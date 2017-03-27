@@ -30,6 +30,7 @@
 
 #ifdef linux
 
+#include <endian.h>
 #include <features.h>
 #include <linux/types.h>
 
@@ -43,6 +44,8 @@
 #include "uapi_linux.h"
 
 #else
+
+#include <sys/endian.h>
 
 /* The underscore variants of the kernel-style names are defined in
  * linux/types.h, but we must define them explicitly for other platforms. */

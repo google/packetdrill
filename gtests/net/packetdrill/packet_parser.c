@@ -42,6 +42,7 @@
 #include "ip_address.h"
 #include "logging.h"
 #include "packet.h"
+#include "psp_packet.h"
 #include "tcp.h"
 
 static int parse_ipv4(struct packet *packet, u8 *header_start, u8 *packet_end,
@@ -394,6 +395,52 @@ error_out:
 	return PACKET_BAD;
 }
 
+static int parse_psp(struct packet *packet, u8 *psp_start, int psp_bytes,
+		     u8 *packet_end, char **error)
+{
+	assert(psp_bytes >= 0);
+	assert(psp_start + psp_bytes <= packet_end);
+	if (psp_bytes < PSP_MINLEN) {
+		asprintf(error, "Truncated PSP header");
+		goto error_out;
+	}
+
+	struct psp *psp = (struct psp *)psp_start;
+	if (psp->version != 0) {
+		asprintf(error, "Unsupported PSP header version %u",
+			 psp->version);
+		goto error_out;
+	}
+	if (psp->ext_len != 1 + psp->has_vc) {
+		asprintf(error, "Wrong PSP header length");
+		goto error_out;
+	}
+
+	const int psp_header_len = psp_len(psp);
+	if (psp_header_len > psp_bytes) {
+		asprintf(error, "PSP header overflows packet");
+		goto error_out;
+	}
+
+	DEBUGP("PSP header len: %d\n", psp_header_len);
+
+	struct header *psp_header;
+	psp_header = packet_append_header(packet, HEADER_PSP, psp_header_len);
+	if (psp_header == NULL) {
+		asprintf(error, "Too many nested headers at PSP header");
+		goto error_out;
+	}
+	psp_header->total_bytes = psp_bytes;
+	packet->psp = psp;
+
+	u8 *next_proto_start = psp_start + psp_header_len;
+	return parse_layer4(packet, next_proto_start, psp->next_header,
+			    psp_bytes - psp_header_len, packet_end, error);
+
+error_out:
+	return PACKET_BAD;
+}
+
 /* Parse the UDP header. Return a packet_parse_result_t. */
 static int parse_udp(struct packet *packet, u8 *layer4_start, int layer4_bytes,
 		     u8 *packet_end, char **error)
@@ -406,8 +453,9 @@ static int parse_udp(struct packet *packet, u8 *layer4_start, int layer4_bytes,
 		asprintf(error, "Truncated UDP header");
 		goto error_out;
 	}
-	packet->udp = (struct udp *) p;
-	const int udp_len = ntohs(packet->udp->len);
+
+	struct udp *udp = (struct udp *)p;
+	const int udp_len = ntohs(udp->len);
 	const int udp_header_len = sizeof(struct udp);
 	if (udp_len < udp_header_len) {
 		asprintf(error, "UDP datagram length too small for UDP header");
@@ -432,8 +480,17 @@ static int parse_udp(struct packet *packet, u8 *layer4_start, int layer4_bytes,
 	p += layer4_bytes;
 	assert(p <= packet_end);
 
-	DEBUGP("UDP src port: %d\n", ntohs(packet->udp->src_port));
-	DEBUGP("UDP dst port: %d\n", ntohs(packet->udp->dst_port));
+	u16 dst_port = ntohs(udp->dst_port);
+	DEBUGP("UDP src port: %d\n", ntohs(udp->src_port));
+	DEBUGP("UDP dst port: %d\n", dst_port);
+
+	if (is_psp_port(dst_port))
+		return parse_psp(packet, layer4_start + udp_header_len,
+				 layer4_bytes - udp_header_len, packet_end,
+				 error);
+
+	/* This UDP header is the innermost L4 rather than part of an encap. */
+	packet->udp = udp;
 	return PACKET_OK;
 
 error_out:

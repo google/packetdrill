@@ -72,6 +72,7 @@ struct expression_type_entry expression_type_table[] = {
 	{ EXPR_SCM_TIMESTAMPING,     "scm_timestamping"},
 	{ EXPR_SOCK_EXTENDED_ERR,    "sock_extended_err"},
 	{ EXPR_EPOLLEV,		     "epollev" },
+	{ EXPR_PSP,                  "psp" },
 	{-1,                         NULL}
 };
 
@@ -300,6 +301,7 @@ void free_expression(struct expression *expression)
 	case EXPR_ELLIPSIS:
 	case EXPR_INTEGER:
 	case EXPR_GRE:
+	case EXPR_PSP:
 	case EXPR_IN6_ADDR:
 	case EXPR_LINGER:
 		break;
@@ -742,6 +744,9 @@ static int evaluate(struct expression *in,
 		break;
 	case EXPR_EPOLLEV:
 		result = evaluate_epollev_expression(in, out, error);
+		break;
+	case EXPR_PSP:			/* copy as-is */
+		out->value.psp_tuple = in->value.psp_tuple;
 		break;
 	case NUM_EXPR_TYPES:
 		break;

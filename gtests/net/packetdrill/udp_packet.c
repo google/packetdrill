@@ -27,6 +27,40 @@
 #include "ip_packet.h"
 #include "udp.h"
 
+int udp_header_append(struct packet *packet, u16 src_port, u16 dst_port,
+		      char **error)
+{
+	struct header *header;
+
+	header = packet_append_header(packet, HEADER_UDP, sizeof(struct udp));
+	if (header == NULL) {
+		asprintf(error, "too many headers");
+		return STATUS_ERR;
+	}
+
+	header->h.udp->src_port	= htons(src_port);
+	header->h.udp->dst_port	= htons(dst_port);
+	header->h.udp->len	= 0;  /* actual length is filled in later */
+	header->h.udp->check	= 0;
+	return STATUS_OK;
+}
+
+int udp_header_finish(struct packet *packet,
+		      struct header *header, struct header *next_inner)
+{
+	struct udp *udp = header->h.udp;
+
+	/* A UDP header may be either part of an encapsulation or belong to the
+	 * innermost packet. We adjust only encapsulation headers, which we
+	 * identify through their 0 current length.
+	 */
+	if (!header->total_bytes) {
+		header->total_bytes = header->header_bytes + next_inner->total_bytes;
+		udp->len = htons(header->total_bytes);
+	}
+	return STATUS_OK;
+}
+
 struct packet *new_udp_packet(int address_family,
 			       enum direction_t direction,
 			       struct ip_info ip_info,

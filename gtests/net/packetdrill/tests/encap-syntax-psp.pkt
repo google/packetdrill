@@ -1,0 +1,37 @@
+// Verify that we can parse inbound and outbound encapsulated packets.
+// This script tests PSP (Google-internal).
+// This is a separate file so that we can keep encap-syntax.pkt passing
+// on both internal and upstream packetdrill.
+
+--dry_run   // just parse, don't run
+--psp_udp_port=1000
+
+// IPv4...
+
+// tunnel-mode PSP encap
++0 < ipv4 2.2.2.2 > 1.1.1.1 : psp spi 12: . 1:1001(1000) ack 1 win 123
++0 > ipv4 2.2.2.2 > 1.1.1.1 : psp spi 12: . 1:1001(1000) ack 1 win 123
+
+// tunnel-mode PSP encap with VC
++0 < ipv4 2.2.2.2 > 1.1.1.1 : psp spi 0x684abfc1, vc 0x123456789abcdef: . 1:1001(1000) ack 1 win 123
++0 > ipv4 2.2.2.2 > 1.1.1.1 : psp spi 0x684abfc1, vc 0x123456789abcdef: . 1:1001(1000) ack 1 win 123
+
+// IPv6...
+
+// tunnel-mode PSP encap
++0 < ipv6 2::2222 > 1::1111 : psp spi 12: . 1:1001(1000) ack 1 win 123
++0 > ipv6 2::2222 > 1::1111 : psp spi 12: . 1:1001(1000) ack 1 win 123
+
+// tunnel-mode PSP encap with VC
++0 < ipv6 2::2222 > 1::1111 : psp spi 0x684abfc1, vc 0x123456789abcdef: . 1:1001(1000) ack 1 win 123
++0 > ipv6 2::2222 > 1::1111 : psp spi 0x684abfc1, vc 0x123456789abcdef: . 1:1001(1000) ack 1 win 123
+
+// The following encapsulations do not add L3 headers.
+
+// transport-mode PSP encap
++0 < encap psp spi 12 . 1:1001(1000) ack 1 win 123
++0 > encap psp spi 12 . 1:1001(1000) ack 1 win 123
+
+// transport-mode PSP encap with VC
++0 < encap psp spi 0x684abfc1, vc 0x123456789abcdef . 1:1001(1000) ack 1 win 123
++0 > encap psp spi 0x684abfc1, vc 0x123456789abcdef . 1:1001(1000) ack 1 win 123
