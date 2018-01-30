@@ -202,7 +202,7 @@ static void set_device_offload_flags(struct local_netdev *netdev)
 {
 #ifdef linux
 	const u32 offload =
-	    TUN_F_CSUM | TUN_F_TSO4 | TUN_F_TSO6 | TUN_F_TSO_ECN | TUN_F_UFO;
+	    TUN_F_CSUM | TUN_F_TSO4 | TUN_F_TSO6 | TUN_F_TSO_ECN;
 	if (ioctl(netdev->tun_fd, TUNSETOFFLOAD, offload) != 0)
 		die_perror("TUNSETOFFLOAD");
 #endif
