@@ -141,6 +141,8 @@ static void write_tcp_info(struct code_state *code,
 	emit_var(code, "tcpi_options",		info->tcpi_options);
 	emit_var(code, "tcpi_snd_wscale",	info->tcpi_snd_wscale);
 	emit_var(code, "tcpi_rcv_wscale",	info->tcpi_rcv_wscale);
+	emit_var(code, "tcpi_delivery_rate_app_limited",
+						info->tcpi_delivery_rate_app_limited);
 	emit_var(code, "tcpi_rto",		info->tcpi_rto);
 	emit_var(code, "tcpi_ato",		info->tcpi_ato);
 	emit_var(code, "tcpi_snd_mss",		info->tcpi_snd_mss);
@@ -162,10 +164,29 @@ static void write_tcp_info(struct code_state *code,
 	emit_var(code, "tcpi_snd_cwnd",		info->tcpi_snd_cwnd);
 	emit_var(code, "tcpi_advmss",		info->tcpi_advmss);
 	emit_var(code, "tcpi_reordering",	info->tcpi_reordering);
-	emit_var(code, "tcpi_total_retrans",	info->tcpi_total_retrans);
 
 	emit_var(code, "tcpi_rcv_rtt",		info->tcpi_rcv_rtt);
 	emit_var(code, "tcpi_rcv_space",	info->tcpi_rcv_space);
+
+	emit_var(code, "tcpi_total_retrans",	info->tcpi_total_retrans);
+
+	emit_var(code, "tcpi_pacing_rate",	info->tcpi_pacing_rate);
+	emit_var(code, "tcpi_max_pacing_rate",	info->tcpi_max_pacing_rate);
+	emit_var(code, "tcpi_bytes_acked",	info->tcpi_bytes_acked);
+	emit_var(code, "tcpi_bytes_received",	info->tcpi_bytes_received);
+	emit_var(code, "tcpi_segs_out",		info->tcpi_segs_out);
+	emit_var(code, "tcpi_segs_in",		info->tcpi_segs_in);
+
+	emit_var(code, "tcpi_notsent_bytes",	info->tcpi_notsent_bytes);
+	emit_var(code, "tcpi_min_rtt",		info->tcpi_min_rtt);
+	emit_var(code, "tcpi_data_segs_in",	info->tcpi_data_segs_in);
+	emit_var(code, "tcpi_data_segs_out",	info->tcpi_data_segs_out);
+
+	emit_var(code, "tcpi_delivery_rate",	info->tcpi_delivery_rate);
+
+	emit_var(code, "tcpi_busy_time",	info->tcpi_busy_time);
+	emit_var(code, "tcpi_rwnd_limited",	info->tcpi_rwnd_limited);
+	emit_var(code, "tcpi_sndbuf_limited",	info->tcpi_sndbuf_limited);
 
 	emit_var_end(code);
 }
