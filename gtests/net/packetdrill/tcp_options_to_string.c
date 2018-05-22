@@ -106,6 +106,10 @@ int tcp_options_to_string(struct packet *packet,
 				option->data.window_scale.shift_count);
 			break;
 
+		case TCPOPT_WINDOW | TCPOPT_WILDCARD:
+			fprintf(s, "wscale *");
+			break;
+
 		case TCPOPT_SACK_PERMITTED:
 			fputs("sackOK", s);
 			break;
