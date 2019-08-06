@@ -1,6 +1,18 @@
+try-run = $(shell set -e;		\
+	TMP="$$.tmp";			\
+	if ($(1)) >/dev/null 2>&1;	\
+	then echo "$(2)";		\
+	else echo "$(3)";		\
+	fi;				\
+	rm -f "$$TMP")
+
+disable-option = $(call try-run,\
+	$(CC) -Werror -Waddress-of-packed-member -c -x c /dev/null -o "$$TMP",\
+	-Wno-address-of-packed-member)
+
 all: binaries
 
-CFLAGS = -g -Wall -Werror
+CFLAGS = -g -Wall -Werror $(disable-option)
 
 parser.o: parser.y
 	bison --output=parser.c --defines=parser.h --report=state parser.y
