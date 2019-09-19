@@ -63,7 +63,7 @@ static int syscall_icmp_sendto(struct state *state,
 			       struct expression_list *args, char **error);
 
 /* Provide a wrapper for the Linux gettid() system call (glibc does not). */
-static pid_t gettid(void)
+static pid_t sys_gettid(void)
 {
 #ifdef linux
 	return syscall(__NR_gettid);
@@ -3441,7 +3441,7 @@ static void *system_call_thread(void *arg)
 	DEBUGP("syscall thread: starting and locking\n");
 	run_lock(state);
 
-	state->syscalls->thread_id = gettid();
+	state->syscalls->thread_id = sys_gettid();
 	if (state->syscalls->thread_id < 0)
 		die_perror("gettid");
 
