@@ -45,6 +45,9 @@
 #include "tcp_packet.h"
 #include "wrap.h"
 
+#include "mptcp_utils.h"
+#include "mptcp.h"
+
 /* To avoid issues with TIME_WAIT, FIN_WAIT1, and FIN_WAIT2 we use
  * dynamically-chosen, unique 4-tuples for each test. We implement the
  * picking of unique ports by binding a socket to port 0 and seeing
@@ -583,8 +586,10 @@ static int map_inbound_packet(
 			return STATUS_ERR;
 		}
 	}
-
-	return STATUS_OK;
+	return mptcp_insert_and_extract_opt_fields(live_packet,
+						   live_packet,
+						   DIRECTION_INBOUND);
+	/* XXX TODO return STATUS_OK; */
 }
 
 static int tcp_convert_seq_number(struct socket *socket, struct packet *packet,
@@ -677,7 +682,9 @@ static int map_outbound_live_packet(
 				      (actual_ts_val -
 				       socket->first_actual_ts_val));
 	}
-
+	mptcp_insert_and_extract_opt_fields(script_packet,
+					    live_packet,
+					    DIRECTION_OUTBOUND);
 	return STATUS_OK;
 }
 
@@ -936,6 +943,220 @@ static int verify_udp(
 		return STATUS_ERR;
 	return STATUS_OK;
 }
+
+/* Check if mptcp options are identical (in values), actual opt, script opt */
+bool same_mptcp_opt(struct tcp_option *opt_a, struct tcp_option *opt_b, struct packet *packet_a){
+
+	switch(opt_a->data.mp_capable.subtype){
+
+		case MP_CAPABLE_SUBTYPE:
+			if(opt_a->data.mp_capable.flags != opt_b->data.mp_capable.flags)
+				return false;
+
+			if(opt_a->length == TCPOLEN_MP_CAPABLE_SYN){
+				if(opt_a->data.mp_capable.syn.key != opt_b->data.mp_capable.syn.key)
+					return false;
+			}else if(opt_a->length == TCPOLEN_MP_CAPABLE){
+				if(opt_a->data.mp_capable.no_syn.receiver_key != opt_b->data.mp_capable.no_syn.receiver_key ||
+						opt_a->data.mp_capable.no_syn.sender_key != opt_b->data.mp_capable.no_syn.sender_key)
+					return false;
+			}
+			break;
+		case MP_JOIN_SUBTYPE:
+			if(opt_a->length == TCPOLEN_MP_JOIN_SYN && !packet_a->tcp->ack && packet_a->tcp->syn){
+				if(opt_a->data.mp_join.syn.address_id != opt_b->data.mp_join.syn.address_id ||
+						opt_a->data.mp_join.syn.flags != opt_b->data.mp_join.syn.flags)
+					return false;
+				if(opt_a->data.mp_join.syn.no_ack.receiver_token != opt_b->data.mp_join.syn.no_ack.receiver_token||
+					opt_a->data.mp_join.syn.no_ack.sender_random_number != opt_b->data.mp_join.syn.no_ack.sender_random_number)
+					return false;
+			}else if(opt_a->length == TCPOLEN_MP_JOIN_SYN_ACK && packet_a->tcp->ack && packet_a->tcp->syn){
+				if(opt_a->data.mp_join.syn.address_id != opt_b->data.mp_join.syn.address_id ||
+					opt_a->data.mp_join.syn.flags != opt_b->data.mp_join.syn.flags)
+					return false;
+				if(opt_a->data.mp_join.syn.ack.sender_hmac != opt_b->data.mp_join.syn.ack.sender_hmac ||
+					opt_a->data.mp_join.syn.ack.sender_random_number != opt_b->data.mp_join.syn.ack.sender_random_number)
+					return false;
+			}else if(opt_a->length == TCPOLEN_MP_JOIN_ACK && packet_a->tcp->ack && !packet_a->tcp->syn){
+				if(opt_a->data.mp_join.no_syn.sender_hmac != opt_b->data.mp_join.no_syn.sender_hmac)
+					return false;
+			}
+			break;
+		case DSS_SUBTYPE:
+			if(opt_a->data.dss.flag_M != opt_b->data.dss.flag_M ||
+				opt_a->data.dss.flag_m != opt_b->data.dss.flag_m ||
+				opt_a->data.dss.flag_A != opt_b->data.dss.flag_A ||
+				opt_a->data.dss.flag_a != opt_b->data.dss.flag_a ||
+				opt_a->data.dss.flag_F != opt_b->data.dss.flag_F )
+				return false;
+
+			if(opt_a->data.dss.flag_M && opt_a->data.dss.flag_A){
+				struct dsn *dsn_live 	= (struct dsn*)((u32*)opt_a+2);
+				struct dsn *dsn_script 	= (struct dsn*)((u32*)opt_b+2);
+				if(!opt_a->data.dss.flag_m && !opt_a->data.dss.flag_a){ // DSN4, DACK4
+					dsn_live 	= (struct dsn*)((u32*)opt_a+2);
+					dsn_script 	= (struct dsn*)((u32*)opt_b+2);
+					if(opt_a->data.dss.dack_dsn.dack.dack4 != opt_b->data.dss.dack_dsn.dack.dack4 ||
+							dsn_live->dsn4 != dsn_script->dsn4)
+						return false;
+				}else if(!opt_a->data.dss.flag_m && opt_a->data.dss.flag_a){ // DSN4, DACK8
+					dsn_live 	= (struct dsn*)((u32*)opt_a+3);
+					dsn_script 	= (struct dsn*)((u32*)opt_b+3);
+					if(	opt_a->data.dss.dack_dsn.dack.dack8 != opt_b->data.dss.dack_dsn.dack.dack8 ||
+							dsn_live->dsn4 != dsn_script->dsn4)
+						return false;
+				}else if(opt_a->data.dss.flag_m && !opt_a->data.dss.flag_a){ // DSN8, DACK4
+					dsn_live 	= (struct dsn*)((u32*)opt_a+2);
+					dsn_script 	= (struct dsn*)((u32*)opt_b+2);
+					if(opt_a->data.dss.dack_dsn.dack.dack4 != opt_b->data.dss.dack_dsn.dack.dack4 ||
+							dsn_live->dsn8 != dsn_script->dsn8)
+						return false;
+				}else if(opt_a->data.dss.flag_m && opt_a->data.dss.flag_a){ // DSN8, DACK8
+					dsn_live 	= (struct dsn*)((u32*)opt_a+3);
+					dsn_script 	= (struct dsn*)((u32*)opt_b+3);
+					if(opt_a->data.dss.dack_dsn.dack.dack8 != opt_b->data.dss.dack_dsn.dack.dack8 ||
+							dsn_live->dsn8 != dsn_script->dsn8)
+						return false;
+				}
+				u32* ssn_live = (u32*)dsn_live+1;
+				u32* ssn_script = (u32*)dsn_script+1;
+				if(*ssn_live != *ssn_script || *(ssn_live+1) != *(ssn_script+1))
+					return false;
+
+			}else if(opt_a->data.dss.flag_M){
+				struct dsn *dsn_live 	= (struct dsn*)((u32*)opt_a+1);
+				struct dsn *dsn_script 	= (struct dsn*)((u32*)opt_b+1);
+				if(!opt_a->data.dss.flag_m){ // DSN4
+					if(dsn_live->dsn4 != dsn_script->dsn4 )
+						return false;
+				}else if(dsn_live->dsn8 != dsn_script->dsn8)
+					return false;
+
+				u32* ssn_live = (u32*)dsn_live+1;
+				u32* ssn_script = (u32*)dsn_script+1;
+				if(*ssn_live != *ssn_script || *(ssn_live+1) != *(ssn_script+1))
+					return false;
+			}else if(opt_a->data.dss.flag_A){
+				if(!opt_a->data.dss.flag_a){
+					if(opt_a->data.dss.dack.dack4 != opt_b->data.dss.dack.dack4 )
+						return false;
+				}else{
+					if(opt_a->data.dss.dack.dack8 != opt_b->data.dss.dack.dack8 )
+						return false;
+				}
+			}
+			break;
+		case ADD_ADDR_SUBTYPE:
+			if(opt_a->data.add_addr.address_id != opt_b->data.add_addr.address_id){
+				return false;
+			}else if(opt_a->length == TCPOLEN_ADD_ADDR_V4){
+				if(opt_b->length != TCPOLEN_ADD_ADDR_V4 )
+					return false;
+				if(memcmp(&opt_a->data.add_addr.ipv4, &opt_b->data.add_addr.ipv4, sizeof(opt_b->data.add_addr.ipv4)))
+					return false;
+			}else if(opt_a->length == TCPOLEN_ADD_ADDR_V4_PORT){
+				if(	opt_b->length != TCPOLEN_ADD_ADDR_V4_PORT ||
+					opt_a->data.add_addr.ipv4_w_port.port != opt_b->data.add_addr.ipv4_w_port.port )
+					return false;
+				if(memcmp(&opt_a->data.add_addr.ipv4_w_port.ipv4, &opt_b->data.add_addr.ipv4_w_port.ipv4, sizeof(struct in_addr)))
+					return false;
+			}if(opt_a->length == TCPOLEN_ADD_ADDR_V6 ){
+				if(	opt_b->length != TCPOLEN_ADD_ADDR_V6 )
+					return false;
+				if(memcmp(&opt_a->data.add_addr.ipv6, &opt_b->data.add_addr.ipv6, sizeof(struct in6_addr)))
+					return false;
+			}if(opt_a->length == TCPOLEN_ADD_ADDR_V6_PORT ){
+				if(	opt_b->length != TCPOLEN_ADD_ADDR_V6_PORT ||
+					opt_a->data.add_addr.ipv6_w_port.port != opt_b->data.add_addr.ipv6_w_port.port )
+					return false;
+				if(memcmp(&opt_a->data.add_addr.ipv6_w_port.ipv6, &opt_b->data.add_addr.ipv6_w_port.ipv6, sizeof(struct in6_addr)))
+					return false;
+			}
+			break;
+		case REMOVE_ADDR_SUBTYPE:
+			if(opt_a->length != opt_b->length || opt_a->length <= TCPOLEN_REMOVE_ADDR)
+				return false;
+			int i = 0;
+			for( i=0; i< opt_a->length; i++){
+				if(*((u8*)&opt_a->data.remove_addr.address_id + i) != *((u8*)&opt_b->data.remove_addr.address_id + i))
+					return false;
+			}
+			break;
+		case MP_PRIO_SUBTYPE:
+			if(opt_a->data.mp_prio.flags != opt_b->data.mp_prio.flags)
+				return false;
+			if(opt_a->length == TCPOLEN_MP_PRIO_ID){
+				if(opt_a->data.mp_prio.address_id != opt_b->data.mp_prio.address_id)
+					return false;
+			}
+			break;
+		case MP_FAIL_SUBTYPE:
+			if(opt_a->data.mp_fail.dsn8 != opt_b->data.mp_fail.dsn8)
+				return false;
+			break;
+		case MP_FASTCLOSE_SUBTYPE:
+			if(opt_a->data.mp_fastclose.receiver_key != opt_b->data.mp_fastclose.receiver_key)
+				return false;
+			break;
+		default:
+			return false;
+	}
+	return true;
+}
+#if 0
+/* Check if tcp options are identical (memcmp) */
+static bool same_tcp_options(struct packet *packet_a,
+		struct packet *packet_b)
+{
+
+	if(packet_tcp_options_len(packet_a) !=
+			packet_tcp_options_len(packet_b)){
+		return false;
+	}
+
+	struct tcp_options_iterator iter_a, iter_b;
+	struct tcp_option *opt_a = tcp_options_begin(packet_a, &iter_a);
+	struct tcp_option *opt_b = tcp_options_begin(packet_b, &iter_b);
+
+	//No assumption about options order
+	while(opt_a != NULL){
+
+		while(opt_b != NULL && opt_a->kind != opt_b->kind){
+			opt_b = tcp_options_next(&iter_b, NULL);
+		}
+		//opt_a not found in packet_b
+		if(opt_b == NULL){
+			return false;
+		}
+
+		// loop on subtypes of mptcp, to compare the right option
+		if(opt_a->kind == TCPOPT_MPTCP){
+
+			while(opt_b != NULL && opt_a->data.mp_capable.subtype!=opt_b->data.mp_capable.subtype)
+				opt_b = tcp_options_next(&iter_b, NULL);
+
+			//sub-option opt_a not found in packet_b
+			if(opt_b == NULL)
+				return false;
+		}
+
+		//NOP option only contains a kind field (not length)
+		if(opt_a->kind != TCPOPT_NOP){
+			if(opt_a->kind != TCPOPT_MPTCP){
+				if(opt_a->length != opt_b->length || memcmp(opt_b, opt_a, opt_a->length))
+					return false;
+			}else{
+				if(!same_mptcp_opt(opt_a, opt_b, packet_a))
+					return false;
+
+			}
+		}
+		opt_b = tcp_options_begin(packet_b, &iter_b);
+		opt_a = tcp_options_next(&iter_a, NULL);
+	}
+	return true;
+}
+#endif
 
 /* Verify that required actual GRE header fields are as the script expected. */
 static int verify_gre(
@@ -1228,7 +1449,14 @@ static int verify_outbound_tcp_option(
 			return STATUS_ERR;
 		}
 		break;
-
+	case TCPOPT_MPTCP:
+		if (!same_mptcp_opt(actual_option, script_option, actual_packet)) {
+			asprintf(error,
+				 "MPTCP option mismatch: %d",
+				 script_option->kind);
+			return STATUS_ERR;
+		}
+		break;
 	default:
 		if (script_option->length != actual_option->length) {
 			asprintf(error,

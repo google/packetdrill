@@ -49,6 +49,7 @@
 #include "system.h"
 #include "tcp.h"
 #include "tcp_options.h"
+#include "mptcp.h"
 
 /* MAX_SPIN_USECS is the maximum amount of time (in microseconds) to
  * spin waiting for an event. We sleep up until this many microseconds
@@ -659,6 +660,7 @@ void run_script(struct config *config, struct script *script)
 		    state->config->script_path, error);
 		free(error);
 	}
+	free_mp_state();
 
 	state_free(state);
 
@@ -680,6 +682,9 @@ int parse_script_and_set_config(int argc, char *argv[],
 
 	DEBUGP("parse_and_run_script: %s\n", script_path);
 	assert(script_path != NULL);
+	//Initialize MPTCP state
+	init_mp_state();
+
 
 	init_script(script);
 
