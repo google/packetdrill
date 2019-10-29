@@ -102,6 +102,7 @@
 #define TCPOLEN_MD5SIG		18
 #define TCPOLEN_MD5_BASE	2
 #define TCPOPT_FASTOPEN		34
+#define TCPOPT_MPTCP		30
 #define TCPOPT_EXP		254	/* Experimental */
 
 #define TCP_MD5_DIGEST_LEN	16	/* bytes in RFC2385 TCP MD5 digest */
@@ -300,6 +301,11 @@ union _tcp_cc_info {
 	struct _tcp_dctcp_info	dctcp;
 	struct _tcp_bbr_info	bbr;
 };
+
+#ifndef IPPROTO_MPTCP
+#define IPPROTO_MPTCP 262
+#endif
+
 #endif  /* linux */
 
 #if defined(__FreeBSD__)
