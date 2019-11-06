@@ -41,6 +41,8 @@
 #include "ethernet.h"
 #include "logging.h"
 
+#include <linux/sockios.h>
+
 /* Number of bytes to buffer in the packet socket we use for sniffing. */
 static const int PACKET_SOCKET_RCVBUF_BYTES = 2*1024*1024;
 
