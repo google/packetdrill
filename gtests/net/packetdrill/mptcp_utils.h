@@ -34,15 +34,15 @@ void hash_key_sha1(uint8_t *hash, key64 key);
 key64 get_barray_from_key64(unsigned long long key);
 dsn64* retreive_dsn(uint8_t *hash);
 token32 retreive_token(uint8_t *hash);
-u64 hmac_sha1_truncat_64(const unsigned char *key,
-		unsigned key_length,
-		char *data,
-		unsigned data_length);
-void hmac_sha1(const unsigned char *key,
-		u32 key_length,
-		char *data,
-		u32 data_length,
-		unsigned char *output);
+u64 hmac_sha1_truncat_64(const u8 *key,
+			 unsigned key_length,
+			 u8 *data,
+			 unsigned data_length);
+int hmac_sha1(const u8 *key,
+	      size_t key_length,
+	      const u8 *data,
+	      size_t data_length,
+	      u8 *output);
 u16 checksum_dss(u16 *buffer, int size);
 uint16_t checksum_d(void* vdata, size_t length);
 void mptcp_hmac_sha1(u8 *key_1, u8 *key_2, u8 *rand_1, u8 *rand_2,

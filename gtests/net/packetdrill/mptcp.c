@@ -623,7 +623,7 @@ void mp_join_syn_ack_sender_hmac(struct tcp_option *tcp_opt_to_modify,
 	tcp_opt_to_modify->data.mp_join.syn.ack.sender_hmac =
 			htobe64(hmac_sha1_truncat_64(hmac_key,
 					16,
-					(char*)msg,
+					(u8 *)msg,
 					8));
 }
 
@@ -711,7 +711,7 @@ static int mp_join_syn_ack(struct packet *packet_to_modify,
 		tcp_opt_to_modify->data.mp_join.syn.ack.sender_random_number =
 				live_mp_join->data.mp_join.syn.ack.sender_random_number;
 		tcp_opt_to_modify->data.mp_join.syn.ack.sender_hmac =
-				hmac_sha1_truncat_64(hmac_key, 16, (char*)msg, 8);
+				hmac_sha1_truncat_64(hmac_key, 16, (u8*)msg, 8);
 	}
 	return STATUS_OK;
 }

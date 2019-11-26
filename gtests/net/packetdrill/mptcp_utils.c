@@ -1,11 +1,17 @@
-#include "mptcp_utils.h"
-#include <linux/kernel.h>
+#include <unistd.h>
+#include <errno.h>
+#include <linux/if_alg.h>
+#include "types.h"
+#include "sha1.h"
+#include "sha256.h"
+#include "logging.h"
 
-/*#include <linux/export.h>
-#include <linux/bitops.h>
-#include <linux/cryptohash.h>
-#include <asm/unaligned.h>
-*/
+#ifndef SOL_ALG
+#define SOL_ALG 279
+#endif /* SOL_ALG */
+
+#include "mptcp_utils.h"
+
 /*
  * If you have 32 registers or more, the compiler can (and should)
  * try to change the array[] accesses into registers. However, on
@@ -65,7 +71,6 @@ static inline __u32 ror32(__u32 word, unsigned int shift)
 {
 	return (word >> shift) | (word << (32 - shift));
 }
-
 
 #define SHA_ROUND(t, input, fn, constant, A, B, C, D, E) do { \
 	__u32 TEMP = input(t); setW(t, TEMP); \
@@ -200,10 +205,6 @@ void sha_transform(__u32 *digest, const char *data, __u32 *array)
 	digest[3] += D;
 	digest[4] += E;
 }
-//EXPORT_SYMBOL(sha_transform);
-
-
-
 
 void seed_generator() {
 	srand(time(NULL ));
@@ -224,51 +225,168 @@ u32 generate_32() {
 	return rand();
 }
 
-void hash_key_sha1(uint8_t *hash, key64 key) {
-	SHA_CTX ctx;
-	SHA1_Init(&ctx);
-	SHA1_Update(&ctx, &key, sizeof(key));
-	SHA1_Final(hash, &ctx);
-}
-
 key64 get_barray_from_key64(unsigned long long key) {
 	return *(key64 *) (unsigned char*) &key;
 }
 
-void hmac_sha1(const unsigned char *key, u32 key_length, char *data,
-		u32 data_length, unsigned char *output) {
+static int linux_af_alg_socket(const char *type, const char *name)
+{
+	struct sockaddr_alg sa;
+	int s;
 
-	unsigned char* hash;
+	s = socket(AF_ALG, SOCK_SEQPACKET, 0);
+	if (s < 0) {
+		DEBUGP("%s: Failed to open AF_ALG socket: %s",
+			   __func__, strerror(errno));
+		return -1;
+	}
 
-	hash = HMAC(EVP_sha1(), key, key_length, (unsigned char*) data, data_length,
-			NULL, NULL );
-	memcpy(output, hash, 20);
+	memset(&sa, 0, sizeof(sa));
+	sa.salg_family = AF_ALG;
+	strncpy((char *) sa.salg_type, type, sizeof(sa.salg_type));
+	strncpy((char *) sa.salg_name, name, sizeof(sa.salg_type));
+	if (bind(s, (struct sockaddr *) &sa, sizeof(sa)) < 0) {
+		DEBUGP("%s: Failed to bind AF_ALG socket(%s,%s): %s",
+			   __func__, type, name, strerror(errno));
+		close(s);
+		return -1;
+	}
+
+	return s;
 }
 
-u64 hmac_sha1_truncat_64(const unsigned char *key, u32 key_length, char *data,
-		u32 data_length) {
-	unsigned char hash[20];
-	printf("Data to hash, key: %llu %llu, data: %u %u\n", ((u64*)key)[0], ((u64*)key)[1], ((u32*)data)[0], ((u32*)data)[1] );
+static int linux_af_alg_hash_vector(const char *alg, const u8 *key,
+				    size_t key_len, size_t num_elem,
+				    const u8 *addr[], const size_t *len,
+				    u8 *mac, size_t mac_len)
+{
+	int s, t;
+	size_t i;
+	ssize_t res;
+	int ret = -1;
+
+	s = linux_af_alg_socket("hash", alg);
+	if (s < 0)
+		return -1;
+
+	if (key && setsockopt(s, SOL_ALG, ALG_SET_KEY, key, key_len) < 0) {
+		DEBUGP("%s: setsockopt(ALG_SET_KEY) failed: %s",
+			   __func__, strerror(errno));
+		close(s);
+		return -1;
+	}
+
+	t = accept(s, NULL, NULL);
+	if (t < 0) {
+		DEBUGP("%s: accept on AF_ALG socket failed: %s",
+			   __func__, strerror(errno));
+		close(s);
+		return -1;
+	}
+
+	for (i = 0; i < num_elem; i++) {
+		res = send(t, addr[i], len[i], i + 1 < num_elem ? MSG_MORE : 0);
+		if (res < 0) {
+			DEBUGP("%s: send on AF_ALG socket failed: %s",
+				   __func__, strerror(errno));
+			goto fail;
+		}
+		if ((size_t) res < len[i]) {
+			DEBUGP("%s: send on AF_ALG socket did not accept full buffer (%d/%d)",
+				   __func__, (int) res, (int) len[i]);
+			goto fail;
+		}
+	}
+
+	res = recv(t, mac, mac_len, 0);
+	if (res < 0) {
+		DEBUGP("%s: recv on AF_ALG socket failed: %s",
+			   __func__, strerror(errno));
+		goto fail;
+	}
+	if ((size_t) res < mac_len) {
+		DEBUGP("%s: recv on AF_ALG socket did not return full buffer (%d/%d)",
+			   __func__, (int) res, (int) mac_len);
+		goto fail;
+	}
+
+	ret = 0;
+fail:
+	close(t);
+	close(s);
+
+	return ret;
+}
+
+int sha1_vector(size_t num_elem, const u8 *addr[], const size_t *len,
+		u8 *mac)
+{
+	return linux_af_alg_hash_vector("sha1", NULL, 0, num_elem, addr, len,
+					mac, SHA1_MAC_LEN);
+}
+
+int sha256_vector(size_t num_elem, const u8 *addr[], const size_t *len,
+		  u8 *mac)
+{
+	return linux_af_alg_hash_vector("sha256", NULL, 0, num_elem, addr, len,
+					mac, SHA256_MAC_LEN);
+}
+
+int hmac_sha1_vector(const u8 *key, size_t key_len, size_t num_elem,
+		     const u8 *addr[], const size_t *len, u8 *mac)
+{
+	return linux_af_alg_hash_vector("hmac(sha1)", key, key_len, num_elem,
+					addr, len, mac, SHA1_MAC_LEN);
+}
+
+int hmac_sha1(const u8 *key, size_t key_len, const u8 *data, size_t data_len,
+	      u8 *mac)
+{
+	return hmac_sha1_vector(key, key_len, 1, &data, &data_len, mac);
+}
+
+int hmac_sha256_vector(const u8 *key, size_t key_len, size_t num_elem,
+		       const u8 *addr[], const size_t *len, u8 *mac)
+{
+	return linux_af_alg_hash_vector("hmac(sha256)", key, key_len, num_elem,
+					addr, len, mac, SHA256_MAC_LEN);
+}
+
+int hmac_sha256(const u8 *key, size_t key_len, const u8 *data,
+		size_t data_len, u8 *mac)
+{
+	return hmac_sha256_vector(key, key_len, 1, &data, &data_len, mac);
+}
+
+u64 hmac_sha1_truncat_64(const u8 *key, u32 key_length, u8 *data,
+			 u32 data_length) {
+	u8 hash[20];
+
 	hmac_sha1(key, key_length, data, data_length, hash);
 	return *((u64*) hash);
-//	return truncated;
+}
+
+void hash_key_sha1(uint8_t *hash, key64 key) {
+	size_t len = 8;
+	u8 *k[1];
+
+	k[0] = (u8 *)&key;
+	sha1_vector(1, (const u8 **)k, &len, hash);
 }
 
 u32 sha1_least_32bits(u64 key) {
 	key64 key_arr = get_barray_from_key64(key);
-	u8 hash[SHA_DIGEST_LENGTH];
+	u8 hash[SHA_DIGEST_LENGTH] = { 0 };
+
 	hash_key_sha1(hash, key_arr);
-	return (u32) be32toh(*((u32*)hash)); // = ntohl
+	return (u32) be32toh(*((u32*)hash));
 }
 
 u64 sha1_least_64bits(u64 key) {
 	key64 key_arr = get_barray_from_key64(key);
-	uint8_t hash[SHA_DIGEST_LENGTH];
+	u8 hash[SHA_DIGEST_LENGTH] = { 0 };
+
 	hash_key_sha1(hash, key_arr);
-//	printf("%x%x --- %x%x-%x%x\n", *((u8*)&hash[0]), *((u8*)&hash[1]), *((u8*)&hash[12]), *((u8*)&hash[13]), *((u8*)&hash[18]), *((u8*)&hash[19]));
-//	printf("%llx%llx%x\n", (u64)be64toh(*((u64*)&hash[0])), (u64)be64toh(*((u64*)&hash[8])), (u32)be32toh(*((u32*)&hash[16])));
-//	printf("%llx \n", (u64)be64toh(*((u64*)&hash[12])));
-//	printf("%llx \n", (u64)be64toh(*((u64*)&hash[12])));
 	return (u64) be64toh(*((u64*)&hash[12]));
 }
 
@@ -287,13 +405,13 @@ u16 checksum_dss(u16 *buffer, int size) {
 }
 
 uint16_t checksum_d(void* vdata, size_t length) {
-	// Cast the data pointer to one that can be indexed.
+	/* Cast the data pointer to one that can be indexed */
 	char* data = (char*) vdata;
 	size_t i;
-	// Initialise the accumulator.
+	/* Initialise the accumulator */
 	uint32_t acc = 0xffff;
 
-	// Handle complete 16-bit blocks.
+	/* Handle complete 16-bit blocks */
 	for (i = 0; i + 1 < length; i += 2) {
 		uint16_t word;
 		memcpy(&word, data + i, 2);
@@ -303,7 +421,7 @@ uint16_t checksum_d(void* vdata, size_t length) {
 		}
 	}
 
-	// Handle any partial block at the end of the data.
+	/* Handle any partial block at the end of the data */
 	if (length & 1) {
 		uint16_t word = 0;
 		memcpy(&word, data + length - 1, 1);
@@ -313,7 +431,7 @@ uint16_t checksum_d(void* vdata, size_t length) {
 		}
 	}
 
-	// Return the checksum in network byte order.
+	/* Return the checksum in network byte order */
 	return ~acc;
 }
 
@@ -330,14 +448,12 @@ void sha_init(__u32 *buf)
 	buf[4] = 0xc3d2e1f0;
 }
 
-
 void mptcp_hmac_sha1(u8 *key_1, u8 *key_2, u8 *rand_1, u8 *rand_2,
 		u32 *hash_out) {
-	u32 workspace[SHA_WORKSPACE_WORDS]; //SHA_DIGEST_LENGTH];
+	u32 workspace[SHA_WORKSPACE_WORDS];
 	u8 input[128]; /* 2 512-bit blocks */
 	int i;
 
-//	printf("Mptcp keys: %llu, %llu\n", *((u64*)key_1), *(u64*)key_2);
 	memset(workspace, 0, sizeof(workspace));
 
 	/* Generate key xored with ipad */
@@ -364,7 +480,7 @@ void mptcp_hmac_sha1(u8 *key_1, u8 *key_2, u8 *rand_1, u8 *rand_2,
 	memset(workspace, 0, sizeof(workspace));
 
 	for (i = 0; i < 5; i++)
-		hash_out[i] = be32toh(hash_out[i]); //cpu_to_be32(hash_out[i]);
+		hash_out[i] = be32toh(hash_out[i]);
 
 	/* Prepare second part of hmac */
 	memset(input, 0x5C, 64);
@@ -388,6 +504,5 @@ void mptcp_hmac_sha1(u8 *key_1, u8 *key_2, u8 *rand_1, u8 *rand_2,
 	sha_transform(hash_out, (const char *)&input[64], workspace);
 
 	for (i = 0; i < 5; i++)
-		hash_out[i] =  be32toh(hash_out[i]); //cpu_to_be32(hash_out[i]);
+		hash_out[i] =  be32toh(hash_out[i]);
 }
-
