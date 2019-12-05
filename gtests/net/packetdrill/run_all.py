@@ -1,4 +1,4 @@
-#!/usr/bin/python2.7
+#!/usr/bin/python3
 
 """Run packetdrill across a set of scripts."""
 
@@ -95,10 +95,10 @@ class TestSet(object):
 
   def Log(self, outfile, errfile):
     """Print a background process's stdout and stderr streams."""
-    print 'stdout: '
+    print('stdout: ')
     outfile.seek(0)
     sys.stdout.write(outfile.read())
-    print 'stderr: '
+    print('stderr: ')
     errfile.seek(0)
     sys.stderr.write(errfile.read())
 
@@ -112,13 +112,13 @@ class TestSet(object):
     if not process.returncode:
       self.num_pass += 1
       if self.args['verbose']:
-        print 'OK   [%s (%s)]' % (path, variant)
+        print('OK   [%s (%s)]' % (path, variant))
         if self.args['log_on_success']:
           self.Log(outfile, errfile)
     else:
       self.num_fail += 1
       if self.args['verbose']:
-        print 'FAIL [%s (%s)]' % (path, variant)
+        print('FAIL [%s (%s)]' % (path, variant))
         if self.args['log_on_error']:
           self.Log(outfile, errfile)
 
@@ -136,7 +136,7 @@ class TestSet(object):
     for proc, path, variant in procs:
       proc.kill()
       if self.args['verbose']:
-        print 'KILL [%s (%s)]' % (path, variant)
+        print('KILL [%s (%s)]' % (path, variant))
 
   def RunDir(self, path):
     """Find all packetdrill scripts in a directory and run them."""
