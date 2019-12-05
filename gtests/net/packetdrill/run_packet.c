@@ -338,7 +338,8 @@ static struct socket *find_connect_for_live_packet(
 		 (socket->state == SOCKET_ACTIVE_CONNECTING));
 	bool is_tcp_match =
 		(packet->tcp && packet->tcp->syn && !packet->tcp->ack &&
-		 (socket->protocol == IPPROTO_TCP) &&
+		 (socket->protocol == IPPROTO_TCP ||
+		  socket->protocol == IPPROTO_MPTCP) &&
 		 (socket->state == SOCKET_ACTIVE_SYN_SENT));
 	if (!is_udp_match && !is_tcp_match && !is_icmp_match)
 		return NULL;
@@ -1709,7 +1710,8 @@ static bool is_script_packet_match_for_socket(
 {
 	const bool is_packet_icmp = (packet->icmpv4 || packet->icmpv6);
 
-	if (socket->protocol == IPPROTO_TCP)
+	if (socket->protocol == IPPROTO_TCP ||
+	    socket->protocol == IPPROTO_MPTCP)
 		return packet->tcp || is_packet_icmp;
 	else if (socket->protocol == IPPROTO_UDP)
 		return packet->udp || is_packet_icmp;
