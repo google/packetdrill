@@ -457,28 +457,42 @@ int mptcp_subtype_mp_capable(struct packet *packet_to_modify,
 		struct tcp_option *tcp_opt_to_modify,
 		unsigned direction)
 {
-	int error;
-	// Syn packet, packetdril -> kernel
-	if(tcp_opt_to_modify->length == TCPOLEN_MP_CAPABLE_SYN &&
-			direction == DIRECTION_INBOUND &&
-			!packet_to_modify->tcp->ack){
+	int error, optlen = tcp_opt_to_modify->length;
+
+	// Syn packet, packetdrill -> kernel, v0
+	if (optlen == TCPOLEN_MP_CAPABLE_SYN &&
+	    direction == DIRECTION_INBOUND &&
+	    !packet_to_modify->tcp->ack) {
 		error = mptcp_gen_key();
 		error = mptcp_set_mp_cap_syn_key(tcp_opt_to_modify) || error;
 		// For inbound flow, initialise flow at syn,
 		// For outbound flow, initialise at third ack.
 		new_subflow_inbound(packet_to_modify);
 	}
-	// Syn and Syn_ack kernel->packetdrill
-	else if(tcp_opt_to_modify->length == TCPOLEN_MP_CAPABLE_SYN &&
-			direction == DIRECTION_OUTBOUND){
+	// syn packet, inbound, v1
+	else if (optlen == TCPOLEN_MP_CAPABLE_V1_SYN &&
+		 direction == DIRECTION_INBOUND &&
+		 !packet_to_modify->tcp->ack) {
+		new_subflow_inbound(packet_to_modify);
+		error = 0;
+	}
+	// Syn v0 and Syn_ack kernel->packetdrill
+	else if (optlen == TCPOLEN_MP_CAPABLE_SYN &&
+		 direction == DIRECTION_OUTBOUND) {
 		error = extract_and_set_kernel_key(live_packet);
 		error = mptcp_set_mp_cap_syn_key(tcp_opt_to_modify);
 		mp_state.remote_ssn++;
 	}
+	// syn v1
+	else if (optlen == TCPOLEN_MP_CAPABLE_V1_SYN &&
+		 direction == DIRECTION_OUTBOUND) {
+		error = 0;
+	}
 	// Third (ack) packet in three-hand shake
-	else if(tcp_opt_to_modify->length == TCPOLEN_MP_CAPABLE ){
+	else if (optlen == TCPOLEN_MP_CAPABLE) {
 		error = mptcp_set_mp_cap_keys(tcp_opt_to_modify);
 		// Automatically put the idsn tokens
+		/*** XXX TODO USE SHA256 when version is 1 ****/
 		mp_state.idsn = sha1_least_64bits(mp_state.packetdrill_key);
 		mp_state.remote_idsn = sha1_least_64bits(mp_state.kernel_key);
 		// If this is done at syn packet time as for inbound, key comparisons fail
@@ -487,14 +501,12 @@ int mptcp_subtype_mp_capable(struct packet *packet_to_modify,
 			new_subflow_outbound(live_packet);
 	}
 	// SYN_ACK, packetdrill->kernel
-	else if(tcp_opt_to_modify->length == TCPOLEN_MP_CAPABLE_SYN &&
-			direction == DIRECTION_INBOUND &&
-			packet_to_modify->tcp->ack){
+	else if (tcp_opt_to_modify->length == TCPOLEN_MP_CAPABLE_SYN &&
+		 direction == DIRECTION_INBOUND &&
+		 packet_to_modify->tcp->ack) {
 		error = mptcp_gen_key();
 		error = mptcp_set_mp_cap_syn_key(tcp_opt_to_modify) || error;
-	}
-
-	else{
+	} else {
 		return STATUS_ERR;
 	}
 	return error;

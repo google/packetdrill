@@ -61,9 +61,6 @@ static int get_expected_tcp_option_length(u8 kind, u8 *expected_length,
 		*expected_length = TCPOLEN_TIMESTAMP;
 		break;
 	case TCPOPT_MPTCP:
-		DEBUGP("TODO COMPUTE MTCP OPTION\n");	
-		/* FALL THROUGH */
-
 	case TCPOPT_SACK:
 	case TCPOPT_MD5SIG:
 	case TCPOPT_FASTOPEN:

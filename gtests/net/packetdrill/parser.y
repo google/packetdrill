@@ -839,6 +839,7 @@ struct tcp_option *dss_do_dsn_dack( int dack_type, int dack_val,
 %token <reserved> ACK ECR EOL MSS NOP SACK SACKOK TIMESTAMP VAL WIN WSCALE
 %token <reserved> URG MD5 FAST_OPEN FAST_OPEN_EXP
 %token <reserved> MP_CAPABLE MP_CAPABLE_NO_CS MP_FASTCLOSE FLAG_A FLAG_B FLAG_C FLAG_D FLAG_E FLAG_F FLAG_G FLAG_H NO_FLAGS
+%token <reserved> MPCAPABLE V0 V1 NOKEY
 %token <reserved> MP_JOIN_SYN MP_JOIN_SYN_BACKUP MP_JOIN_SYN_ACK_BACKUP MP_JOIN_ACK MP_JOIN_SYN_ACK
 %token <reserved> DSS DACK4 DSN4 DACK8 DSN8 FIN SSN DLL NOCS CKSUM ADDRESS_ID BACKUP TOKEN AUTO RAND TRUNC_R64_HMAC
 %token <reserved> SENDER_HMAC TRUNC_L64_HMAC FULL_160_HMAC SHA1_32
@@ -875,6 +876,7 @@ struct tcp_option *dss_do_dsn_dack( int dack_type, int dack_val,
 %type <integer> opt_icmp_mtu fin ssn dll dss_checksum
 %type <integer> mp_capable_no_cs is_backup address_id rand port
 %type <integer> flag_a flag_b flag_c flag_d flag_e flag_f flag_g flag_h no_flags
+%type <integer> mpc_ver mpc_flags_list mpc_flags mpc_flag mpc_keys
 %type <integer> gre_flags_list gre_flags gre_flag
 %type <integer> gre_sum gre_off gre_key gre_seq
 %type <integer> opt_icmp_echo_id
@@ -1833,6 +1835,57 @@ dss_checksum
 }
 ;
 
+mpc_ver
+: NONE	{ $$ = MPTCP_VER_DEFAULT; }
+| V0	{ $$ = MPTCPV0; }
+| V1	{ $$ = MPTCPV1; }
+;
+
+mpc_flags_list
+: FLAGS '[' mpc_flags ']'	{ $$ = $3; }
+| FLAGS any_int		{ $$ = $2->value.num; }
+;
+
+mpc_flags
+: mpc_flag			{ $$ = $1; }
+| mpc_flag ',' mpc_flags	{ $$ = $1 | $3; }
+;
+
+mpc_flag
+: NO_FLAGS			{ $$ = 0; }
+| FLAG_A			{ $$ = MPC_FLAG_A; }
+| FLAG_B			{ $$ = MPC_FLAG_B; }
+| FLAG_C			{ $$ = MPC_FLAG_C; }
+| FLAG_D			{ $$ = MPC_FLAG_D; }
+| FLAG_E			{ $$ = MPC_FLAG_E; }
+| FLAG_F			{ $$ = MPC_FLAG_F; }
+| FLAG_G			{ $$ = MPC_FLAG_G; }
+| FLAG_H			{ $$ = MPC_FLAG_H; }
+;
+
+mpc_keys
+: NOKEY {
+	$$ = 0;
+}
+| KEY '[' mptcp_var ']' {
+	$$ = 1;
+	if (enqueue_var($3.name))
+		semantic_error("MPTCP variables queue is full!\n");
+	if ($3.script_assigned)
+		add_mp_var_script_defined($3.name, &$3.value, 8);
+}
+| KEY '[' mptcp_var ',' mptcp_var ']' {
+	$$ = 2;
+	if (enqueue_var($3.name))
+		semantic_error("MPTCP variables queue is full!\n");
+	if ($3.script_assigned)
+		add_mp_var_script_defined($3.name, &$3.value, 8);
+	if (enqueue_var($5.name))
+		semantic_error("MPTCP variables queue is full!\n");
+	if ($5.script_assigned)
+		add_mp_var_script_defined($5.name, &$5.value, 8);
+}
+
 tcp_option
 : NOP              { $$ = tcp_option_new(TCPOPT_NOP, 1); }
 | EOL              { $$ = tcp_option_new(TCPOPT_EOL, 1); }
@@ -1891,7 +1944,14 @@ tcp_option
 		free(error);
 	}
 }
+| MPCAPABLE mpc_ver mpc_flags_list mpc_keys {
 
+	$$ = tcp_option_new(TCPOPT_MPTCP,
+			    TCPOLEN_MP_CAPABLE_V1_SYN + (8 * $4));
+	$$->data.mp_capable.version = $2;
+	$$->data.mp_capable.flags = $3;
+	$$->data.mp_capable.subtype = MP_CAPABLE_SUBTYPE;
+}
 | mp_capable_no_cs mptcp_var mptcp_var_or_empty flag_a flag_b flag_c flag_d flag_e flag_f flag_g flag_h no_flags{
 
 	unsigned mp_capable_length = TCPOLEN_MP_CAPABLE_SYN;

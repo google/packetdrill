@@ -48,6 +48,7 @@
 
 /* MPTCP options subtypes length */
 //MP_CAPABLE
+#define TCPOLEN_MP_CAPABLE_V1_SYN 4
 #define TCPOLEN_MP_CAPABLE_SYN 12 /* Size of the first and second steps of the three way handshake. */
 #define TCPOLEN_MP_CAPABLE 20 /* Size of the third step of the three way handshake. */
 #define TCPOLEN_MP_CAPABLE_DACK 28 /* Third packet with first DSS packet */
@@ -90,6 +91,20 @@
 #define MP_JOIN_SYN_FLAGS_BACKUP 1
 #define MP_JOIN_SYN_FLAGS_NO_BACKUP 0
 #define ZERO_RESERVED 0
+
+#define MPC_FLAG_A 0x80
+#define MPC_FLAG_B 0x40
+#define MPC_FLAG_C 0x20
+#define MPC_FLAG_D 0x10
+#define MPC_FLAG_E 0x08
+#define MPC_FLAG_F 0x04
+#define MPC_FLAG_G 0x02
+#define MPC_FLAG_H 0x01
+
+#define MPTCPV0 0
+#define MPTCPV1 1
+
+#define MPTCP_VER_DEFAULT MPTCPV1
 
 //SUBFLOW states
 #define ESTABLISHED 1 //for Subflow state

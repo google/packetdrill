@@ -951,15 +951,22 @@ bool same_mptcp_opt(struct tcp_option *opt_a, struct tcp_option *opt_b, struct p
 	switch(opt_a->data.mp_capable.subtype){
 
 		case MP_CAPABLE_SUBTYPE:
-			if(opt_a->data.mp_capable.flags != opt_b->data.mp_capable.flags)
+			if (opt_a->data.mp_capable.version !=
+			    opt_b->data.mp_capable.version)
+				return false;
+			if (opt_a->data.mp_capable.flags !=
+			    opt_b->data.mp_capable.flags)
 				return false;
 
-			if(opt_a->length == TCPOLEN_MP_CAPABLE_SYN){
-				if(opt_a->data.mp_capable.syn.key != opt_b->data.mp_capable.syn.key)
+			if (opt_a->length == TCPOLEN_MP_CAPABLE_SYN) {
+				if (opt_a->data.mp_capable.syn.key !=
+				    opt_b->data.mp_capable.syn.key)
 					return false;
-			}else if(opt_a->length == TCPOLEN_MP_CAPABLE){
-				if(opt_a->data.mp_capable.no_syn.receiver_key != opt_b->data.mp_capable.no_syn.receiver_key ||
-						opt_a->data.mp_capable.no_syn.sender_key != opt_b->data.mp_capable.no_syn.sender_key)
+			}else if (opt_a->length == TCPOLEN_MP_CAPABLE) {
+				if (opt_a->data.mp_capable.no_syn.receiver_key !=
+				    opt_b->data.mp_capable.no_syn.receiver_key ||
+				    opt_a->data.mp_capable.no_syn.sender_key !=
+				    opt_b->data.mp_capable.no_syn.sender_key)
 					return false;
 			}
 			break;
