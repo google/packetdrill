@@ -1,0 +1,23 @@
+// Test mp_capable mptcp option, first syn sent by packetdrill
+`../common/defaults.sh`
+
++0    socket(..., SOCK_STREAM, IPPROTO_MPTCP) = 3
++0    setsockopt(3, SOL_SOCKET, SO_REUSEADDR, [1], 4) = 0
+
++0    bind(3, ..., ...) = 0
++0    listen(3, 1) = 0
++0      < S 0:0(0) win 32792 <mss 1000,sackOK,nop,nop,nop,wscale 7,mpcapable v1 flags[flag_h]  nokey>
++0      > S. 0:0(0) ack 1 <mss 1460,nop,nop,sackOK,nop,wscale 8,mpcapable v1 flags[flag_h] key[skey] >
++0.01   < . 1:1(0) ack 1 win 257 <mpcapable v0 flags[flag_h] key[ckey=2,skey] >
++0    accept(3, ..., ...) = 4
+
+// ensure that traffic plane is functional and does not use DSS
+
++0    write(4, ..., 1000) = 1000
++0      > P. 1:1001(1000) ack 1
++0      < P. 1:501(500) ack 1001 win 257
++0      > . 1001:1001(0) ack 501
++0    read(4, ..., 1000) = 500
+
+
+
