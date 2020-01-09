@@ -490,6 +490,13 @@ int mptcp_subtype_mp_capable(struct packet *packet_to_modify,
 	}
 	// Third (ack) packet in three-hand shake
 	else if (optlen == TCPOLEN_MP_CAPABLE) {
+		/* with protocol v1, the client key is transmitted in
+		 * the last packet of the three-way-handshake
+		 */
+		if (direction == DIRECTION_OUTBOUND &&
+		    tcp_opt_to_modify->data.mp_capable.version != 0)
+			error = extract_and_set_kernel_key(live_packet);
+
 		error = mptcp_set_mp_cap_keys(tcp_opt_to_modify);
 		// Automatically put the idsn tokens
 		/*** XXX TODO USE SHA256 when version is 1 ****/
