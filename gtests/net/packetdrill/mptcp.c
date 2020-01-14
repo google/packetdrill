@@ -1142,7 +1142,8 @@ int dss_inbound_parser(struct packet *packet_to_modify,
 
 
 		// DSN8 & DACK4
-		}else if(dss_opt_script->data.dss.flag_m && dss_opt_script->data.dss.flag_a){
+		} else if (dss_opt_script->data.dss.flag_m &&
+			   !dss_opt_script->data.dss.flag_a) {
 			// get original information from live_packet
 			struct dack *dack_live	= (struct dack*)((u32*)dss_opt_live+1);
 			struct dsn *dsn_live 	= (struct dsn*)((u32*)dss_opt_live+2);
