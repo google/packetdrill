@@ -23,6 +23,8 @@
 #include "run.h"
 #include "packet_checksum.h"
 
+#include <linux/hash_info.h>
+
 
 #if __BYTE_ORDER == __LITTLE_ENDIAN
 	#define ntohll(x)  le64toh(x)
@@ -178,11 +180,11 @@ struct mp_subflow {
  * Global state for multipath TCP
  */
 struct mp_state_s {
-    u64 packetdrill_key; //packetdrill side key
-    u64 kernel_key; //mptcp stack side key
-    //Should be a single key for a mptcp session.
+    u64 packetdrill_key;
+    u64 kernel_key;
     bool packetdrill_key_set;
     bool kernel_key_set;
+    enum hash_algo hash;
 
     /*
      * FIFO queue to track variables use. Once parser encounter a mptcp

@@ -263,6 +263,8 @@ sha1_32			return SHA1_32;
 token			return TOKEN;
 trunc_l64_hmac		return TRUNC_L64_HMAC;
 trunc_r64_hmac		return TRUNC_R64_HMAC;
+trunc_r64_hmac_sha1	return TRUNC_R64_HMAC_SHA1;
+trunc_r64_hmac_sha256 	return TRUNC_R64_HMAC_SHA256;
 full_160_hmac		return FULL_160_HMAC;
 ipv4			return IPV4;
 ipv6			return IPV6;

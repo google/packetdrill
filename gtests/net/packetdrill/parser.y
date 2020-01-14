@@ -841,7 +841,8 @@ struct tcp_option *dss_do_dsn_dack( int dack_type, int dack_val,
 %token <reserved> MP_CAPABLE MP_CAPABLE_NO_CS MP_FASTCLOSE FLAG_A FLAG_B FLAG_C FLAG_D FLAG_E FLAG_F FLAG_G FLAG_H NO_FLAGS
 %token <reserved> MPCAPABLE V0 V1 NOKEY
 %token <reserved> MP_JOIN_SYN MP_JOIN_SYN_BACKUP MP_JOIN_SYN_ACK_BACKUP MP_JOIN_ACK MP_JOIN_SYN_ACK
-%token <reserved> DSS DACK4 DSN4 DACK8 DSN8 FIN SSN DLL NOCS CKSUM ADDRESS_ID BACKUP TOKEN AUTO RAND TRUNC_R64_HMAC
+%token <reserved> DSS DACK4 DSN4 DACK8 DSN8 FIN SSN DLL NOCS CKSUM ADDRESS_ID BACKUP TOKEN AUTO RAND
+%token <reserved> TRUNC_R64_HMAC TRUNC_R64_HMAC_SHA1 TRUNC_R64_HMAC_SHA256
 %token <reserved> SENDER_HMAC TRUNC_L64_HMAC FULL_160_HMAC SHA1_32
 %token <reserved> ADD_ADDRESS ADD_ADDR_IPV4 ADD_ADDR_IPV6 PORT MP_FAIL
 %token <reserved> REMOVE_ADDRESS ADDRESSES_ID LIST_ID
@@ -1566,11 +1567,17 @@ dsn
 : 					{	$$.type = UNDEFINED;   $$.val = UNDEFINED;}
 | DSN4 '=' INTEGER 	{ 	$$.type = 4;	$$.val = $3;}
 | DSN4 				{	$$.type = 4;	$$.val = UNDEFINED;}
-| DSN4 '=' TRUNC_R64_HMAC '('  INTEGER ')'	{
+| DSN4 '=' TRUNC_R64_HMAC_SHA1 '('  INTEGER ')'	{
 	if(!is_valid_u32($5))
 		semantic_error("this is not a valid 32 unsigned integer.");
 	$$.type = 4;
-	$$.val = sha1_least_64bits($5);
+	$$.val = sha_least_64bits($5, HASH_ALGO_SHA1);
+}
+| DSN4 '=' TRUNC_R64_HMAC_SHA256 '('  INTEGER ')'	{
+	if(!is_valid_u32($5))
+		semantic_error("this is not a valid 32 unsigned integer.");
+	$$.type = 4;
+	$$.val = sha_least_64bits($5, HASH_ALGO_SHA256);
 }
 | DSN4 '=' TRUNC_R64_HMAC '('  WORD ')' add_to_var {
 	$$.type = 4;
@@ -1582,9 +1589,13 @@ dsn
 }
 | DSN8 '=' INTEGER 	{	$$.type = 8;	$$.val = $3;}
 | DSN8 				{	$$.type = 8;	$$.val = UNDEFINED;}
-| DSN8 '=' TRUNC_R64_HMAC '('  INTEGER ')'	{
+| DSN8 '=' TRUNC_R64_HMAC_SHA1 '('  INTEGER ')'	{
 	$$.type = 8;
-	$$.val = sha1_least_64bits($5);
+	$$.val = sha_least_64bits($5, HASH_ALGO_SHA1);
+}
+| DSN8 '=' TRUNC_R64_HMAC_SHA256 '('  INTEGER ')'	{
+	$$.type = 8;
+	$$.val = sha_least_64bits($5, HASH_ALGO_SHA256);
 }
 | DSN8 '=' TRUNC_R64_HMAC '('  WORD ')' add_to_var	{
 	$$.type = 8;
@@ -1618,11 +1629,17 @@ dack
 : 					{	$$.type = UNDEFINED;	$$.dack = UNDEFINED;}
 | DACK4 '=' INTEGER {	$$.type = 4;	$$.dack = $3;}
 | DACK4 			{	$$.type = 4;	$$.dack = UNDEFINED;}
-| DACK4 '=' TRUNC_R64_HMAC '(' INTEGER ')'	{
+| DACK4 '=' TRUNC_R64_HMAC_SHA1 '(' INTEGER ')'	{
 	if(!is_valid_u32($5))
 		semantic_error("mptcp trunc_r64_hmac is not a valid u64. ");
 	$$.type = 4;
-	$$.dack = sha1_least_64bits($5);
+	$$.dack = sha_least_64bits($5, HASH_ALGO_SHA1);
+}
+| DACK4 '=' TRUNC_R64_HMAC_SHA256 '(' INTEGER ')'	{
+	if(!is_valid_u32($5))
+		semantic_error("mptcp trunc_r64_hmac is not a valid u64. ");
+	$$.type = 4;
+	$$.dack = sha_least_64bits($5, HASH_ALGO_SHA256);
 }
 | DACK4 '=' TRUNC_R64_HMAC '('  WORD ')' add_to_var	{
 	$$.type = 4;
@@ -1634,9 +1651,13 @@ dack
 }
 | DACK8 '=' INTEGER {	$$.type = 8;	$$.dack = $3;}
 | DACK8  			{	$$.type = 8;	$$.dack = UNDEFINED;}
-| DACK8 '=' TRUNC_R64_HMAC '(' INTEGER ')'	{
+| DACK8 '=' TRUNC_R64_HMAC_SHA1 '(' INTEGER ')'	{
 	$$.type = 8;
-	$$.dack = sha1_least_64bits($5);
+	$$.dack = sha_least_64bits($5, HASH_ALGO_SHA1);
+}
+| DACK8 '=' TRUNC_R64_HMAC_SHA256 '(' INTEGER ')' {
+	$$.type = 8;
+	$$.dack = sha_least_64bits($5, HASH_ALGO_SHA256);
 }
 | DACK8 '=' TRUNC_R64_HMAC '('  WORD ')' add_to_var	{
 

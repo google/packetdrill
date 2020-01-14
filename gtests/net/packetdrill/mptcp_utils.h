@@ -8,6 +8,8 @@
 #include "types.h"
 #include "unaligned.h"
 
+#include <linux/hash_info.h>
+
 #define SHA_WORKSPACE_WORDS 16
 
 
@@ -30,6 +32,9 @@ u64 rand_64();
 u32 generate_32();
 u32 sha1_least_32bits(u64 key);
 u64 sha1_least_64bits(u64 key);
+
+u64 sha_least_64bits(u64 key, enum hash_algo algo);
+
 void hash_key_sha1(uint8_t *hash, key64 key);
 key64 get_barray_from_key64(unsigned long long key);
 dsn64* retreive_dsn(uint8_t *hash);
