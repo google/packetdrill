@@ -496,6 +496,9 @@ int mptcp_subtype_mp_capable(struct packet *packet_to_modify,
 		if (direction == DIRECTION_OUTBOUND &&
 		    tcp_opt_to_modify->data.mp_capable.version != 0)
 			error = extract_and_set_kernel_key(live_packet);
+		if (direction == DIRECTION_INBOUND &&
+		    tcp_opt_to_modify->data.mp_capable.version != 0)
+			error = mptcp_gen_key();
 
 		error = mptcp_set_mp_cap_keys(tcp_opt_to_modify);
 		// Automatically put the idsn tokens
