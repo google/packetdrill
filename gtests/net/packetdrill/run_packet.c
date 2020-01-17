@@ -897,6 +897,9 @@ static int verify_tcp(
 	    (strict && check_field("tcp_cwr",
 			script_tcp->cwr,
 			actual_tcp->cwr, error)) ||
+	    check_field("tcp_ae",
+			script_tcp->ae,
+			actual_tcp->ae,  error) ||
 	    check_field("tcp_reserved_bits",
 			script_tcp->res1,
 			actual_tcp->res1, error) ||

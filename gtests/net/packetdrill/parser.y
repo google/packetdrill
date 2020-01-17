@@ -1104,6 +1104,8 @@ ip_ecn
 
 flags
 : WORD         { $$ = $1; }
+| INTEGER      { $$ = strdup(yytext); }
+| INTEGER '.'  { asprintf(&($$), "%lld.", $1); }
 | '.'          { $$ = strdup("."); }
 | WORD '.'     { asprintf(&($$), "%s.", $1); free($1); }
 | '-'          { $$ = strdup(""); }  /* no TCP flags set in segment */

@@ -27,18 +27,50 @@
 #include "ip_packet.h"
 #include "tcp.h"
 
-/* The full list of valid TCP bit flag characters */
-static const char valid_tcp_flags[] = "FSRP.EWCU";
+/*
+ * The full list of valid TCP bit flag characters
+ * numeric 0..7 used as shorthands for the ACE field
+ * Note that the parser will accept the dot only as
+ * last character in a packetdrill script, and numerals
+ * should come after any letters.
+ *
+ * In the list of valid flags, the dot as the most
+ * common flag, is placed first
+ */
+static const char valid_tcp_flags[] = ".FSRPEWAU01234567";
+static const char ace_tcp_flags[] = "01234567";
+static const char ecn_tcp_flags[] = "EWA";
 
 /* Are all the TCP flags in the given string valid? */
 static bool is_tcp_flags_spec_valid(const char *flags, char **error)
 {
 	const char *s;
+	bool has_ecn_flag = false;
+	bool has_ace_flag = false;
 
 	for (s = flags; *s != '\0'; ++s) {
 		if (!strchr(valid_tcp_flags, *s)) {
 			asprintf(error, "Invalid TCP flag: '%c'", *s);
 			return false;
+		}
+		if (strchr(ecn_tcp_flags, *s)) {
+			has_ecn_flag = true;
+			if (has_ace_flag)  {
+				asprintf(error, "Conflicting TCP flag: '%c'", *s);
+				return false;
+			}
+		}
+		if (strchr(ace_tcp_flags, *s)) {
+			if (has_ecn_flag) {
+				asprintf(error, "Conflicting TCP flag: '%c'", *s);
+				return false;
+			}
+			if (!has_ace_flag) {
+				has_ace_flag = true;
+			} else {
+				asprintf(error, "Conflicting TCP flag: '%c'", *s);
+				return false;
+			}
 		}
 	}
 	return true;
@@ -48,6 +80,19 @@ static bool is_tcp_flags_spec_valid(const char *flags, char **error)
 static inline int is_tcp_flag_set(char flag, const char *flags)
 {
 	return (strchr(flags, flag) != NULL) ? 1 : 0;
+}
+
+/* find first numeric flag for ACE */
+static inline int tcp_flag_ace_count( const char *flags)
+{
+	const char *s;
+
+	for (s = flags; *s != '\0'; ++s) {
+		if (strchr(ace_tcp_flags, *s)) {
+			return ((int)s - (int)'0');
+		}
+	}
+	return 0;
 }
 
 struct packet *new_tcp_packet(int address_family,
@@ -74,6 +119,7 @@ struct packet *new_tcp_packet(int address_family,
 	const int tcp_header_bytes = sizeof(struct tcp) + tcp_option_bytes;
 	const int ip_bytes =
 		 ip_header_bytes + tcp_header_bytes + tcp_payload_bytes;
+	int ace;
 
 	/* Sanity-check all the various lengths */
 	if (ip_option_bytes & 0x3) {
@@ -150,8 +196,17 @@ struct packet *new_tcp_packet(int address_family,
 	packet->tcp->psh = is_tcp_flag_set('P', flags);
 	packet->tcp->ack = is_tcp_flag_set('.', flags);
 	packet->tcp->urg = is_tcp_flag_set('U', flags);
-	packet->tcp->ece = is_tcp_flag_set('E', flags);
-	packet->tcp->cwr = is_tcp_flag_set('W', flags);
+
+	if ((ace = tcp_flag_ace_count(flags)) != 0) {
+		/* after validity check, ACE value doesn't coexist with ECN flags */
+		packet->tcp->ece = (ace & 1);
+		packet->tcp->cwr = (ace & 2);
+		packet->tcp->ae  = (ace & 4);
+	} else {
+		packet->tcp->ece = is_tcp_flag_set('E', flags);
+		packet->tcp->cwr = is_tcp_flag_set('W', flags);
+		packet->tcp->ae  = is_tcp_flag_set('A', flags);
+	}
 
 	if (tcp_options == NULL) {
 		packet->flags |= FLAG_OPTIONS_NOCHECK;
