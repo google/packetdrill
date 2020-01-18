@@ -33,6 +33,8 @@ enum dump_format_t {
 	DUMP_VERBOSE,		/* add hex dump */
 };
 
+static bool parse_tcp_ace_field = false;
+
 /* Returns in *ascii_string a human-readable representation of the
  * packet 'packet'. Returns STATUS_OK on success; on failure returns
  * STATUS_ERR and sets error message.

@@ -168,6 +168,39 @@ static int tcp_packet_to_string(FILE *s, struct packet *packet,
 		fputc('.', s);
 	if (packet->tcp->urg)
 		fputc('U', s);
+	if (!packet->tcp->syn && parse_tcp_ace_field) {
+		int ace = 0;
+		if (packet->tcp->ece)
+			ace |= 1;
+		if (packet->tcp->cwr)
+			ace |= 2;
+		if (packet->tcp->ae)
+			ace |= 4;
+		fputc('0' + ace, s);
+	} else {
+		if (packet->tcp->ece)
+			fputc('E', s);   /* ECN *E*cho sent (ECN) */
+		if (packet->tcp->cwr)
+			fputc('W', s);   /* Congestion *W*indow reduced (ECN) */
+		if (packet->tcp->ae)
+			fputc('A', s);   /* AccECN bit */
+
+		/* Check for AccECN handshake */
+		if (packet->tcp->syn && !packet->tcp->ack &&
+		    packet->tcp->ae && packet->tcp->cwr && packet->tcp->cwr)
+			parse_tcp_ace_field = true;
+		else if (packet->tcp->syn && packet->tcp->ack &&
+			parse_tcp_ace_field) {
+			if ((!packet->tcp->ae &&  packet->tcp->cwr && !packet->tcp->ece) ||
+			    (!packet->tcp->ae &&  packet->tcp->cwr &&  packet->tcp->ece) ||
+			    ( packet->tcp->ae && !packet->tcp->cwr && !packet->tcp->ece) ||
+			    ( packet->tcp->ae &&  packet->tcp->cwr && !packet->tcp->ece))
+				parse_tcp_ace_field = true;
+			else
+				parse_tcp_ace_field = false;
+		}
+	}
+
 	if (packet->tcp->ece)
 		fputc('E', s);   /* ECN *E*cho sent (ECN) */
 	if (packet->tcp->cwr)

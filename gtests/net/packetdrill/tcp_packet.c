@@ -89,7 +89,7 @@ static inline int tcp_flag_ace_count( const char *flags)
 
 	for (s = flags; *s != '\0'; ++s) {
 		if (strchr(ace_tcp_flags, *s)) {
-			return ((int)s - (int)'0');
+			return ((int)*s - (int)'0');
 		}
 	}
 	return 0;
