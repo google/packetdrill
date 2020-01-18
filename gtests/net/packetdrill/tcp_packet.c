@@ -55,7 +55,7 @@ static bool is_tcp_flags_spec_valid(const char *flags, char **error)
 		}
 		if (strchr(ecn_tcp_flags, *s)) {
 			has_ecn_flag = true;
-			if (has_ace_flag)  {
+			if (has_ace_flag) {
 				asprintf(error, "Conflicting TCP flag: '%c'", *s);
 				return false;
 			}

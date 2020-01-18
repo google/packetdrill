@@ -891,15 +891,24 @@ static int verify_tcp(
 	    check_field("tcp_urg",
 			script_tcp->urg,
 			actual_tcp->urg, error) ||
-	    check_field("tcp_ece",
+	    (parse_tcp_ace_field &&
+		check_field("tcp_ace",
+			(script_tcp->ae  ? 4 : 0) |
+			(script_tcp->cwr ? 2 : 0) |
+			(script_tcp->ece ? 1 : 0),
+			(actual_tcp->ae  ? 4 : 0) |
+			(actual_tcp->cwr ? 2 : 0) |
+			(actual_tcp->ece ? 1 : 0), error)) ||
+	    (!parse_tcp_ace_field &&
+		(check_field("tcp_ece",
 			script_tcp->ece,
 			actual_tcp->ece, error) ||
-	    (strict && check_field("tcp_cwr",
+		(strict && check_field("tcp_cwr",
 			script_tcp->cwr,
 			actual_tcp->cwr, error)) ||
-	    check_field("tcp_ae",
+		check_field("tcp_ae",
 			script_tcp->ae,
-			actual_tcp->ae,  error) ||
+			actual_tcp->ae,  error))) ||
 	    check_field("tcp_reserved_bits",
 			script_tcp->res1,
 			actual_tcp->res1, error) ||
