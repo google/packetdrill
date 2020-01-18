@@ -201,13 +201,6 @@ static int tcp_packet_to_string(FILE *s, struct packet *packet,
 		}
 	}
 
-	if (packet->tcp->ece)
-		fputc('E', s);   /* ECN *E*cho sent (ECN) */
-	if (packet->tcp->cwr)
-		fputc('W', s);   /* Congestion *W*indow reduced (ECN) */
-	if (packet->tcp->ae)
-		fputc('A', s);   /* AccECN bit */
-
 	fprintf(s, " %u:%u(%u) ",
 		ntohl(packet->tcp->seq),
 		ntohl(packet->tcp->seq) + packet_payload_len(packet),
