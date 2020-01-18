@@ -199,9 +199,9 @@ struct packet *new_tcp_packet(int address_family,
 
 	if ((ace = tcp_flag_ace_count(flags)) != 0) {
 		/* after validity check, ACE value doesn't coexist with ECN flags */
-		packet->tcp->ece = (ace & 1);
-		packet->tcp->cwr = (ace & 2);
-		packet->tcp->ae  = (ace & 4);
+		packet->tcp->ece = ((ace & 1) == 1);
+		packet->tcp->cwr = ((ace & 2) == 2);
+		packet->tcp->ae  = ((ace & 4) == 4);
 	} else {
 		packet->tcp->ece = is_tcp_flag_set('E', flags);
 		packet->tcp->cwr = is_tcp_flag_set('W', flags);
