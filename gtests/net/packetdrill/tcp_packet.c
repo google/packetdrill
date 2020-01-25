@@ -204,6 +204,7 @@ struct packet *new_tcp_packet(int address_family,
 		 * Need to force a boolean check for the 
 		 * 1 bit fields to get correctly set
 		 */
+		packet->flags |= FLAG_PARSE_ACE;
 		packet->tcp->ece = ((ace & 1) != 0);
 		packet->tcp->cwr = ((ace & 2) != 0);
 		packet->tcp->ae  = ((ace & 4) != 0);

@@ -891,7 +891,7 @@ static int verify_tcp(
 	    check_field("tcp_urg",
 			script_tcp->urg,
 			actual_tcp->urg, error) ||
-	    (parse_tcp_ace_field &&
+	    ((script_packet->flags & FLAG_PARSE_ACE) &&
 		check_field("tcp_ace",
 			(script_tcp->ae  ? 4 : 0) |
 			(script_tcp->cwr ? 2 : 0) |
@@ -899,7 +899,7 @@ static int verify_tcp(
 			(actual_tcp->ae  ? 4 : 0) |
 			(actual_tcp->cwr ? 2 : 0) |
 			(actual_tcp->ece ? 1 : 0), error)) ||
-	    (!parse_tcp_ace_field &&
+	    (!(script_packet->flags & FLAG_PARSE_ACE) &&
 		(check_field("tcp_ece",
 			script_tcp->ece,
 			actual_tcp->ece, error) ||
