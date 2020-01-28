@@ -1240,7 +1240,7 @@ int dss_inbound_parser(struct packet *packet_to_modify,
 			}else{
 				if (dack_script->dack8 > 0)
 					dack_live->dack8 =
-						htonl(sha_least_64bits(mp_state.kernel_key,
+						htonll(sha_least_64bits(mp_state.kernel_key,
 								       mp_state.hash) +
 						      dack_script->dack8);
 			}
@@ -1259,7 +1259,7 @@ int dss_inbound_parser(struct packet *packet_to_modify,
 			}else{
 				if (dsn_script->dsn8 > 0)
 					dsn_live->dsn8 =
-						htonl(sha_least_64bits(mp_state.packetdrill_key,
+						htonll(sha_least_64bits(mp_state.packetdrill_key,
 								       mp_state.hash) +
 						      dsn_script->dsn8);
 			}
