@@ -1541,7 +1541,7 @@ int dss_outbound_parser(struct packet *packet_to_modify,
 			if(!(!dss_opt_live->data.dss.flag_m && dss_opt_live->data.dss.flag_a))
 				return STATUS_ERR;
 			// get original information from live_packet
-			u32 *dack_live			= (u32*)dss_opt_live+1;
+			u64 *dack_live			= (u64 *)((u32 *)dss_opt_live + 1);
 			u32 *dsn_live			= (u32*)dack_live+2;
 			u32 *ssn_live			= (u32*)dsn_live+1;
 
@@ -1623,11 +1623,11 @@ int dss_outbound_parser(struct packet *packet_to_modify,
 
 			// get original information from live_packet
 			u32 *dack_live			= (u32*)dss_opt_live+1;
-			u32 *dsn_live			= (u32*)dack_live+1;
+			u64 *dsn_live			= (u64 *)((u32 *)dack_live + 1);
 			u32 *ssn_live			= (u32*)dsn_live+2;
 
-			int *dack_script = (int*)dss_opt_script+1;
-			int *dsn_script = (int*)dack_script+1;
+			u32 *dack_script = (u32 *)dss_opt_script + 1;
+			u64 *dsn_script = (u64 *)((u32 *)dack_script + 1);
 			int *ssn_script = (int*)dsn_script+2;
 			s16 *dll_script = (s16*)ssn_script+2;
 			s16 *chk_script = (s16*)ssn_script+3;
@@ -1702,12 +1702,12 @@ int dss_outbound_parser(struct packet *packet_to_modify,
 				return STATUS_ERR;
 
 			// get original information from live_packet
-			u32 *dack_live			= (u32*)dss_opt_live+1;
-			u32 *dsn_live			= (u32*)dack_live+2;
+			u64 *dack_live			= (u64 *)((u32 *)dss_opt_live + 1);
+			u64 *dsn_live			= (u64 *)((u32 *)dack_live + 2);
 			u32 *ssn_live			= (u32*)dsn_live+2;
 
-			int *dack_script = (int*)dss_opt_script+1;
-			int *dsn_script = (int*)dack_script+2;
+			u64 *dack_script = (u64 *)((u32 *)dss_opt_script + 1);
+			u64 *dsn_script = (u64 *)((u32 *)dack_script + 2);
 			int *ssn_script = (int*)dsn_script+2;
 			s16 *dll_script = (s16*)ssn_script+2;
 			s16 *chk_script = (s16*)ssn_script+3;
