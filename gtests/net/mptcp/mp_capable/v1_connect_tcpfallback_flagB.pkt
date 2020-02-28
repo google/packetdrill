@@ -1,0 +1,25 @@
+// connect() function, connection initiated by the kernel
+--tolerance_usecs=100000
+`../common/defaults.sh`
+
+0.0   socket(..., SOCK_STREAM, IPPROTO_MPTCP) = 3
++0.0  fcntl(3, F_GETFL) = 0x2 (flags O_RDWR)
++0.0  fcntl(3, F_SETFL, O_RDWR|O_NONBLOCK) = 0
+
+// Establish connection and verify that there was no error.
+
++0.0  connect(3, ..., ...) = -1 EINPROGRESS (Operation now in progress)
++0.0   > S 0:0(0) <mss 1460,sackOK,TS val 100 ecr 0,nop,wscale 8,mpcapable v1 flags[flag_h] nokey>
++0.0   < S. 0:0(0) ack 1 win 65535 <mss 1460,sackOK,TS val 700 ecr 100,nop,wscale 8,mpcapable v1 flags[flag_b,flag_h] key[skey=2] >
++0.0   > . 1:1(0) ack 1 win 256 <nop,nop,TS val 100 ecr 700>
+0.200 getsockopt(3, SOL_SOCKET, SO_ERROR, [0], [4]) = 0
+0.200 fcntl(3, F_SETFL, O_RDWR) = 0   // set back to blocking
+
+// ensure that traffic plane is functional and does not use DSS
+
++0    write(3, ..., 1000) = 1000
++0      > P. 1:1001(1000) ack 1 <nop,nop,TS val 100 ecr 700>
++0      < P. 1:501(500) ack 1001 win 257
++0      > . 1001:1001(0) ack 501 <nop,nop,TS val 100 ecr 700>
++0    read(3, ..., 1000) = 500
+

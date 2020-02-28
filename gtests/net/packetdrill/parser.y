@@ -839,8 +839,10 @@ struct tcp_option *dss_do_dsn_dack( int dack_type, int dack_val,
 %token <reserved> ACK ECR EOL MSS NOP SACK SACKOK TIMESTAMP VAL WIN WSCALE
 %token <reserved> URG MD5 FAST_OPEN FAST_OPEN_EXP
 %token <reserved> MP_CAPABLE MP_CAPABLE_NO_CS MP_FASTCLOSE FLAG_A FLAG_B FLAG_C FLAG_D FLAG_E FLAG_F FLAG_G FLAG_H NO_FLAGS
+%token <reserved> MPCAPABLE V0 V1 NOKEY
 %token <reserved> MP_JOIN_SYN MP_JOIN_SYN_BACKUP MP_JOIN_SYN_ACK_BACKUP MP_JOIN_ACK MP_JOIN_SYN_ACK
-%token <reserved> DSS DACK4 DSN4 DACK8 DSN8 FIN SSN DLL NOCS CKSUM ADDRESS_ID BACKUP TOKEN AUTO RAND TRUNC_R64_HMAC
+%token <reserved> DSS DACK4 DSN4 DACK8 DSN8 FIN SSN DLL NOCS CKSUM ADDRESS_ID BACKUP TOKEN AUTO RAND
+%token <reserved> TRUNC_R64_HMAC TRUNC_R64_HMAC_SHA1 TRUNC_R64_HMAC_SHA256
 %token <reserved> SENDER_HMAC TRUNC_L64_HMAC FULL_160_HMAC SHA1_32
 %token <reserved> ADD_ADDRESS ADD_ADDR_IPV4 ADD_ADDR_IPV6 PORT MP_FAIL
 %token <reserved> REMOVE_ADDRESS ADDRESSES_ID LIST_ID
@@ -875,6 +877,7 @@ struct tcp_option *dss_do_dsn_dack( int dack_type, int dack_val,
 %type <integer> opt_icmp_mtu fin ssn dll dss_checksum
 %type <integer> mp_capable_no_cs is_backup address_id rand port
 %type <integer> flag_a flag_b flag_c flag_d flag_e flag_f flag_g flag_h no_flags
+%type <integer> mpc_ver mpc_flags_list mpc_flags mpc_flag mpc_keys
 %type <integer> gre_flags_list gre_flags gre_flag
 %type <integer> gre_sum gre_off gre_key gre_seq
 %type <integer> opt_icmp_echo_id
@@ -1564,11 +1567,17 @@ dsn
 : 					{	$$.type = UNDEFINED;   $$.val = UNDEFINED;}
 | DSN4 '=' INTEGER 	{ 	$$.type = 4;	$$.val = $3;}
 | DSN4 				{	$$.type = 4;	$$.val = UNDEFINED;}
-| DSN4 '=' TRUNC_R64_HMAC '('  INTEGER ')'	{
+| DSN4 '=' TRUNC_R64_HMAC_SHA1 '('  INTEGER ')'	{
 	if(!is_valid_u32($5))
 		semantic_error("this is not a valid 32 unsigned integer.");
 	$$.type = 4;
-	$$.val = sha1_least_64bits($5);
+	$$.val = sha_least_64bits($5, HASH_ALGO_SHA1);
+}
+| DSN4 '=' TRUNC_R64_HMAC_SHA256 '('  INTEGER ')'	{
+	if(!is_valid_u32($5))
+		semantic_error("this is not a valid 32 unsigned integer.");
+	$$.type = 4;
+	$$.val = sha_least_64bits($5, HASH_ALGO_SHA256);
 }
 | DSN4 '=' TRUNC_R64_HMAC '('  WORD ')' add_to_var {
 	$$.type = 4;
@@ -1580,9 +1589,13 @@ dsn
 }
 | DSN8 '=' INTEGER 	{	$$.type = 8;	$$.val = $3;}
 | DSN8 				{	$$.type = 8;	$$.val = UNDEFINED;}
-| DSN8 '=' TRUNC_R64_HMAC '('  INTEGER ')'	{
+| DSN8 '=' TRUNC_R64_HMAC_SHA1 '('  INTEGER ')'	{
 	$$.type = 8;
-	$$.val = sha1_least_64bits($5);
+	$$.val = sha_least_64bits($5, HASH_ALGO_SHA1);
+}
+| DSN8 '=' TRUNC_R64_HMAC_SHA256 '('  INTEGER ')'	{
+	$$.type = 8;
+	$$.val = sha_least_64bits($5, HASH_ALGO_SHA256);
 }
 | DSN8 '=' TRUNC_R64_HMAC '('  WORD ')' add_to_var	{
 	$$.type = 8;
@@ -1616,11 +1629,17 @@ dack
 : 					{	$$.type = UNDEFINED;	$$.dack = UNDEFINED;}
 | DACK4 '=' INTEGER {	$$.type = 4;	$$.dack = $3;}
 | DACK4 			{	$$.type = 4;	$$.dack = UNDEFINED;}
-| DACK4 '=' TRUNC_R64_HMAC '(' INTEGER ')'	{
+| DACK4 '=' TRUNC_R64_HMAC_SHA1 '(' INTEGER ')'	{
 	if(!is_valid_u32($5))
 		semantic_error("mptcp trunc_r64_hmac is not a valid u64. ");
 	$$.type = 4;
-	$$.dack = sha1_least_64bits($5);
+	$$.dack = sha_least_64bits($5, HASH_ALGO_SHA1);
+}
+| DACK4 '=' TRUNC_R64_HMAC_SHA256 '(' INTEGER ')'	{
+	if(!is_valid_u32($5))
+		semantic_error("mptcp trunc_r64_hmac is not a valid u64. ");
+	$$.type = 4;
+	$$.dack = sha_least_64bits($5, HASH_ALGO_SHA256);
 }
 | DACK4 '=' TRUNC_R64_HMAC '('  WORD ')' add_to_var	{
 	$$.type = 4;
@@ -1632,9 +1651,13 @@ dack
 }
 | DACK8 '=' INTEGER {	$$.type = 8;	$$.dack = $3;}
 | DACK8  			{	$$.type = 8;	$$.dack = UNDEFINED;}
-| DACK8 '=' TRUNC_R64_HMAC '(' INTEGER ')'	{
+| DACK8 '=' TRUNC_R64_HMAC_SHA1 '(' INTEGER ')'	{
 	$$.type = 8;
-	$$.dack = sha1_least_64bits($5);
+	$$.dack = sha_least_64bits($5, HASH_ALGO_SHA1);
+}
+| DACK8 '=' TRUNC_R64_HMAC_SHA256 '(' INTEGER ')' {
+	$$.type = 8;
+	$$.dack = sha_least_64bits($5, HASH_ALGO_SHA256);
 }
 | DACK8 '=' TRUNC_R64_HMAC '('  WORD ')' add_to_var	{
 
@@ -1833,6 +1856,57 @@ dss_checksum
 }
 ;
 
+mpc_ver
+: NONE	{ $$ = MPTCP_VER_DEFAULT; }
+| V0	{ $$ = MPTCPV0; }
+| V1	{ $$ = MPTCPV1; }
+;
+
+mpc_flags_list
+: FLAGS '[' mpc_flags ']'	{ $$ = $3; }
+| FLAGS any_int		{ $$ = $2->value.num; }
+;
+
+mpc_flags
+: mpc_flag			{ $$ = $1; }
+| mpc_flag ',' mpc_flags	{ $$ = $1 | $3; }
+;
+
+mpc_flag
+: NO_FLAGS			{ $$ = 0; }
+| FLAG_A			{ $$ = MPC_FLAG_A; }
+| FLAG_B			{ $$ = MPC_FLAG_B; }
+| FLAG_C			{ $$ = MPC_FLAG_C; }
+| FLAG_D			{ $$ = MPC_FLAG_D; }
+| FLAG_E			{ $$ = MPC_FLAG_E; }
+| FLAG_F			{ $$ = MPC_FLAG_F; }
+| FLAG_G			{ $$ = MPC_FLAG_G; }
+| FLAG_H			{ $$ = MPC_FLAG_H; }
+;
+
+mpc_keys
+: NOKEY {
+	$$ = 0;
+}
+| KEY '[' mptcp_var ']' {
+	$$ = 1;
+	if (enqueue_var($3.name))
+		semantic_error("MPTCP variables queue is full!\n");
+	if ($3.script_assigned)
+		add_mp_var_script_defined($3.name, &$3.value, 8);
+}
+| KEY '[' mptcp_var ',' mptcp_var ']' {
+	$$ = 2;
+	if (enqueue_var($3.name))
+		semantic_error("MPTCP variables queue is full!\n");
+	if ($3.script_assigned)
+		add_mp_var_script_defined($3.name, &$3.value, 8);
+	if (enqueue_var($5.name))
+		semantic_error("MPTCP variables queue is full!\n");
+	if ($5.script_assigned)
+		add_mp_var_script_defined($5.name, &$5.value, 8);
+}
+
 tcp_option
 : NOP              { $$ = tcp_option_new(TCPOPT_NOP, 1); }
 | EOL              { $$ = tcp_option_new(TCPOPT_EOL, 1); }
@@ -1891,7 +1965,14 @@ tcp_option
 		free(error);
 	}
 }
+| MPCAPABLE mpc_ver mpc_flags_list mpc_keys {
 
+	$$ = tcp_option_new(TCPOPT_MPTCP,
+			    TCPOLEN_MP_CAPABLE_V1_SYN + (8 * $4));
+	$$->data.mp_capable.version = $2;
+	$$->data.mp_capable.flags = $3;
+	$$->data.mp_capable.subtype = MP_CAPABLE_SUBTYPE;
+}
 | mp_capable_no_cs mptcp_var mptcp_var_or_empty flag_a flag_b flag_c flag_d flag_e flag_f flag_g flag_h no_flags{
 
 	unsigned mp_capable_length = TCPOLEN_MP_CAPABLE_SYN;

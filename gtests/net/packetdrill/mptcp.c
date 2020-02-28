@@ -5,9 +5,6 @@
 #include "mptcp.h"
 #include "packet_to_string.h"
 
-//#include "mptcp_sha1.h"
-
-
 void init_mp_state()
 {
 	mp_state.packetdrill_key_set = false;
@@ -457,44 +454,78 @@ int mptcp_subtype_mp_capable(struct packet *packet_to_modify,
 		struct tcp_option *tcp_opt_to_modify,
 		unsigned direction)
 {
-	int error;
-	// Syn packet, packetdril -> kernel
-	if(tcp_opt_to_modify->length == TCPOLEN_MP_CAPABLE_SYN &&
-			direction == DIRECTION_INBOUND &&
-			!packet_to_modify->tcp->ack){
+	int error, optlen = tcp_opt_to_modify->length;
+
+	// Syn packet, packetdrill -> kernel, v0
+	if (optlen == TCPOLEN_MP_CAPABLE_SYN &&
+	    direction == DIRECTION_INBOUND &&
+	    !packet_to_modify->tcp->ack) {
 		error = mptcp_gen_key();
 		error = mptcp_set_mp_cap_syn_key(tcp_opt_to_modify) || error;
 		// For inbound flow, initialise flow at syn,
 		// For outbound flow, initialise at third ack.
 		new_subflow_inbound(packet_to_modify);
 	}
-	// Syn and Syn_ack kernel->packetdrill
-	else if(tcp_opt_to_modify->length == TCPOLEN_MP_CAPABLE_SYN &&
-			direction == DIRECTION_OUTBOUND){
+	// syn packet, inbound, v1
+	else if (optlen == TCPOLEN_MP_CAPABLE_V1_SYN &&
+		 direction == DIRECTION_INBOUND &&
+		 !packet_to_modify->tcp->ack) {
+		new_subflow_inbound(packet_to_modify);
+		error = 0;
+	}
+	// Syn v0 and Syn_ack kernel->packetdrill
+	else if (optlen == TCPOLEN_MP_CAPABLE_SYN &&
+		 direction == DIRECTION_OUTBOUND) {
 		error = extract_and_set_kernel_key(live_packet);
 		error = mptcp_set_mp_cap_syn_key(tcp_opt_to_modify);
 		mp_state.remote_ssn++;
 	}
+	// syn v1
+	else if (optlen == TCPOLEN_MP_CAPABLE_V1_SYN &&
+		 direction == DIRECTION_OUTBOUND) {
+		error = 0;
+	}
 	// Third (ack) packet in three-hand shake
-	else if(tcp_opt_to_modify->length == TCPOLEN_MP_CAPABLE ){
+	else if (optlen == TCPOLEN_MP_CAPABLE) {
+		/* with protocol v1, the client key is transmitted in
+		 * the last packet of the three-way-handshake
+		 */
+		if (direction == DIRECTION_OUTBOUND &&
+		    tcp_opt_to_modify->data.mp_capable.version != 0)
+			error = extract_and_set_kernel_key(live_packet);
+		if (direction == DIRECTION_INBOUND &&
+		    tcp_opt_to_modify->data.mp_capable.version != 0)
+			error = mptcp_gen_key();
+
+		switch (tcp_opt_to_modify->data.mp_capable.version) {
+			case MPTCPV0:
+				mp_state.hash = HASH_ALGO_SHA1;
+				break;
+			case MPTCPV1:
+				mp_state.hash = HASH_ALGO_SHA256;
+				break;
+			default:
+				break;
+		}
+
 		error = mptcp_set_mp_cap_keys(tcp_opt_to_modify);
 		// Automatically put the idsn tokens
-		mp_state.idsn = sha1_least_64bits(mp_state.packetdrill_key);
-		mp_state.remote_idsn = sha1_least_64bits(mp_state.kernel_key);
+		mp_state.idsn = sha_least_64bits(mp_state.packetdrill_key,
+						 mp_state.hash);
+		mp_state.remote_idsn = sha_least_64bits(mp_state.kernel_key,
+							mp_state.hash);
 		// If this is done at syn packet time as for inbound, key comparisons fail
 		// due to, I guess, key set too early as it complains key is not 0
 		if(direction == DIRECTION_OUTBOUND)
 			new_subflow_outbound(live_packet);
 	}
 	// SYN_ACK, packetdrill->kernel
-	else if(tcp_opt_to_modify->length == TCPOLEN_MP_CAPABLE_SYN &&
-			direction == DIRECTION_INBOUND &&
-			packet_to_modify->tcp->ack){
+	else if (tcp_opt_to_modify->length == TCPOLEN_MP_CAPABLE_SYN &&
+		 direction == DIRECTION_INBOUND &&
+		 packet_to_modify->tcp->ack) {
 		error = mptcp_gen_key();
 		error = mptcp_set_mp_cap_syn_key(tcp_opt_to_modify) || error;
-	}
-
-	else{
+	} else {
 		return STATUS_ERR;
 	}
 	return error;
@@ -967,10 +998,16 @@ int dss_inbound_parser(struct packet *packet_to_modify,
 				u64 *key = find_next_key();
 				if(!key || additional_val==STATUS_ERR)
 					return STATUS_ERR;
-				dack_live->dack4 = htonl(sha1_least_64bits(*key)+ additional_val);
+				dack_live->dack4 =
+					htonl(sha_least_64bits(*key,
+							       mp_state.hash) +
+					      additional_val);
 			}else{
-				if(dack_script->dack4>0)
-					dack_live->dack4 = htonl(sha1_least_64bits(mp_state.kernel_key) + dack_script->dack4);
+				if (dack_script->dack4 > 0)
+					dack_live->dack4 =
+						htonl(sha_least_64bits(mp_state.kernel_key,
+								       mp_state.hash) +
+						      dack_script->dack4);
 			}
 
 
@@ -981,10 +1018,15 @@ int dss_inbound_parser(struct packet *packet_to_modify,
 				u64 *key = find_next_key();
 				if(!key || additional_val==STATUS_ERR)
 					return STATUS_ERR;
-				dsn_live->dsn4 = htonl(sha1_least_64bits(*key) + additional_val);
+				dsn_live->dsn4 = htonl(sha_least_64bits(*key,
+									mp_state.hash) +
+						       additional_val);
 			}else{
-				if(dsn_script->dsn4>0)
-					dsn_live->dsn4 = htonl(sha1_least_64bits(mp_state.packetdrill_key) + dsn_script->dsn4);
+				if (dsn_script->dsn4 > 0)
+					dsn_live->dsn4 =
+						htonl(sha_least_64bits(mp_state.packetdrill_key,
+								       mp_state.hash) +
+						      dsn_script->dsn4);
 			}
 
 			if(dss_opt_script->length == TCPOLEN_DSS_DACK4_DSN4){
@@ -1036,10 +1078,16 @@ int dss_inbound_parser(struct packet *packet_to_modify,
 				u64 *key = find_next_key();
 				if(!key || additional_val==STATUS_ERR)
 					return STATUS_ERR;
-				dack_live->dack8 = htonll(sha1_least_64bits(*key) + additional_val);
+				dack_live->dack8 =
+					htonll(sha_least_64bits(*key,
+								mp_state.hash) +
+					       additional_val);
 			}else{
-				if(dack_script->dack8>0)
-					dack_live->dack8 = htonll(sha1_least_64bits(mp_state.kernel_key) + dack_script->dack8);
+				if (dack_script->dack8 > 0)
+					dack_live->dack8 =
+						htonll(sha_least_64bits(mp_state.kernel_key,
+								        mp_state.hash) +
+						       dack_script->dack8);
 			}
 
 			if(dsn_script->dsn4 == UNDEFINED)
@@ -1049,10 +1097,16 @@ int dss_inbound_parser(struct packet *packet_to_modify,
 				u64 *key = find_next_key();
 				if(!key || additional_val==STATUS_ERR)
 					return STATUS_ERR;
-				dsn_live->dsn4 = htonl(sha1_least_64bits(*key)+ additional_val);
+				dsn_live->dsn4 =
+					htonl(sha_least_64bits(*key,
+							       mp_state.hash) +
+					      additional_val);
 			}else{
-				if(dsn_script->dsn4>0)
-					dsn_live->dsn4 = htonl(sha1_least_64bits(mp_state.packetdrill_key) + dsn_script->dsn4);
+				if (dsn_script->dsn4 > 0)
+					dsn_live->dsn4 =
+						htonl(sha_least_64bits(mp_state.packetdrill_key,
+								       mp_state.hash) +
+						      dsn_script->dsn4);
 			}
 
 			if(dss_opt_script->length == TCPOLEN_DSS_DACK4_DSN4){
@@ -1088,7 +1142,8 @@ int dss_inbound_parser(struct packet *packet_to_modify,
 
 
 		// DSN8 & DACK4
-		}else if(dss_opt_script->data.dss.flag_m && dss_opt_script->data.dss.flag_a){
+		} else if (dss_opt_script->data.dss.flag_m &&
+			   !dss_opt_script->data.dss.flag_a) {
 			// get original information from live_packet
 			struct dack *dack_live	= (struct dack*)((u32*)dss_opt_live+1);
 			struct dsn *dsn_live 	= (struct dsn*)((u32*)dss_opt_live+2);
@@ -1103,10 +1158,15 @@ int dss_inbound_parser(struct packet *packet_to_modify,
 				u64 *key = find_next_key();
 				if(!key || additional_val==STATUS_ERR)
 					return STATUS_ERR;
-				dack_live->dack4 = htonl(sha1_least_64bits(*key) + additional_val);
+				dack_live->dack4 =
+					htonl(sha_least_64bits(*key, mp_state.hash) +
+					      additional_val);
 			}else{
-				if(dack_script->dack4>0)
-					dack_live->dack4 = htonl(sha1_least_64bits(mp_state.kernel_key) + dack_script->dack4);
+				if (dack_script->dack4 > 0)
+					dack_live->dack4 =
+						htonl(sha_least_64bits(mp_state.kernel_key,
+								       mp_state.hash) +
+						      dack_script->dack4);
 			}
 
 			if(dss_opt_script->data.dss.dack_dsn.dsn.dsn8 == UNDEFINED)
@@ -1116,10 +1176,15 @@ int dss_inbound_parser(struct packet *packet_to_modify,
 				u64 *key = find_next_key();
 				if(!key || additional_val==STATUS_ERR)
 					return STATUS_ERR;
-				dsn_live->dsn8 = htonll(sha1_least_64bits(*key) + additional_val);
+				dsn_live->dsn8 =
+					htonll(sha_least_64bits(*key, mp_state.hash) +
+					       additional_val);
 			}else{
-				if(dsn_script->dsn8>0)
-					dsn_live->dsn8 = htonl(sha1_least_64bits(mp_state.packetdrill_key) + dsn_script->dsn8);
+				if (dsn_script->dsn8 > 0)
+					dsn_live->dsn8 =
+						htonl(sha_least_64bits(mp_state.packetdrill_key,
+								       mp_state.hash) +
+						      dsn_script->dsn8);
 			}
 
 			if(dss_opt_script->length == TCPOLEN_DSS_DACK4_DSN4){
@@ -1168,10 +1233,16 @@ int dss_inbound_parser(struct packet *packet_to_modify,
 				u64 *key = find_next_key();
 				if(!key || additional_val==STATUS_ERR)
 					return STATUS_ERR;
-				dack_live->dack8 = htonll(sha1_least_64bits(*key) + additional_val);
+				dack_live->dack8 =
+					htonll(sha_least_64bits(*key,
+								mp_state.hash) +
+					additional_val);
 			}else{
-				if(dack_script->dack8>0)
-					dack_live->dack8 = htonl(sha1_least_64bits(mp_state.kernel_key) + dack_script->dack8);
+				if (dack_script->dack8 > 0)
+					dack_live->dack8 =
+						htonll(sha_least_64bits(mp_state.kernel_key,
+								       mp_state.hash) +
+						      dack_script->dack8);
 			}
 
 			if(dss_opt_script->data.dss.dack_dsn.dsn.dsn8 == UNDEFINED)
@@ -1181,10 +1252,16 @@ int dss_inbound_parser(struct packet *packet_to_modify,
 				u64 *key = find_next_key();
 				if(!key || additional_val==STATUS_ERR)
 					return STATUS_ERR;
-				dsn_live->dsn8 = htonll(sha1_least_64bits(*key) + additional_val);
+				dsn_live->dsn8 =
+					htonll(sha_least_64bits(*key,
+							        mp_state.hash) +
+					       additional_val);
 			}else{
-				if(dsn_script->dsn8>0)
-					dsn_live->dsn8 = htonl(sha1_least_64bits(mp_state.packetdrill_key) + dsn_script->dsn8);
+				if (dsn_script->dsn8 > 0)
+					dsn_live->dsn8 =
+						htonll(sha_least_64bits(mp_state.packetdrill_key,
+								       mp_state.hash) +
+						      dsn_script->dsn8);
 			}
 
 			if(dss_opt_script->length == TCPOLEN_DSS_DACK4_DSN4){
@@ -1235,10 +1312,16 @@ int dss_inbound_parser(struct packet *packet_to_modify,
 				u64 *key = find_next_key();
 				if(!key || additional_val==STATUS_ERR)
 					return STATUS_ERR;
-				dsn_live->dsn4 = htobe32(sha1_least_64bits(*key) + additional_val);
+				dsn_live->dsn4 =
+					htobe32(sha_least_64bits(*key,
+								 mp_state.hash) +
+						additional_val);
 			}else{
-				if(dsn_script->dsn4>0)
-					dsn_live->dsn4 = htonl(sha1_least_64bits(mp_state.packetdrill_key) + dsn_script->dsn4);
+				if (dsn_script->dsn4 > 0)
+					dsn_live->dsn4 =
+						htonl(sha_least_64bits(mp_state.packetdrill_key,
+								       mp_state.hash) +
+						      dsn_script->dsn4);
 			}
 
 			if(dss_opt_script->length == TCPOLEN_DSS_DACK4_DSN4){
@@ -1280,10 +1363,16 @@ int dss_inbound_parser(struct packet *packet_to_modify,
 				u64 *key = find_next_key();
 				if(!key || additional_val==STATUS_ERR)
 					return STATUS_ERR;
-				dsn_live->dsn8 = htonll(sha1_least_64bits(*key) + additional_val);
+				dsn_live->dsn8 =
+					htonll(sha_least_64bits(*key,
+								mp_state.hash) +
+					       additional_val);
 			}else{
-				if(dsn_script->dsn8>0)
-					dsn_live->dsn8 = htonll(sha1_least_64bits(mp_state.packetdrill_key) + dsn_script->dsn8);
+				if (dsn_script->dsn8 > 0)
+					dsn_live->dsn8 =
+						htonll(sha_least_64bits(mp_state.packetdrill_key,
+								        mp_state.hash) +
+						       dsn_script->dsn8);
 			}
 
 			if(dss_opt_script->length == TCPOLEN_DSS_DACK4_DSN4){
@@ -1329,10 +1418,16 @@ int dss_inbound_parser(struct packet *packet_to_modify,
 				u64 *key = find_next_key();
 				if(!key || additional_val==STATUS_ERR)
 					return STATUS_ERR;
-				dss_opt_script->data.dss.dack.dack4 = htonl(sha1_least_64bits(*key) + additional_val);
+				dss_opt_script->data.dss.dack.dack4 =
+					htonl(sha_least_64bits(*key,
+							       mp_state.hash) +
+					      additional_val);
 			}else{
-				if(dss_opt_script->data.dss.dack.dack4>0)
-					dss_opt_live->data.dss.dack.dack4 = htonl(sha1_least_64bits(mp_state.kernel_key) + dss_opt_script->data.dss.dack.dack4);
+				if (dss_opt_script->data.dss.dack.dack4 > 0)
+					dss_opt_live->data.dss.dack.dack4 =
+						htonl(sha_least_64bits(mp_state.kernel_key,
+								       mp_state.hash) +
+						      dss_opt_script->data.dss.dack.dack4);
 				else
 					return STATUS_ERR;
 			}
@@ -1384,10 +1479,16 @@ int dss_outbound_parser(struct packet *packet_to_modify,
 				u64 *key = find_next_key();
 				if(!key || additional_val==STATUS_ERR)
 					return STATUS_ERR;
-				*dack_script = htonl(sha1_least_64bits(*key) + additional_val);
+				*dack_script =
+					htonl(sha_least_64bits(*key,
+							       mp_state.hash) +
+					      additional_val);
 			}else{
-				if(*dack_script>0){
-					*dack_script = htonl(sha1_least_64bits(mp_state.packetdrill_key) + *dack_script);
+				if (*dack_script > 0) {
+					*dack_script =
+						htonl(sha_least_64bits(mp_state.packetdrill_key,
+								       mp_state.hash) +
+						      *dack_script);
 				}
 			}
 
@@ -1399,10 +1500,16 @@ int dss_outbound_parser(struct packet *packet_to_modify,
 				u64 *key 			= find_next_key();
 				if(!key || additional_val==STATUS_ERR)
 					return STATUS_ERR;
-				*dsn_script = htonl(sha1_least_64bits(*key) + additional_val);
+				*dsn_script =
+				      htonl(sha_least_64bits(*key,
+							     mp_state.hash) +
+					    additional_val);
 			}else{
-				if(*dsn_script>0){
-					*dsn_script = htonl(sha1_least_64bits(mp_state.kernel_key) + *dsn_script);
+				if (*dsn_script > 0) {
+					*dsn_script =
+						htonl(sha_least_64bits(mp_state.kernel_key,
+								       mp_state.hash) +
+						      *dsn_script);
 				}
 			}
 
@@ -1434,7 +1541,7 @@ int dss_outbound_parser(struct packet *packet_to_modify,
 			if(!(!dss_opt_live->data.dss.flag_m && dss_opt_live->data.dss.flag_a))
 				return STATUS_ERR;
 			// get original information from live_packet
-			u32 *dack_live			= (u32*)dss_opt_live+1;
+			u64 *dack_live			= (u64 *)((u32 *)dss_opt_live + 1);
 			u32 *dsn_live			= (u32*)dack_live+2;
 			u32 *ssn_live			= (u32*)dsn_live+1;
 
@@ -1452,10 +1559,16 @@ int dss_outbound_parser(struct packet *packet_to_modify,
 				u64 *key = find_next_key();
 				if(!key || additional_val==STATUS_ERR)
 					return STATUS_ERR;
-				*dack_script = htonll(sha1_least_64bits(*key) + additional_val);
+				*dack_script =
+					htonll(sha_least_64bits(*key,
+								mp_state.hash) +
+					       additional_val);
 			}else{
-				if(*dack_script>0){
-					*dack_script = htonll(sha1_least_64bits(mp_state.packetdrill_key) + *dack_script);
+				if (*dack_script > 0) {
+					*dack_script =
+						htonll(sha_least_64bits(mp_state.packetdrill_key,
+								        mp_state.hash) +
+						       *dack_script);
 				}
 			}
 
@@ -1467,10 +1580,16 @@ int dss_outbound_parser(struct packet *packet_to_modify,
 				u64 *key 			= find_next_key();
 				if(!key || additional_val==STATUS_ERR)
 					return STATUS_ERR;
-				*dsn_script = htonl(sha1_least_64bits(*key) + additional_val);
+				*dsn_script =
+					htonl(sha_least_64bits(*key,
+							       mp_state.hash) +
+					      additional_val);
 			}else{
-				if(*dsn_script>0){
-					*dsn_script = htonl(sha1_least_64bits(mp_state.kernel_key) + *dsn_script);
+				if (*dsn_script > 0) {
+					*dsn_script =
+						htonl(sha_least_64bits(mp_state.kernel_key,
+								       mp_state.hash) +
+						      *dsn_script);
 				}
 			}
 
@@ -1504,11 +1623,11 @@ int dss_outbound_parser(struct packet *packet_to_modify,
 
 			// get original information from live_packet
 			u32 *dack_live			= (u32*)dss_opt_live+1;
-			u32 *dsn_live			= (u32*)dack_live+1;
+			u64 *dsn_live			= (u64 *)((u32 *)dack_live + 1);
 			u32 *ssn_live			= (u32*)dsn_live+2;
 
-			int *dack_script = (int*)dss_opt_script+1;
-			int *dsn_script = (int*)dack_script+1;
+			u32 *dack_script = (u32 *)dss_opt_script + 1;
+			u64 *dsn_script = (u64 *)((u32 *)dack_script + 1);
 			int *ssn_script = (int*)dsn_script+2;
 			s16 *dll_script = (s16*)ssn_script+2;
 			s16 *chk_script = (s16*)ssn_script+3;
@@ -1521,10 +1640,16 @@ int dss_outbound_parser(struct packet *packet_to_modify,
 				u64 *key = find_next_key();
 				if(!key || additional_val==STATUS_ERR)
 					return STATUS_ERR;
-				*dack_script = htonl(sha1_least_64bits(*key) + additional_val);
+				*dack_script =
+					htonl(sha_least_64bits(*key,
+							       mp_state.hash) +
+					      additional_val);
 			}else{
-				if(*dack_script>0){
-					*dack_script = htonl(sha1_least_64bits(mp_state.packetdrill_key) + *dack_script);
+				if (*dack_script > 0){
+					*dack_script =
+						htonl(sha_least_64bits(mp_state.packetdrill_key,
+								       mp_state.hash) +
+						      *dack_script);
 				}
 			}
 
@@ -1536,10 +1661,15 @@ int dss_outbound_parser(struct packet *packet_to_modify,
 				u64 *key 			= find_next_key();
 				if(!key || additional_val==STATUS_ERR)
 					return STATUS_ERR;
-				*dsn_script = htonll(sha1_least_64bits(*key) + additional_val);
+				*dsn_script = htonll(sha_least_64bits(*key,
+								      mp_state.hash) +
+					      additional_val);
 			}else{
-				if(*dsn_script>0){
-					*dsn_script = htonll(sha1_least_64bits(mp_state.kernel_key) + *dsn_script);
+				if(*dsn_script > 0){
+					*dsn_script =
+						htonll(sha_least_64bits(mp_state.kernel_key,
+								        mp_state.hash) +
+						       *dsn_script);
 				}
 			}
 
@@ -1572,12 +1702,12 @@ int dss_outbound_parser(struct packet *packet_to_modify,
 				return STATUS_ERR;
 
 			// get original information from live_packet
-			u32 *dack_live			= (u32*)dss_opt_live+1;
-			u32 *dsn_live			= (u32*)dack_live+2;
+			u64 *dack_live			= (u64 *)((u32 *)dss_opt_live + 1);
+			u64 *dsn_live			= (u64 *)((u32 *)dack_live + 2);
 			u32 *ssn_live			= (u32*)dsn_live+2;
 
-			int *dack_script = (int*)dss_opt_script+1;
-			int *dsn_script = (int*)dack_script+2;
+			u64 *dack_script = (u64 *)((u32 *)dss_opt_script + 1);
+			u64 *dsn_script = (u64 *)((u32 *)dack_script + 2);
 			int *ssn_script = (int*)dsn_script+2;
 			s16 *dll_script = (s16*)ssn_script+2;
 			s16 *chk_script = (s16*)ssn_script+3;
@@ -1590,10 +1720,16 @@ int dss_outbound_parser(struct packet *packet_to_modify,
 				u64 *key = find_next_key();
 				if(!key || additional_val==STATUS_ERR)
 					return STATUS_ERR;
-				*dack_script = htonll(sha1_least_64bits(*key) + additional_val);
+				*dack_script =
+					htonll(sha_least_64bits(*key,
+								mp_state.hash) +
+					       additional_val);
 			}else{
-				if(*dack_script>0){
-					*dack_script = htonll(sha1_least_64bits(mp_state.packetdrill_key) + *dack_script);
+				if (*dack_script > 0) {
+					*dack_script =
+						htonll(sha_least_64bits(mp_state.packetdrill_key,
+								        mp_state.hash) +
+						       *dack_script);
 				}
 			}
 
@@ -1605,10 +1741,16 @@ int dss_outbound_parser(struct packet *packet_to_modify,
 				u64 *key 			= find_next_key();
 				if(!key || additional_val==STATUS_ERR)
 					return STATUS_ERR;
-				*dsn_script = htonll(sha1_least_64bits(*key) + additional_val);
+				*dsn_script =
+					htonll(sha_least_64bits(*key,
+								mp_state.hash) +
+					       additional_val);
 			}else{
-				if(*dsn_script>0){
-					*dsn_script = htonll(sha1_least_64bits(mp_state.kernel_key) + *dsn_script);
+				if (*dsn_script > 0) {
+					*dsn_script =
+						htonll(sha_least_64bits(mp_state.kernel_key,
+								        mp_state.hash) +
+						       *dsn_script);
 				}
 			}
 
@@ -1665,10 +1807,16 @@ int dss_outbound_parser(struct packet *packet_to_modify,
 				u64 *key = find_next_key();
 				if(!key || additional_val==STATUS_ERR)
 					return STATUS_ERR;
-				dss_opt_script->data.dss.dsn.dsn8 = htonll(sha1_least_64bits(*key) + additional_val);
+				dss_opt_script->data.dss.dsn.dsn8 =
+					htonll(sha_least_64bits(*key,
+					       mp_state.hash) +
+					additional_val);
 			}else{
-				if(dss_opt_script->data.dss.dsn.dsn8>0){
-					dss_opt_script->data.dss.dsn.dsn8  = htonll(sha1_least_64bits(mp_state.kernel_key) + dss_opt_script->data.dss.dsn.dsn8 );
+				if (dss_opt_script->data.dss.dsn.dsn8 > 0) {
+					dss_opt_script->data.dss.dsn.dsn8 =
+						htonll(sha_least_64bits(mp_state.kernel_key,
+									mp_state.hash) +
+						       dss_opt_script->data.dss.dsn.dsn8);
 				}
 			}
 
@@ -1701,10 +1849,16 @@ int dss_outbound_parser(struct packet *packet_to_modify,
 				u64 *key = find_next_key();
 				if(!key || additional_val==STATUS_ERR)
 					return STATUS_ERR;
-				dss_opt_script->data.dss.dsn.dsn4 = htobe32(sha1_least_64bits(*key) + additional_val);
+				dss_opt_script->data.dss.dsn.dsn4 =
+					htobe32(sha_least_64bits(*key,
+								 mp_state.hash) +
+						additional_val);
 			}else{
-				if(dss_opt_script->data.dss.dsn.dsn4>0){
-					dss_opt_script->data.dss.dsn.dsn4  = htonll(sha1_least_64bits(mp_state.kernel_key) + dss_opt_script->data.dss.dsn.dsn4 );
+				if (dss_opt_script->data.dss.dsn.dsn4 >0) {
+					dss_opt_script->data.dss.dsn.dsn4 =
+						htonll(sha_least_64bits(mp_state.kernel_key,
+								        mp_state.hash) +
+						       dss_opt_script->data.dss.dsn.dsn4);
 				}
 			}
 			u32 *script_dsn4 	= (u32*)dss_opt_script+3;
@@ -1738,10 +1892,16 @@ int dss_outbound_parser(struct packet *packet_to_modify,
 				u64 *key = find_next_key();
 				if(!key || additional_val==STATUS_ERR)
 					return STATUS_ERR;
-				dss_opt_script->data.dss.dack.dack8 = htonll(sha1_least_64bits(*key) + additional_val);
+				dss_opt_script->data.dss.dack.dack8 =
+					htonll(sha_least_64bits(*key,
+								mp_state.hash) +
+					       additional_val);
 			}else{
-				if(dss_opt_script->data.dss.dack.dack8>0){
-					dss_opt_script->data.dss.dack.dack8 = htonll(sha1_least_64bits(mp_state.packetdrill_key) + dss_opt_script->data.dss.dack.dack8);
+				if (dss_opt_script->data.dss.dack.dack8 > 0){
+					dss_opt_script->data.dss.dack.dack8 =
+						htonll(sha_least_64bits(mp_state.packetdrill_key,
+									mp_state.hash) +
+						       dss_opt_script->data.dss.dack.dack8);
 				}
 			}
 		}
@@ -1760,10 +1920,16 @@ int dss_outbound_parser(struct packet *packet_to_modify,
 				u64 *key = find_next_key();
 				if(!key || additional_val==STATUS_ERR)
 					return STATUS_ERR;
-				dss_opt_script->data.dss.dack.dack4 = htonl(sha1_least_64bits(*key) + additional_val);
+				dss_opt_script->data.dss.dack.dack4 =
+					htonl(sha_least_64bits(*key,
+							       mp_state.hash) +
+					      additional_val);
 			}else{
-				if(dss_opt_script->data.dss.dack.dack4>0){
-					dss_opt_script->data.dss.dack.dack4 = htonl(sha1_least_64bits(mp_state.packetdrill_key) + dss_opt_script->data.dss.dack.dack4);
+				if (dss_opt_script->data.dss.dack.dack4 > 0) {
+					dss_opt_script->data.dss.dack.dack4 =
+						htonl(sha_least_64bits(mp_state.packetdrill_key,
+								       mp_state.hash) +
+						      dss_opt_script->data.dss.dack.dack4);
 				}
 			}
 		}
@@ -1902,19 +2068,23 @@ int mptcp_subtype_mp_fail(struct packet *packet_to_modify,
 		u32 bytes_sent_on_all_ssn = get_sum_ssn();
 
 		//Set dsn being value specified in script
-		if(dss_opt_script->data.dss.dsn.dsn8 == UNDEFINED)
+		if (dss_opt_script->data.dss.dsn.dsn8 == UNDEFINED)
 			dss_opt_script->data.dss.dsn.dsn8 = htonll(mp_state.idsn + bytes_sent_on_all_ssn); //subflow->ssn);
 		else if(dss_opt_script->data.dss.dsn.dsn8 == SCRIPT_DEFINED_TO_HASH_LSB){
-			u64 additional_val 	= find_next_value();
+			u64 additional_val = find_next_value();
 			u64 *key = find_next_key();
-			if(!key || additional_val==STATUS_ERR)
+			if(!key || additional_val == STATUS_ERR)
 				return STATUS_ERR;
-			dss_opt_script->data.dss.dsn.dsn8 = htonll(sha1_least_64bits(*key) + additional_val);
+			dss_opt_script->data.dss.dsn.dsn8 =
+				htonll(sha_least_64bits(*key, mp_state.hash) +
+				       additional_val);
 		}else{
 			// this is to get the relative numbers from script
-			if(dss_opt_script->data.dss.dsn.dsn8>0)
-				dss_opt_script->data.dss.dsn.dsn8 = htonll(sha1_least_64bits(mp_state.packetdrill_key) +
-						dss_opt_script->data.dss.dsn.dsn8 );
+			if(dss_opt_script->data.dss.dsn.dsn8 > 0)
+				dss_opt_script->data.dss.dsn.dsn8 =
+					htonll(sha_least_64bits(mp_state.packetdrill_key,
+								mp_state.hash) +
+					       dss_opt_script->data.dss.dsn.dsn8);
 		}
 	}else if(direction == DIRECTION_OUTBOUND){
 		//Set dsn being value specified in script
@@ -1925,12 +2095,15 @@ int mptcp_subtype_mp_fail(struct packet *packet_to_modify,
 			u64 *key 			= find_next_key();
 			if(!key || additional_val==STATUS_ERR)
 				return STATUS_ERR;
-			dss_opt_script->data.dss.dsn.dsn8  = htonll(sha1_least_64bits(*key) + additional_val);
+			dss_opt_script->data.dss.dsn.dsn8 =
+				htonll(sha_least_64bits(*key, mp_state.hash) + additional_val);
 		}else{
 			// this is to get the relative numbers from script
-			if(dss_opt_script->data.dss.dsn.dsn8 >0){
-				dss_opt_script->data.dss.dsn.dsn8  = htonll(sha1_least_64bits(mp_state.kernel_key) +
-						dss_opt_script->data.dss.dsn.dsn8 );
+			if (dss_opt_script->data.dss.dsn.dsn8 > 0) {
+				dss_opt_script->data.dss.dsn.dsn8 =
+					htonll(sha_least_64bits(mp_state.kernel_key,
+								mp_state.hash) +
+					       dss_opt_script->data.dss.dsn.dsn8);
 			}
 		}
 	}else

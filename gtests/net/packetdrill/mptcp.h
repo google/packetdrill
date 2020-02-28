@@ -23,15 +23,11 @@
 #include "run.h"
 #include "packet_checksum.h"
 
+#include <linux/hash_info.h>
 
-#if __BYTE_ORDER == __LITTLE_ENDIAN
-	#define ntohll(x)  le64toh(x)
-	#define htonll(x)  htole64(x)
-#elif __BYTE_ORDER == __BIG_ENDIAN
-	#define ntohll(x) be64toh(x)
-	#define htonll(x) htobe64(x)
-#endif
 
+#define htonll(x) ((1==htonl(1)) ? (x) : ((uint64_t)htonl((x) & 0xFFFFFFFF) << 32) | htonl((x) >> 32))
+#define ntohll(x) ((1==ntohl(1)) ? (x) : ((uint64_t)ntohl((x) & 0xFFFFFFFF) << 32) | ntohl((x) >> 32))
 
 #define MPTCP_VERSION 0
 
@@ -48,6 +44,7 @@
 
 /* MPTCP options subtypes length */
 //MP_CAPABLE
+#define TCPOLEN_MP_CAPABLE_V1_SYN 4
 #define TCPOLEN_MP_CAPABLE_SYN 12 /* Size of the first and second steps of the three way handshake. */
 #define TCPOLEN_MP_CAPABLE 20 /* Size of the third step of the three way handshake. */
 #define TCPOLEN_MP_CAPABLE_DACK 28 /* Third packet with first DSS packet */
@@ -90,6 +87,20 @@
 #define MP_JOIN_SYN_FLAGS_BACKUP 1
 #define MP_JOIN_SYN_FLAGS_NO_BACKUP 0
 #define ZERO_RESERVED 0
+
+#define MPC_FLAG_A 0x80
+#define MPC_FLAG_B 0x40
+#define MPC_FLAG_C 0x20
+#define MPC_FLAG_D 0x10
+#define MPC_FLAG_E 0x08
+#define MPC_FLAG_F 0x04
+#define MPC_FLAG_G 0x02
+#define MPC_FLAG_H 0x01
+
+#define MPTCPV0 0
+#define MPTCPV1 1
+
+#define MPTCP_VER_DEFAULT MPTCPV1
 
 //SUBFLOW states
 #define ESTABLISHED 1 //for Subflow state
@@ -163,11 +174,11 @@ struct mp_subflow {
  * Global state for multipath TCP
  */
 struct mp_state_s {
-    u64 packetdrill_key; //packetdrill side key
-    u64 kernel_key; //mptcp stack side key
-    //Should be a single key for a mptcp session.
+    u64 packetdrill_key;
+    u64 kernel_key;
     bool packetdrill_key_set;
     bool kernel_key_set;
+    enum hash_algo hash;
 
     /*
      * FIFO queue to track variables use. Once parser encounter a mptcp

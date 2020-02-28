@@ -273,23 +273,13 @@ int tcp_options_to_string(struct packet *packet,
 				goto out;
 			}
 			break;
-        case TCPOPT_MPTCP:
+	case TCPOPT_MPTCP:
+		switch (option->data.mp_capable.subtype){
+		case MP_CAPABLE_SUBTYPE:
+			fprintf(s, "mp_capable v%d",
+				option->data.mp_capable.version);
 
-        	switch(option->data.mp_capable.subtype){
-
-        	case MP_CAPABLE_SUBTYPE:
-        		if(option->length == TCPOLEN_MP_CAPABLE){
-        			fprintf(s, "mp_capable sender_key: %lu receiver_key: %lu",
-        					(unsigned long)option->data.mp_capable.no_syn.sender_key,
-        					(unsigned long)option->data.mp_capable.no_syn.receiver_key);
-        		}else if(option->length == TCPOLEN_MP_CAPABLE_SYN){
-        			fprintf(s, "mp_capable sender_key: %lu",
-        					(unsigned long)option->data.mp_capable.syn.key);
-			} else {
-        			fprintf(s, "mp_capable unknown length");
-			}
-
-			fprintf(s, ", flags: ");
+			fprintf(s, " flags: ");
 			u8 flags = option->data.mp_capable.flags;
 			if(flags==0){
 				fprintf(s, "| |");
@@ -326,9 +316,20 @@ int tcp_options_to_string(struct packet *packet,
 					fprintf(s, "|H");
 					flags = flags-1;
 				}
-				fprintf(s, "|");
-        		}
-
+				fprintf(s, "| ");
+			}
+			if (option->length == TCPOLEN_MP_CAPABLE) {
+				fprintf(s, "sender_key: %llu receiver_key: %llu",
+					option->data.mp_capable.no_syn.sender_key,
+					option->data.mp_capable.no_syn.receiver_key);
+			} else if (option->length == TCPOLEN_MP_CAPABLE_SYN) {
+				fprintf(s, "sender_key: %llu",
+					option->data.mp_capable.syn.key);
+			} else if (option->length == TCPOLEN_MP_CAPABLE_V1_SYN) {
+				/* nothing worth printing here\n */
+			} else {
+				fprintf(s, "mp_capable unknown length");
+			}
 			break;
         	case DSS_SUBTYPE:
         		print_dss_subtype(s, option);
