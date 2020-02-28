@@ -1,4 +1,5 @@
 // Test mp_capable mptcp option, first syn sent by packetdrill
+--tolerance_usecs=100000
 `../common/defaults.sh`
 
 +0    socket(..., SOCK_STREAM, IPPROTO_MPTCP) = 3

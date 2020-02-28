@@ -1,4 +1,5 @@
 // connect() function, connection initiated by the kernel
+--tolerance_usecs=100000
 `../common/defaults.sh`
 
 0.0   socket(..., SOCK_STREAM, IPPROTO_MPTCP) = 3
