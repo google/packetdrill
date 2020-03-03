@@ -16,7 +16,7 @@
 0.200 getsockopt(3, SOL_SOCKET, SO_ERROR, [0], [4]) = 0
 0.205 fcntl(3, F_SETFL, O_RDWR) = 0   // set back to blocking
 +0.1   < P. 1:1001(1000) ack 1 win 450  <nop, nop, dss dack8=1 dsn8=1 ssn=1 dll=1000 nocs>
-+0.0   > . 1:1(0) ack 1001 win 264 <nop, nop, TS val 100 ecr 700,dss dack8=1 ssn=1 dll=0 nocs>
++0.0   > . 1:1(0) ack 1001 win 264 <nop, nop, TS val 100 ecr 700,dss dack8=1001 ssn=1 dll=0 nocs>
 0.3  read(3, ..., 1000) = 1000
 +0.0 write(3,..., 100) = 100
 +0.0   > P. 1:101(100) ack 1001 win 264 <nop, nop, TS val 100 ecr 700, dss dack8=1001 dsn8=1 ssn=1 dll=100 nocs, nop, nop>
