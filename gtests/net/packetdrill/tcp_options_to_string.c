@@ -318,10 +318,14 @@ int tcp_options_to_string(struct packet *packet,
 				}
 				fprintf(s, "| ");
 			}
-			if (option->length == TCPOLEN_MP_CAPABLE) {
+			if (option->length == TCPOLEN_MP_CAPABLE ||
+			    option->length == TCPOLEN_MP_CAPABLE_DATA) {
 				fprintf(s, "sender_key: %llu receiver_key: %llu",
 					option->data.mp_capable.no_syn.sender_key,
 					option->data.mp_capable.no_syn.receiver_key);
+				if (option->length == TCPOLEN_MP_CAPABLE_DATA)
+					fprintf(s, " mpcdatalen=%hu",
+						ntohs(option->data.mp_capable.no_syn.dll));
 			} else if (option->length == TCPOLEN_MP_CAPABLE_SYN) {
 				fprintf(s, "sender_key: %llu",
 					option->data.mp_capable.syn.key);

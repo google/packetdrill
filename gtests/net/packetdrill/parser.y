@@ -839,7 +839,7 @@ struct tcp_option *dss_do_dsn_dack( int dack_type, int dack_val,
 %token <reserved> ACK ECR EOL MSS NOP SACK SACKOK TIMESTAMP VAL WIN WSCALE
 %token <reserved> URG MD5 FAST_OPEN FAST_OPEN_EXP
 %token <reserved> MP_CAPABLE MP_CAPABLE_NO_CS MP_FASTCLOSE FLAG_A FLAG_B FLAG_C FLAG_D FLAG_E FLAG_F FLAG_G FLAG_H NO_FLAGS
-%token <reserved> MPCAPABLE V0 V1 NOKEY
+%token <reserved> MPCAPABLE V0 V1 NOKEY MPCDATALEN
 %token <reserved> MP_JOIN_SYN MP_JOIN_SYN_BACKUP MP_JOIN_SYN_ACK_BACKUP MP_JOIN_ACK MP_JOIN_SYN_ACK
 %token <reserved> DSS DACK4 DSN4 DACK8 DSN8 FIN SSN DLL NOCS CKSUM ADDRESS_ID BACKUP TOKEN AUTO RAND
 %token <reserved> TRUNC_R64_HMAC TRUNC_R64_HMAC_SHA1 TRUNC_R64_HMAC_SHA256
@@ -877,7 +877,7 @@ struct tcp_option *dss_do_dsn_dack( int dack_type, int dack_val,
 %type <integer> opt_icmp_mtu fin ssn dll dss_checksum
 %type <integer> mp_capable_no_cs is_backup address_id rand port
 %type <integer> flag_a flag_b flag_c flag_d flag_e flag_f flag_g flag_h no_flags
-%type <integer> mpc_ver mpc_flags_list mpc_flags mpc_flag mpc_keys
+%type <integer> mpc_ver mpc_flags_list mpc_flags mpc_flag mpc_keys mpc_data
 %type <integer> gre_flags_list gre_flags gre_flag
 %type <integer> gre_sum gre_off gre_key gre_seq
 %type <integer> opt_icmp_echo_id
@@ -1906,6 +1906,17 @@ mpc_keys
 	if ($5.script_assigned)
 		add_mp_var_script_defined($5.name, &$5.value, 8);
 }
+;
+
+mpc_data
+: { $$ = 0; /* TODO assign the TCP payload length */ }
+| MPCDATALEN INTEGER {
+	if (!is_valid_u16($2)) {
+		semantic_error("mpcdatalen value out of range");
+	}
+	$$ = $2;
+}
+;
 
 tcp_option
 : NOP              { $$ = tcp_option_new(TCPOPT_NOP, 1); }
@@ -1965,13 +1976,16 @@ tcp_option
 		free(error);
 	}
 }
-| MPCAPABLE mpc_ver mpc_flags_list mpc_keys {
+| MPCAPABLE mpc_ver mpc_flags_list mpc_keys mpc_data {
 
 	$$ = tcp_option_new(TCPOPT_MPTCP,
-			    TCPOLEN_MP_CAPABLE_V1_SYN + (8 * $4));
+			    $5 == 0 ? TCPOLEN_MP_CAPABLE_V1_SYN + (8 * $4) :
+			    TCPOLEN_MP_CAPABLE_DATA);
+
 	$$->data.mp_capable.version = $2;
 	$$->data.mp_capable.flags = $3;
 	$$->data.mp_capable.subtype = MP_CAPABLE_SUBTYPE;
+	$$->data.mp_capable.no_syn.dll = htons($5);
 }
 | mp_capable_no_cs mptcp_var mptcp_var_or_empty flag_a flag_b flag_c flag_d flag_e flag_f flag_g flag_h no_flags{
 
