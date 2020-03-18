@@ -69,7 +69,7 @@ static int parse_layer2_packet(struct packet *packet,
 		asprintf(error, "Ethernet header overflows packet");
 		goto error_out;
 	}
-	ether = (struct ether_header *)p;
+	ether = (struct ether_header *) p;
 	p += sizeof(*ether);
 	packet->l2_header_bytes = sizeof(*ether);
 
@@ -98,7 +98,7 @@ static int parse_layer3_packet_by_proto(struct packet *packet,
 		/* Look at the IP version number, which is in the first 4 bits
 		 * of both IPv4 and IPv6 packets.
 		 */
-		ip = (struct ipv4 *)p;
+		ip = (struct ipv4 *) p;
 		if (ip->version == 4) {
 			return parse_ipv4(packet, p, packet_end, error);
 		} else {
@@ -117,7 +117,7 @@ static int parse_layer3_packet_by_proto(struct packet *packet,
 		/* Look at the IP version number, which is in the first 4 bits
 		 * of both IPv4 and IPv6 packets.
 		 */
-		ip = (struct ipv6 *)p;
+		ip = (struct ipv6 *) p;
 		if (ip->version == 6) {
 			return parse_ipv6(packet, p, packet_end, error);
 		} else {
@@ -152,7 +152,7 @@ static int parse_layer3_packet(struct packet *packet,
 	/* Look at the IP version number, which is in the first 4 bits
 	 * of both IPv4 and IPv6 packets.
 	 */
-	ip = (struct ipv4 *) (p);
+	ip = (struct ipv4 *) p;
 	if (ip->version == 4)
 		return parse_ipv4(packet, p, packet_end, error);
 	else if (ip->version == 6)
@@ -206,7 +206,7 @@ static int parse_ipv4(struct packet *packet, u8 *header_start, u8 *packet_end,
 	u8 *p = header_start;
 	const bool is_outer = (packet->ip_bytes == 0);
 	enum packet_parse_result_t result = PACKET_BAD;
-	struct ipv4 *ipv4 = (struct ipv4 *) (p);
+	struct ipv4 *ipv4 = (struct ipv4 *) p;
 
 	const int ip_header_bytes = ipv4_header_len(ipv4);
 	assert(ip_header_bytes >= 0);
@@ -293,7 +293,7 @@ static int parse_ipv6(struct packet *packet, u8 *header_start, u8 *packet_end,
 	struct header *ip_header = NULL;
 	u8 *p = header_start;
 	const bool is_outer = (packet->ip_bytes == 0);
-	struct ipv6 *ipv6 = (struct ipv6 *) (p);
+	struct ipv6 *ipv6 = (struct ipv6 *) p;
 	enum packet_parse_result_t result = PACKET_BAD;
 
 	/* Check that header fits in sniffed packet. */
@@ -566,7 +566,7 @@ int parse_mpls(struct packet *packet, u8 *header_start, u8 *packet_end,
 	bool is_stack_bottom = false;
 
 	do {
-		struct mpls *mpls_entry = (struct mpls *)(p);
+		struct mpls *mpls_entry = (struct mpls *) p;
 
 		if (p + sizeof(struct mpls) > packet_end) {
 			asprintf(error, "MPLS stack entry overflows packet");
