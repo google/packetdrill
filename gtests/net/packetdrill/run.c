@@ -92,6 +92,7 @@ struct state *state_new(struct config *config,
 	state->code = code_new(config);
 	state->fds = NULL;
 	state->num_events = 0;
+	state->last_tcp_timestamp_usecs = NO_TIME_RANGE;
 	return state;
 }
 
@@ -181,7 +182,7 @@ int verify_time(struct state *state, enum event_time_t time_type,
 	s64 expected_usecs_end = script_usecs_end -
 		state->script_start_time_usecs;
 	s64 actual_usecs = live_usecs - state->live_start_time_usecs;
-	long tolerance_usecs = state->config->tolerance_usecs;
+	s64 tolerance_usecs;
 
 	DEBUGP("expected: %.3f actual: %.3f  (secs)\n",
 	       usecs_to_secs(script_usecs), usecs_to_secs(actual_usecs));
@@ -189,14 +190,9 @@ int verify_time(struct state *state, enum event_time_t time_type,
 	if (time_type == ANY_TIME)
 		return STATUS_OK;
 
-	if (last_event_usecs != NO_TIME_RANGE) {
-		s64 delta = script_usecs - last_event_usecs;
-		long dynamic_tolerance;
+	tolerance_usecs = get_tolerance_usecs(state, script_usecs,
+					      last_event_usecs);
 
-		dynamic_tolerance = (state->config->tolerance_percent / 100.0) * delta;
-		if (dynamic_tolerance > tolerance_usecs)
-			tolerance_usecs = dynamic_tolerance;
-	}
 	if (time_type == ABSOLUTE_RANGE_TIME ||
 	    time_type == RELATIVE_RANGE_TIME) {
 		DEBUGP("expected_usecs_end %.3f\n",

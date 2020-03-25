@@ -702,9 +702,12 @@ static bool scm_timestamping_expect_eq(struct state *state,
 		s64 exp_usecs = script_time_to_live_time_usecs(state,
 			timespec_to_usecs(&expected->ts[i]));
 		s64 actual_usecs = timespec_to_usecs(&actual->ts[i]);
+		s64 tolerance_usecs = get_tolerance_usecs(state, actual_usecs,
+				state->last_tcp_timestamp_usecs);
+		state->last_tcp_timestamp_usecs = actual_usecs;
+
 		/* difference exceeds configured timing tolerance */
-		if (llabs(exp_usecs - actual_usecs) >
-		    state->config->tolerance_usecs) {
+		if (llabs(exp_usecs - actual_usecs) > tolerance_usecs) {
 			asprintf(error,
 				 "Bad timestamp %d in scm_timestamping %d: "
 				 "expected=%lld (%lld) actual=%lld (%lld) "

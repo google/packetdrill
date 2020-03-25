@@ -1224,21 +1224,15 @@ static int verify_outbound_tcp_option(
 	struct config *config = state->config;
 	u32 script_ts_val, actual_ts_val;
 	int ts_val_tick_usecs;
-	long tolerance_usecs;
-	double dynamic_tolerance;
-	s64 delta;
+	s64 tolerance_usecs;
 
-	tolerance_usecs = config->tolerance_usecs;
 	/* Note that for TCP TS, we do not want to compute the tolerance based
 	* on last event (as we do in verify_time())
 	* last event might have happened few ms in the past.
 	* What matters here is the cumulative time (from the beginning of the test)
 	*/
-	delta = state->event->time_usecs - state->script_start_time_usecs;
-
-	dynamic_tolerance = (config->tolerance_percent / 100.0) * delta;
-	if (dynamic_tolerance > tolerance_usecs)
-		tolerance_usecs = dynamic_tolerance;
+	tolerance_usecs = get_tolerance_usecs(state, state->event->time_usecs,
+						state->script_start_time_usecs);
 
 	switch (actual_option->kind) {
 	case TCPOPT_EOL:
@@ -1255,9 +1249,10 @@ static int verify_outbound_tcp_option(
 		 */
 		if (ts_val_tick_usecs &&
 		    ((abs((s32)(actual_ts_val - script_ts_val)) *
-		      ts_val_tick_usecs) >
-		     tolerance_usecs)) {
-			asprintf(error, "bad outbound TCP timestamp value, tolerance %ld", tolerance_usecs);
+		      ts_val_tick_usecs) > tolerance_usecs)) {
+			asprintf(error,
+				"bad outbound TCP timestamp value, tolerance %lld",
+				tolerance_usecs);
 			return STATUS_ERR;
 		}
 		break;

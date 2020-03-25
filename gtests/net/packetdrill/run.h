@@ -105,6 +105,7 @@ struct state {
 	s64 script_start_time_usecs;	/* time of first event in script */
 	s64 script_last_time_usecs;	/* time of previous event in script */
 	s64 live_start_time_usecs;	/* time of first event in live test */
+	s64 last_tcp_timestamp_usecs;	/* time of previous tcp_timestamp */
 	int num_events;			/* events executed so far */
 };
 
@@ -159,6 +160,26 @@ static inline s64 last_event_time_usecs(struct state *state)
 {
 	return state->last_event == NULL ? NO_TIME_RANGE :
 			state->last_event->time_usecs;
+}
+
+/*
+ * Return the greater between static and dynamic tolerance
+ * Static tolerance: state->config->tolerance_usecs
+ * Dynamic tolerance: state->config->tolerance_percent * time_delta
+ */
+static inline s64 get_tolerance_usecs(struct state *state, s64 script_usecs,
+	s64 last_event_usecs)
+{
+	s64 tolerance_usecs = state->config->tolerance_usecs;
+
+	if (last_event_usecs != NO_TIME_RANGE) {
+		s64 delta = script_usecs - last_event_usecs;
+		s64 d_tol = (state->config->tolerance_percent / 100.0) * delta;
+
+		if (d_tol > tolerance_usecs)
+			tolerance_usecs = d_tol;
+	}
+	return tolerance_usecs;
 }
 
 /*
