@@ -152,6 +152,7 @@ struct tcp_option {
 				struct {
 					u64 sender_key;
 					u64 receiver_key;
+					u32 dll;
 				} no_syn;
 			};
 		} __packed mp_capable;

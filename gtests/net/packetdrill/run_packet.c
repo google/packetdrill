@@ -968,6 +968,14 @@ bool same_mptcp_opt(struct tcp_option *opt_a, struct tcp_option *opt_b, struct p
 				    opt_a->data.mp_capable.no_syn.sender_key !=
 				    opt_b->data.mp_capable.no_syn.sender_key)
 					return false;
+			} else if (opt_a->length == TCPOLEN_MP_CAPABLE_DATA) {
+				if (opt_a->data.mp_capable.no_syn.receiver_key !=
+				    opt_b->data.mp_capable.no_syn.receiver_key ||
+				    opt_a->data.mp_capable.no_syn.sender_key !=
+				    opt_b->data.mp_capable.no_syn.sender_key ||
+				    opt_a->data.mp_capable.no_syn.dll !=
+				    opt_b->data.mp_capable.no_syn.dll)
+					return false;
 			}
 			break;
 		case MP_JOIN_SUBTYPE:

@@ -486,7 +486,8 @@ int mptcp_subtype_mp_capable(struct packet *packet_to_modify,
 		error = 0;
 	}
 	// Third (ack) packet in three-hand shake
-	else if (optlen == TCPOLEN_MP_CAPABLE) {
+	else if (optlen == TCPOLEN_MP_CAPABLE ||
+		 optlen == TCPOLEN_MP_CAPABLE_DATA) {
 		/* with protocol v1, the client key is transmitted in
 		 * the last packet of the three-way-handshake
 		 */
@@ -516,8 +517,11 @@ int mptcp_subtype_mp_capable(struct packet *packet_to_modify,
 							mp_state.hash);
 		// If this is done at syn packet time as for inbound, key comparisons fail
 		// due to, I guess, key set too early as it complains key is not 0
-		if(direction == DIRECTION_OUTBOUND)
+		if (optlen == TCPOLEN_MP_CAPABLE_DATA) {
+			/* TODO update SSN counters */
+		} else if (direction == DIRECTION_OUTBOUND) {
 			new_subflow_outbound(live_packet);
+		}
 	}
 	// SYN_ACK, packetdrill->kernel
 	else if (tcp_opt_to_modify->length == TCPOLEN_MP_CAPABLE_SYN &&

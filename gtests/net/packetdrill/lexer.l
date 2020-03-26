@@ -231,6 +231,7 @@ auto			return AUTO;
 mp_capable		return MP_CAPABLE;
 mp_capable_no_cs	return MP_CAPABLE_NO_CS;
 mpcapable		return MPCAPABLE;
+mpcdatalen 		return MPCDATALEN;
 v0			return V0;
 v1			return V1;
 flag_a			return FLAG_A;
