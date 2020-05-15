@@ -388,7 +388,7 @@ int tcp_options_to_string(struct packet *packet,
 						src_string,
 						ntohs(option->data.add_addr.ipv4_w_port.port));
         		}else if(option->length == TCPOLEN_ADD_ADDR_V6){
-        			if (!inet_ntop(AF_INET, &option->data.add_addr.ipv6, src_string, ADDR_STR_LEN))
+        			if (!inet_ntop(AF_INET6, &option->data.add_addr.ipv6, src_string, ADDR_STR_LEN))
 						die_perror("inet_ntop");
 					fprintf(s, "add_address address_id: %u ipv6: %s",
 						option->data.add_addr.address_id,
