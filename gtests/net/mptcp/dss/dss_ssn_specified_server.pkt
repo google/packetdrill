@@ -26,5 +26,11 @@
 +0     < P. 1:11(10) ack 2001 win 225 <dss dack8=2001 dsn8=1 ssn=1 dll=10 nocs, nop, nop>
 +0     > .  2001:2001(0) ack 11 <dss dack8=11 nocs>
 0.3  read(4, ..., 10) = 10
+
+// send 1 more data segment, this time dack8 will have to be used: server sent dsn8
++0   write(4, ..., 1000) = 1000
++0     > P. 2001:3001(1000) ack 11 <dss dack8=11 dsn8=2001 ssn=2001 dll=1000 nocs, nop, nop>
++0.1   < .  11:11(0) ack 3001 win 225 <dss dack8=3001 dsn8=10 ssn=1 dll=0 nocs, nop, nop>
+
 +0   close(4) = 0
-+0     > F. 2001:2001(0) ack 11 <dss dack8=11 dsn8=2001 ssn=0 dll=1 nocs fin, nop, nop>
++0     > F. 3001:3001(0) ack 11 <dss dack8=11 dsn8=3001 ssn=0 dll=1 nocs fin, nop, nop>
