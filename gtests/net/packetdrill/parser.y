@@ -1772,7 +1772,7 @@ add_addr_ip
 	$$.ip_addr = ip_formatted.ip.v4;
 	$$.type = AF_INET;
 }
-| IPV6 '=' INET_ADDR '(' STRING ')' {
+| IPV6 '=' INET6_ADDR '(' STRING ')' {
 	struct ip_address ip_formatted = ipv6_parse($5);
 	$$.ip6_addr = ip_formatted.ip.v6;
 	$$.type = AF_INET6;
