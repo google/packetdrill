@@ -21,7 +21,7 @@
 +0.01   > P. 1:1001(1000) ack 1 <nop, nop, TS val 100 ecr 700, mpcapable v1 flags[flag_h] key[ckey,skey] mpcdatalen 1000, nop, nop>
 +0.01   < .  1:1(0) ack 1001 win 225 <dss dack8=1001 nocs>
 +0.1 write(3, ..., 500) = 500
-+0.01   > P. 1001:1501(500) ack 1 <nop, nop, TS val 100 ecr 700, dss dack8=1 dsn8=1001 ssn=1001 dll=500 nocs, nop, nop>
++0.01   > P. 1001:1501(500) ack 1 <nop, nop, TS val 100 ecr 700, dss dack4=1 dsn8=1001 ssn=1001 dll=500 nocs, nop, nop>
 +0.01   < .  1:201(200) ack 1501 win 225 <dss dack8=1501 dsn8=1 ssn=1 dll=200 nocs, nop, nop>
 +0.01   > .  1501:1501(0) ack 201 <nop, nop, TS val 100 ecr 700, dss dack8=201 dll=0 nocs>
 +0.1 read(3, ..., 200) = 200
