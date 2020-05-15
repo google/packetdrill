@@ -1063,7 +1063,9 @@ bool same_mptcp_opt(struct tcp_option *opt_a, struct tcp_option *opt_b, struct p
 			}
 			break;
 		case ADD_ADDR_SUBTYPE:
-			if(opt_a->data.add_addr.address_id != opt_b->data.add_addr.address_id){
+			if(opt_a->data.add_addr.flag_E != opt_b->data.add_addr.flag_E){
+                                return false;
+			}else if(opt_a->data.add_addr.address_id != opt_b->data.add_addr.address_id){
 				return false;
 			}else if(opt_a->length == TCPOLEN_ADD_ADDR_V4){
 				if(opt_b->length != TCPOLEN_ADD_ADDR_V4 )
@@ -1076,16 +1078,42 @@ bool same_mptcp_opt(struct tcp_option *opt_a, struct tcp_option *opt_b, struct p
 					return false;
 				if(memcmp(&opt_a->data.add_addr.ipv4_w_port.ipv4, &opt_b->data.add_addr.ipv4_w_port.ipv4, sizeof(struct in_addr)))
 					return false;
-			}if(opt_a->length == TCPOLEN_ADD_ADDR_V6 ){
+			}else if(opt_a->length == TCPOLEN_ADD_ADDR_V4_HMAC){
+				if(	opt_b->length != TCPOLEN_ADD_ADDR_V4_HMAC ||
+					opt_a->data.add_addr.ipv4_w_hmac.hmac != opt_b->data.add_addr.ipv4_w_hmac.hmac )
+					return false;
+				if(memcmp(&opt_a->data.add_addr.ipv4_w_hmac.ipv4, &opt_b->data.add_addr.ipv4_w_hmac.ipv4, sizeof(struct in_addr)))
+					return false;
+			}else if(opt_a->length == TCPOLEN_ADD_ADDR_V4_PORT_HMAC){
+				if(	opt_b->length != TCPOLEN_ADD_ADDR_V4_PORT_HMAC ||
+					opt_a->data.add_addr.ipv4_w_port_hmac.port != opt_b->data.add_addr.ipv4_w_port_hmac.port ||
+                                        opt_a->data.add_addr.ipv4_w_port_hmac.hmac != opt_b->data.add_addr.ipv4_w_port_hmac.hmac )
+					return false;
+				if(memcmp(&opt_a->data.add_addr.ipv4_w_port_hmac.ipv4, &opt_b->data.add_addr.ipv4_w_port_hmac.ipv4, sizeof(struct in_addr)))
+					return false;
+			}else if(opt_a->length == TCPOLEN_ADD_ADDR_V6 ){
 				if(	opt_b->length != TCPOLEN_ADD_ADDR_V6 )
 					return false;
 				if(memcmp(&opt_a->data.add_addr.ipv6, &opt_b->data.add_addr.ipv6, sizeof(struct in6_addr)))
 					return false;
-			}if(opt_a->length == TCPOLEN_ADD_ADDR_V6_PORT ){
+			}else if(opt_a->length == TCPOLEN_ADD_ADDR_V6_PORT ){
 				if(	opt_b->length != TCPOLEN_ADD_ADDR_V6_PORT ||
 					opt_a->data.add_addr.ipv6_w_port.port != opt_b->data.add_addr.ipv6_w_port.port )
 					return false;
 				if(memcmp(&opt_a->data.add_addr.ipv6_w_port.ipv6, &opt_b->data.add_addr.ipv6_w_port.ipv6, sizeof(struct in6_addr)))
+					return false;
+			}else if(opt_a->length == TCPOLEN_ADD_ADDR_V6_HMAC ){
+				if(	opt_b->length != TCPOLEN_ADD_ADDR_V6_HMAC ||
+					opt_a->data.add_addr.ipv6_w_hmac.hmac != opt_b->data.add_addr.ipv6_w_hmac.hmac )
+					return false;
+				if(memcmp(&opt_a->data.add_addr.ipv6_w_hmac.ipv6, &opt_b->data.add_addr.ipv6_w_hmac.ipv6, sizeof(struct in6_addr)))
+					return false;
+			}else if(opt_a->length == TCPOLEN_ADD_ADDR_V6_PORT_HMAC ){
+				if(	opt_b->length != TCPOLEN_ADD_ADDR_V6_PORT_HMAC ||
+					opt_a->data.add_addr.ipv6_w_port_hmac.port != opt_b->data.add_addr.ipv6_w_port_hmac.port ||
+					opt_a->data.add_addr.ipv6_w_port_hmac.hmac != opt_b->data.add_addr.ipv6_w_port_hmac.hmac )
+					return false;
+				if(memcmp(&opt_a->data.add_addr.ipv6_w_port_hmac.ipv6, &opt_b->data.add_addr.ipv6_w_port_hmac.ipv6, sizeof(struct in6_addr)))
 					return false;
 			}
 			break;

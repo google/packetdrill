@@ -374,32 +374,52 @@ int tcp_options_to_string(struct packet *packet,
         		break;
         	case ADD_ADDR_SUBTYPE:
 
-        		if(option->length == TCPOLEN_ADD_ADDR_V4){
+                       if(option->length == TCPOLEN_ADD_ADDR_V4 ||
+                          option->length == TCPOLEN_ADD_ADDR_V4_HMAC){
         			if (!inet_ntop(AF_INET, &option->data.add_addr.ipv4, src_string, ADDR_STR_LEN))
 						die_perror("inet_ntop");
-        			fprintf(s, "add_address address_id: %u ipv4: %s",
+                                fprintf(s, "add_address address_id: %u ipv4: %s",
 						option->data.add_addr.address_id,
 						src_string);
-        		}else if(option->length == TCPOLEN_ADD_ADDR_V4_PORT){
+                                if (option->data.add_addr.flag_E)
+                                        fprintf(s, " flags: E");
+                                else
+                                        fprintf(s, " hmac: %llu", option->data.add_addr.ipv4_w_hmac.hmac);
+                       }else if(option->length == TCPOLEN_ADD_ADDR_V4_PORT ||
+                                option->length == TCPOLEN_ADD_ADDR_V4_PORT_HMAC){
         			if (!inet_ntop(AF_INET, &option->data.add_addr.ipv4_w_port.ipv4, src_string, ADDR_STR_LEN))
 						die_perror("inet_ntop");
         			fprintf(s, "add_address address_id: %u ipv4: %s port: %u",
 						option->data.add_addr.address_id,
 						src_string,
 						ntohs(option->data.add_addr.ipv4_w_port.port));
-        		}else if(option->length == TCPOLEN_ADD_ADDR_V6){
+                                if (option->data.add_addr.flag_E)
+                                        fprintf(s, " flags: E");
+                                else
+                                        fprintf(s, " hmac: %llu", option->data.add_addr.ipv4_w_port_hmac.hmac);
+                       }else if(option->length == TCPOLEN_ADD_ADDR_V6 ||
+                                option->length == TCPOLEN_ADD_ADDR_V6_HMAC){
         			if (!inet_ntop(AF_INET6, &option->data.add_addr.ipv6, src_string, ADDR_STR_LEN))
 						die_perror("inet_ntop");
 					fprintf(s, "add_address address_id: %u ipv6: %s",
 						option->data.add_addr.address_id,
 						src_string);
-        		}else if(option->length == TCPOLEN_ADD_ADDR_V6_PORT){
+                                if (option->data.add_addr.flag_E)
+                                        fprintf(s, " flags: E");
+                                else
+                                        fprintf(s, " hmac: %llu", option->data.add_addr.ipv6_w_hmac.hmac);
+                       }else if(option->length == TCPOLEN_ADD_ADDR_V6_PORT ||
+                                option->length == TCPOLEN_ADD_ADDR_V6_PORT_HMAC){
         			if (!inet_ntop(AF_INET6, &option->data.add_addr.ipv6_w_port.ipv6, src_string, ADDR_STR_LEN))
 						die_perror("inet_ntop");
 					fprintf(s, "add_address address_id: %u ipv6: %s port: %u",
 						option->data.add_addr.address_id,
 						src_string,
 						ntohs(option->data.add_addr.ipv6_w_port.port));
+                                if (option->data.add_addr.flag_E)
+                                        fprintf(s, " flags: E");
+                                else
+                                        fprintf(s, " hmac: %llu", option->data.add_addr.ipv6_w_port_hmac.hmac);
         		}else{
         			fprintf(s, "add_address bad length");
         		}

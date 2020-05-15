@@ -366,6 +366,14 @@ u64 hmac_sha1_truncat_64(const u8 *key, u32 key_length, u8 *data,
 	return *((u64*) hash);
 }
 
+u64 hmac_sha256_truncat_64(const u8 *key, u32 key_length, u8 *data,
+                           u32 data_length) {
+	u8 hash[32];
+
+	hmac_sha256(key, key_length, data, data_length, hash);
+	return *((u64*) hash);
+}
+
 void hash_key_sha1(uint8_t *hash, key64 key) {
 	size_t len = 8;
 	u8 *k[1];

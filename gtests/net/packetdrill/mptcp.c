@@ -1735,6 +1735,44 @@ int mptcp_subtype_dss(struct packet *packet_to_modify,
 	return STATUS_OK;
 }
 
+static u64 add_addr_ipv4_hmac(u64 key1, u64 key2, u8 address_id, struct in_addr* address, u16 port)
+{
+	//Build key for HMAC-SHA256
+	unsigned char hmac_key[16];
+	unsigned long *key_a = (unsigned long*)hmac_key;
+	unsigned long *key_b = (unsigned long*)&(hmac_key[8]);
+	*key_a = key1;
+	*key_b = key2;
+
+	//Build message for HMAC-SHA256
+	u8 msg[7];
+	msg[0] = address_id;
+        memcpy(&msg[1], address, 4);
+        msg[5] = port >> 8;
+        msg[6] = port & 0xff;
+
+        return hmac_sha256_truncat_64(hmac_key, 16, msg, 7);
+}
+
+static u64 add_addr_ipv6_hmac(u64 key1, u64 key2, u8 address_id, struct in6_addr* address, u16 port)
+{
+	//Build key for HMAC-SHA256
+	unsigned char hmac_key[16];
+	unsigned long *key_a = (unsigned long*)hmac_key;
+	unsigned long *key_b = (unsigned long*)&(hmac_key[8]);
+	*key_a = key1;
+	*key_b = key2;
+
+	//Build message for HMAC-SHA256
+	u8 msg[19];
+	msg[0] = address_id;
+        memcpy(&msg[1], address, 16);
+        msg[17] = port >> 8;
+        msg[18] = port & 0xff;
+
+        return htobe64(hmac_sha256_truncat_64(hmac_key, 16, msg, 19));
+}
+
 int mptcp_subtype_add_address(struct packet *packet_to_modify,
 		struct packet *live_packet,
 		struct tcp_option *dss_opt_script,
@@ -1765,7 +1803,29 @@ int mptcp_subtype_add_address(struct packet *packet_to_modify,
 			if(!memcmp(&dss_opt_script->data.add_addr.ipv4_w_port.ipv4, &adr4_zero, sizeof(struct in_addr)))
 				dss_opt_live->data.add_addr.ipv4_w_port.ipv4 = subflow->src_ip.ip.v4;
 			if(dss_opt_script->data.add_addr.ipv4_w_port.port == UNDEFINED)
-				dss_opt_live->data.add_addr.ipv4_w_port.port= subflow->src_port;
+				dss_opt_live->data.add_addr.ipv4_w_port.port = subflow->src_port;
+		}else if(dss_opt_live->length == TCPOLEN_ADD_ADDR_V4_HMAC){
+			if(!memcmp(&dss_opt_script->data.add_addr.ipv4_w_hmac.ipv4, &adr4_zero, sizeof(struct in_addr)))
+				dss_opt_live->data.add_addr.ipv4_w_hmac.ipv4 = subflow->src_ip.ip.v4;
+			if(dss_opt_script->data.add_addr.ipv4_w_hmac.hmac == UNDEFINED)
+				dss_opt_live->data.add_addr.ipv4_w_hmac.hmac =
+                                        add_addr_ipv4_hmac(mp_state.packetdrill_key,
+                                                           mp_state.kernel_key,
+                                                           dss_opt_script->data.add_addr.address_id,
+                                                           &dss_opt_script->data.add_addr.ipv4_w_hmac.ipv4,
+                                                           0);
+		}else if(dss_opt_live->length == TCPOLEN_ADD_ADDR_V4_PORT_HMAC){
+			if(!memcmp(&dss_opt_script->data.add_addr.ipv4_w_port_hmac.ipv4, &adr4_zero, sizeof(struct in_addr)))
+				dss_opt_live->data.add_addr.ipv4_w_port_hmac.ipv4 = subflow->src_ip.ip.v4;
+			if(dss_opt_script->data.add_addr.ipv4_w_port_hmac.port == UNDEFINED)
+				dss_opt_live->data.add_addr.ipv4_w_port_hmac.port = subflow->src_port;
+			if(dss_opt_script->data.add_addr.ipv4_w_port_hmac.hmac == UNDEFINED)
+				dss_opt_live->data.add_addr.ipv4_w_port_hmac.hmac =
+                                        add_addr_ipv4_hmac(mp_state.packetdrill_key,
+                                                           mp_state.kernel_key,
+                                                           dss_opt_script->data.add_addr.address_id,
+                                                           &dss_opt_script->data.add_addr.ipv4_w_port_hmac.ipv4,
+                                                           0);
 		}else if(dss_opt_live->length == TCPOLEN_ADD_ADDR_V6){
 			if(!memcmp(&dss_opt_script->data.add_addr.ipv6, &adr6_zero, sizeof(struct in6_addr)))
 				dss_opt_live->data.add_addr.ipv6 = subflow->src_ip.ip.v6;
@@ -1774,6 +1834,28 @@ int mptcp_subtype_add_address(struct packet *packet_to_modify,
 				dss_opt_script->data.add_addr.ipv6_w_port.ipv6 = subflow->src_ip.ip.v6;
 			if(dss_opt_script->data.add_addr.ipv6_w_port.port == UNDEFINED)
 				dss_opt_live->data.add_addr.ipv6_w_port.port = subflow->src_port;
+		}else if(dss_opt_live->length == TCPOLEN_ADD_ADDR_V6_HMAC){
+			if(!memcmp(&dss_opt_script->data.add_addr.ipv6_w_hmac.ipv6, &adr6_zero, sizeof(struct in6_addr)))
+				dss_opt_script->data.add_addr.ipv6_w_hmac.ipv6 = subflow->src_ip.ip.v6;
+			if(dss_opt_script->data.add_addr.ipv6_w_hmac.hmac == UNDEFINED)
+				dss_opt_live->data.add_addr.ipv6_w_hmac.hmac =
+                                        add_addr_ipv6_hmac(mp_state.packetdrill_key,
+                                                           mp_state.kernel_key,
+                                                           dss_opt_script->data.add_addr.address_id,
+                                                           &dss_opt_script->data.add_addr.ipv6_w_hmac.ipv6,
+                                                           0);
+		}else if(dss_opt_live->length == TCPOLEN_ADD_ADDR_V6_PORT_HMAC){
+			if(!memcmp(&dss_opt_script->data.add_addr.ipv6_w_port_hmac.ipv6, &adr6_zero, sizeof(struct in6_addr)))
+				dss_opt_script->data.add_addr.ipv6_w_port_hmac.ipv6 = subflow->src_ip.ip.v6;
+			if(dss_opt_script->data.add_addr.ipv6_w_port_hmac.port == UNDEFINED)
+				dss_opt_live->data.add_addr.ipv6_w_port_hmac.port = subflow->src_port;
+			if(dss_opt_script->data.add_addr.ipv6_w_port_hmac.hmac == UNDEFINED)
+				dss_opt_live->data.add_addr.ipv6_w_port_hmac.hmac =
+                                        add_addr_ipv6_hmac(mp_state.packetdrill_key,
+                                                           mp_state.kernel_key,
+                                                           dss_opt_script->data.add_addr.address_id,
+                                                           &dss_opt_script->data.add_addr.ipv6_w_port_hmac.ipv6,
+                                                           0);
 		}else
 			return STATUS_ERR;
 	}else if(direction == DIRECTION_OUTBOUND){
@@ -1785,9 +1867,31 @@ int mptcp_subtype_add_address(struct packet *packet_to_modify,
 				dss_opt_script->data.add_addr.ipv4 = dss_opt_live->data.add_addr.ipv4;
 		}else if(dss_opt_script->length == TCPOLEN_ADD_ADDR_V4_PORT){
 			if(!memcmp(&dss_opt_script->data.add_addr.ipv4_w_port.ipv4, &adr4_zero, sizeof(struct in_addr)))
-				dss_opt_script->data.add_addr.ipv4_w_port.ipv4 = dss_opt_live->data.add_addr.ipv4_w_port.ipv4 ;
+				dss_opt_script->data.add_addr.ipv4_w_port.ipv4 = dss_opt_live->data.add_addr.ipv4_w_port.ipv4;
 			if(dss_opt_script->data.add_addr.ipv4_w_port.port == UNDEFINED)
 				dss_opt_script->data.add_addr.ipv4_w_port.port = dss_opt_live->data.add_addr.ipv4_w_port.port;
+		}else if(dss_opt_script->length == TCPOLEN_ADD_ADDR_V4_HMAC){
+			if(!memcmp(&dss_opt_script->data.add_addr.ipv4_w_hmac.ipv4, &adr4_zero, sizeof(struct in_addr)))
+				dss_opt_script->data.add_addr.ipv4_w_hmac.ipv4 = dss_opt_live->data.add_addr.ipv4_w_hmac.ipv4;
+			if(dss_opt_script->data.add_addr.ipv4_w_hmac.hmac == UNDEFINED)
+				dss_opt_script->data.add_addr.ipv4_w_hmac.hmac =
+                                        add_addr_ipv4_hmac(mp_state.kernel_key,
+                                                           mp_state.packetdrill_key,
+                                                           dss_opt_live->data.add_addr.address_id,
+                                                           &dss_opt_live->data.add_addr.ipv4_w_hmac.ipv4,
+                                                           0);
+		}else if(dss_opt_script->length == TCPOLEN_ADD_ADDR_V4_PORT_HMAC){
+			if(!memcmp(&dss_opt_script->data.add_addr.ipv4_w_port_hmac.ipv4, &adr4_zero, sizeof(struct in_addr)))
+				dss_opt_script->data.add_addr.ipv4_w_port_hmac.ipv4 = dss_opt_live->data.add_addr.ipv4_w_port_hmac.ipv4;
+			if(dss_opt_script->data.add_addr.ipv4_w_port.port == UNDEFINED)
+				dss_opt_script->data.add_addr.ipv4_w_port.port = dss_opt_live->data.add_addr.ipv4_w_port.port;
+			if(dss_opt_script->data.add_addr.ipv4_w_port_hmac.hmac == UNDEFINED)
+				dss_opt_script->data.add_addr.ipv4_w_port_hmac.hmac =
+                                        add_addr_ipv4_hmac(mp_state.kernel_key,
+                                                           mp_state.packetdrill_key,
+                                                           dss_opt_live->data.add_addr.address_id,
+                                                           &dss_opt_live->data.add_addr.ipv4_w_port_hmac.ipv4,
+                                                           0);
 		}else if(dss_opt_script->length == TCPOLEN_ADD_ADDR_V6){
 			if(!memcmp(&dss_opt_script->data.add_addr.ipv6, &adr6_zero, sizeof(struct in6_addr)))
 				dss_opt_script->data.add_addr.ipv6 = dss_opt_live->data.add_addr.ipv6 ;
@@ -1796,6 +1900,28 @@ int mptcp_subtype_add_address(struct packet *packet_to_modify,
 				dss_opt_script->data.add_addr.ipv6_w_port.ipv6 = dss_opt_live->data.add_addr.ipv6_w_port.ipv6;
 			if(dss_opt_script->data.add_addr.ipv6_w_port.port == UNDEFINED)
 				dss_opt_script->data.add_addr.ipv6_w_port.port = dss_opt_live->data.add_addr.ipv6_w_port.port;
+		}else if(dss_opt_script->length == TCPOLEN_ADD_ADDR_V6_HMAC){
+			if(!memcmp(&dss_opt_script->data.add_addr.ipv6_w_hmac.ipv6, &adr6_zero, sizeof(struct in6_addr)))
+				dss_opt_script->data.add_addr.ipv6_w_hmac.ipv6 = dss_opt_live->data.add_addr.ipv6_w_hmac.ipv6;
+			if(dss_opt_script->data.add_addr.ipv6_w_hmac.hmac == UNDEFINED)
+				dss_opt_script->data.add_addr.ipv6_w_hmac.hmac =
+                                        add_addr_ipv6_hmac(mp_state.kernel_key,
+                                                           mp_state.packetdrill_key,
+                                                           dss_opt_live->data.add_addr.address_id,
+                                                           &dss_opt_live->data.add_addr.ipv6_w_hmac.ipv6,
+                                                           0);
+		}else if(dss_opt_script->length == TCPOLEN_ADD_ADDR_V6_PORT_HMAC){
+			if(!memcmp(&dss_opt_script->data.add_addr.ipv6_w_port_hmac.ipv6, &adr6_zero, sizeof(struct in6_addr)))
+				dss_opt_script->data.add_addr.ipv6_w_port_hmac.ipv6 = dss_opt_live->data.add_addr.ipv6_w_port_hmac.ipv6;
+			if(dss_opt_script->data.add_addr.ipv6_w_port.port == UNDEFINED)
+				dss_opt_script->data.add_addr.ipv6_w_port.port = dss_opt_live->data.add_addr.ipv6_w_port.port;
+			if(dss_opt_script->data.add_addr.ipv6_w_port_hmac.hmac == UNDEFINED)
+				dss_opt_script->data.add_addr.ipv6_w_port_hmac.hmac =
+                                        add_addr_ipv6_hmac(mp_state.kernel_key,
+                                                           mp_state.packetdrill_key,
+                                                           dss_opt_live->data.add_addr.address_id,
+                                                           &dss_opt_live->data.add_addr.ipv6_w_port_hmac.ipv6,
+                                                           0);
 		}else{
 			return STATUS_ERR;
 		}

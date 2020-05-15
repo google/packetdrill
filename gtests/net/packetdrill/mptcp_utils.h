@@ -43,6 +43,10 @@ u64 hmac_sha1_truncat_64(const u8 *key,
 			 unsigned key_length,
 			 u8 *data,
 			 unsigned data_length);
+u64 hmac_sha256_truncat_64(const u8 *key,
+                           unsigned key_length,
+                           u8 *data,
+                           unsigned data_length);
 int hmac_sha1(const u8 *key,
 	      size_t key_length,
 	      const u8 *data,

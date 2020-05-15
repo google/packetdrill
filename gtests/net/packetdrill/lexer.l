@@ -260,6 +260,7 @@ mp_fail			return MP_FAIL;
 mp_fastclose 	return MP_FASTCLOSE;
 rand			return RAND;
 sender_hmac		return SENDER_HMAC;
+hmac                    return ADD_ADDR_HMAC;
 sha1_32			return SHA1_32;
 token			return TOKEN;
 trunc_l64_hmac		return TRUNC_L64_HMAC;
