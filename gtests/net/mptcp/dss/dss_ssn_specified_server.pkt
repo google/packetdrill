@@ -15,11 +15,11 @@
 
 // send 2 data segments and ack them
 +0   write(4, ..., 1000) = 1000
-+0     > P. 1:1001(1000) ack 1 <dss dack8=1 dsn8=1 ssn=1 dll=1000 nocs, nop, nop>
++0     > P. 1:1001(1000) ack 1 <dss dack4=1 dsn8=1 ssn=1 dll=1000 nocs, nop, nop>
 +0.1   < . 1:1(0) ack 1001 win 225 <dss dack8=1001 dsn8=1 ssn=1 dll=0 nocs, nop, nop>
 
 +0   write(4, ..., 1000) = 1000
-+0     > P. 1001:2001(1000) ack 1 <dss dack8=1 dsn8=1001 ssn=1001 dll=1000 nocs, nop, nop>
++0     > P. 1001:2001(1000) ack 1 <dss dack4=1 dsn8=1001 ssn=1001 dll=1000 nocs, nop, nop>
 +0.1   < .  1:1(0) ack 2001 win 225 <dss dack8=2001 dsn8=1 ssn=1 dll=0 nocs, nop, nop>
 
 // read and ack 1 data segment
