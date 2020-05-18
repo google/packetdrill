@@ -1751,7 +1751,7 @@ static u64 add_addr_ipv4_hmac(u64 key1, u64 key2, u8 address_id, struct in_addr*
         msg[5] = port >> 8;
         msg[6] = port & 0xff;
 
-        return hmac_sha256_truncat_64(hmac_key, 16, msg, 7);
+        return hmac_sha256_truncat_most_64(hmac_key, 16, msg, 7);
 }
 
 static u64 add_addr_ipv6_hmac(u64 key1, u64 key2, u8 address_id, struct in6_addr* address, u16 port)
@@ -1770,7 +1770,7 @@ static u64 add_addr_ipv6_hmac(u64 key1, u64 key2, u8 address_id, struct in6_addr
         msg[17] = port >> 8;
         msg[18] = port & 0xff;
 
-        return htobe64(hmac_sha256_truncat_64(hmac_key, 16, msg, 19));
+        return hmac_sha256_truncat_most_64(hmac_key, 16, msg, 19);
 }
 
 int mptcp_subtype_add_address(struct packet *packet_to_modify,
