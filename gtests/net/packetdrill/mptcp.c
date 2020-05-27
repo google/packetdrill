@@ -337,13 +337,7 @@ struct mp_subflow *new_subflow_inbound(struct packet *inbound_packet)
 
 struct mp_subflow *new_subflow_outbound(struct packet *outbound_packet)
 {
-
 	struct mp_subflow *subflow = malloc(sizeof(struct mp_subflow));
-	struct tcp_option *mp_join_syn =
-			get_mptcp_option(outbound_packet, MP_CAPABLE_SUBTYPE); //TCPOPT_MPTCP);
-
-	if(!mp_join_syn)
-		return NULL;
 
 	if(outbound_packet->ipv4){
 		ip_from_ipv4(&outbound_packet->ipv4->dst_ip, &subflow->src_ip);
@@ -361,10 +355,6 @@ struct mp_subflow *new_subflow_outbound(struct packet *outbound_packet)
 
 	subflow->src_port = ntohs(outbound_packet->tcp->dst_port);
 	subflow->dst_port = ntohs(outbound_packet->tcp->src_port);
-	subflow->kernel_rand_nbr =
-			mp_join_syn->data.mp_join.syn.no_ack.sender_random_number;
-	subflow->kernel_addr_id =
-			mp_join_syn->data.mp_join.syn.address_id;
 	subflow->packetdrill_addr_id = UNDEFINED;
 	struct ip_address *ip = &subflow->src_ip;
 	find_or_create_packetdrill_addr(&subflow->packetdrill_addr_id, &ip);
@@ -720,8 +710,17 @@ static int mp_join_syn(struct packet *packet_to_modify,
 	struct mp_subflow *subflow;
 	if(direction == DIRECTION_INBOUND)
 		subflow = new_subflow_inbound(packet_to_modify);
-	else if(direction == DIRECTION_OUTBOUND)
+	else if(direction == DIRECTION_OUTBOUND){
+		struct tcp_option *mp_join_syn =
+				get_mptcp_option(live_packet, MP_JOIN_SUBTYPE);
+		if(!mp_join_syn)
+			return STATUS_ERR;
 		subflow = new_subflow_outbound(live_packet);
+		subflow->kernel_rand_nbr =
+				mp_join_syn->data.mp_join.syn.no_ack.sender_random_number;
+		subflow->kernel_addr_id =
+				mp_join_syn->data.mp_join.syn.address_id;
+	}
 	if(!subflow)
 		return STATUS_ERR;
 
