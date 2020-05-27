@@ -1392,10 +1392,10 @@ int dss_inbound_parser(struct packet *packet_to_modify,
 		struct dack *dack_live	= (struct dack*)((u32*)dss_opt_live+1);
 		struct dack *dack_script= (struct dack*)((u32*)dss_opt_script+1);
 
-		// dack4
-		if(!dss_opt_script->data.dss.flag_a){
+		if(!dss_opt_script->data.dss.flag_a)
 			set_dack4(dack_live, dack_script);
-		}
+		else
+			set_dack8(dack_live, dack_script);
 	}
 	subflow->ssn += tcp_payload_length;
 	return STATUS_OK;
