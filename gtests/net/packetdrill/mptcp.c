@@ -959,6 +959,54 @@ u16 get_tcp_header_length(struct packet *packet){
 	return  packet->tcp->doff*4 + 20; // tcp_header_wo_options = 20
 }
 
+static int set_dack4(struct dack *dack_live, struct dack *dack_script)
+{
+	if(dack_script->dack4 == UNDEFINED)
+		dack_live->dack4 = htobe32(mp_state.remote_idsn + mp_state.remote_ssn + mp_state.remote_last_pkt_length);
+	else if(dack_script->dack4 == SCRIPT_DEFINED_TO_HASH_LSB){
+		u64 additional_val 	= find_next_value();
+		u64 *key = find_next_key();
+		if(!key || additional_val==STATUS_ERR)
+			return STATUS_ERR;
+		dack_live->dack4 =
+			htobe32(sha_least_64bits(*key,
+					         mp_state.hash) +
+			        additional_val);
+	}else{
+		if (dack_script->dack4 > 0)
+			dack_live->dack4 =
+				htobe32(sha_least_64bits(mp_state.kernel_key,
+						         mp_state.hash) +
+				        dack_script->dack4);
+		else
+			return STATUS_ERR;
+	}
+	return STATUS_OK;
+}
+
+static int set_dack8(struct dack *dack_live, struct dack *dack_script)
+{
+	if(dack_script->dack8 == UNDEFINED)
+		dack_live->dack8 = htonll(mp_state.remote_idsn + mp_state.remote_ssn);
+	else if(dack_script->dack8 == SCRIPT_DEFINED_TO_HASH_LSB){
+		u64 additional_val 	= find_next_value();
+		u64 *key = find_next_key();
+		if(!key || additional_val==STATUS_ERR)
+			return STATUS_ERR;
+		dack_live->dack8 =
+			htonll(sha_least_64bits(*key,
+						mp_state.hash) +
+			       additional_val);
+	}else{
+		if (dack_script->dack8 > 0)
+			dack_live->dack8 =
+				htonll(sha_least_64bits(mp_state.kernel_key,
+						        mp_state.hash) +
+				       dack_script->dack8);
+	}
+	return STATUS_OK;
+}
+
 /**
  *  It will parse an inbound packet and modify the script packet
  *  in order to correspond with the scripted tests.
@@ -994,26 +1042,7 @@ int dss_inbound_parser(struct packet *packet_to_modify,
 			struct dack *dack_script= (struct dack*)((u32*)dss_opt_script+1);
 			struct dsn *dsn_script	= (struct dsn*) ((u32*)dss_opt_script+2);
 
-			// put information in script packet automatically
-			if(dss_opt_script->data.dss.dack_dsn.dack.dack4 == UNDEFINED)
-				dack_live->dack4 = htonl(mp_state.remote_idsn + mp_state.remote_ssn + mp_state.remote_last_pkt_length);
-			else if(dss_opt_script->data.dss.dack_dsn.dack.dack4 == SCRIPT_DEFINED_TO_HASH_LSB){
-				u64 additional_val 	= find_next_value();
-				u64 *key = find_next_key();
-				if(!key || additional_val==STATUS_ERR)
-					return STATUS_ERR;
-				dack_live->dack4 =
-					htonl(sha_least_64bits(*key,
-							       mp_state.hash) +
-					      additional_val);
-			}else{
-				if (dack_script->dack4 > 0)
-					dack_live->dack4 =
-						htonl(sha_least_64bits(mp_state.kernel_key,
-								       mp_state.hash) +
-						      dack_script->dack4);
-			}
-
+			set_dack4(dack_live, dack_script);
 
 			if(dsn_script->dsn4 == UNDEFINED){
 				dsn_live->dsn4 = htonl(mp_state.idsn + bytes_sent_on_all_ssn); //subflow->ssn);
@@ -1074,25 +1103,7 @@ int dss_inbound_parser(struct packet *packet_to_modify,
 			struct dack *dack_script= (struct dack*)((u32*)dss_opt_script+1);
 			struct dsn *dsn_script	= (struct dsn*)((u32*)dss_opt_script+3);
 
-			// put information in script packet
-			if(dss_opt_script->data.dss.dack_dsn.dack.dack8 == UNDEFINED)
-				dack_live->dack8 = htonll(mp_state.remote_idsn + mp_state.remote_ssn);
-			else if(dss_opt_script->data.dss.dack_dsn.dack.dack8 == SCRIPT_DEFINED_TO_HASH_LSB){
-				u64 additional_val 	= find_next_value();
-				u64 *key = find_next_key();
-				if(!key || additional_val==STATUS_ERR)
-					return STATUS_ERR;
-				dack_live->dack8 =
-					htonll(sha_least_64bits(*key,
-								mp_state.hash) +
-					       additional_val);
-			}else{
-				if (dack_script->dack8 > 0)
-					dack_live->dack8 =
-						htonll(sha_least_64bits(mp_state.kernel_key,
-								        mp_state.hash) +
-						       dack_script->dack8);
-			}
+			set_dack8(dack_live, dack_script);
 
 			if(dsn_script->dsn4 == UNDEFINED)
 				dsn_live->dsn4 = htonl( mp_state.idsn + bytes_sent_on_all_ssn); //subflow->ssn);
@@ -1154,24 +1165,7 @@ int dss_inbound_parser(struct packet *packet_to_modify,
 			struct dack *dack_script= (struct dack*)((u32*)dss_opt_script+1);
 			struct dsn *dsn_script	= (struct dsn*)((u32*)dss_opt_script+2);
 
-			// put information in script packet
-			if(dss_opt_script->data.dss.dack_dsn.dack.dack4 == UNDEFINED)
-				dack_live->dack4 = htobe32(mp_state.remote_idsn + mp_state.remote_ssn);
-			else if(dss_opt_script->data.dss.dack_dsn.dack.dack4 == SCRIPT_DEFINED_TO_HASH_LSB){
-				u64 additional_val 	= find_next_value();
-				u64 *key = find_next_key();
-				if(!key || additional_val==STATUS_ERR)
-					return STATUS_ERR;
-				dack_live->dack4 =
-					htonl(sha_least_64bits(*key, mp_state.hash) +
-					      additional_val);
-			}else{
-				if (dack_script->dack4 > 0)
-					dack_live->dack4 =
-						htonl(sha_least_64bits(mp_state.kernel_key,
-								       mp_state.hash) +
-						      dack_script->dack4);
-			}
+			set_dack4(dack_live, dack_script);
 
 			if(dss_opt_script->data.dss.dack_dsn.dsn.dsn8 == UNDEFINED)
 				dsn_live->dsn8 = htonll(mp_state.idsn + bytes_sent_on_all_ssn); //subflow->ssn);
@@ -1229,25 +1223,7 @@ int dss_inbound_parser(struct packet *packet_to_modify,
 			struct dack *dack_script= (struct dack*)((u32*)dss_opt_script+1);
 			struct dsn *dsn_script	= (struct dsn*)((u32*)dss_opt_script+3);
 
-			// put information in script packet
-			if(dss_opt_script->data.dss.dack_dsn.dack.dack8 == UNDEFINED)
-				dack_live->dack8 = htonll(mp_state.remote_idsn + mp_state.remote_ssn);
-			else if(dss_opt_script->data.dss.dack_dsn.dack.dack8 == SCRIPT_DEFINED_TO_HASH_LSB){
-				u64 additional_val 	= find_next_value();
-				u64 *key = find_next_key();
-				if(!key || additional_val==STATUS_ERR)
-					return STATUS_ERR;
-				dack_live->dack8 =
-					htonll(sha_least_64bits(*key,
-								mp_state.hash) +
-					additional_val);
-			}else{
-				if (dack_script->dack8 > 0)
-					dack_live->dack8 =
-						htonll(sha_least_64bits(mp_state.kernel_key,
-								       mp_state.hash) +
-						      dack_script->dack8);
-			}
+			set_dack8(dack_live, dack_script);
 
 			if(dss_opt_script->data.dss.dack_dsn.dsn.dsn8 == UNDEFINED)
 				dsn_live->dsn8 = htonll(mp_state.idsn + bytes_sent_on_all_ssn); //subflow->ssn);
@@ -1412,30 +1388,13 @@ int dss_inbound_parser(struct packet *packet_to_modify,
 	}
 	// IF ACK only
 	else if(dss_opt_script->data.dss.flag_A){
+		// get original information from live_packet
+		struct dack *dack_live	= (struct dack*)((u32*)dss_opt_live+1);
+		struct dack *dack_script= (struct dack*)((u32*)dss_opt_script+1);
 
 		// dack4
 		if(!dss_opt_script->data.dss.flag_a){
-			if(dss_opt_script->data.dss.dack.dack4==UNDEFINED){
-				dss_opt_script->data.dss.dack.dack4 = ntohl((u32)(mp_state.remote_idsn + mp_state.remote_ssn + mp_state.remote_last_pkt_length));
-			}else if(dss_opt_script->data.dss.dack.dack4==SCRIPT_DEFINED_TO_HASH_LSB){
-				u64 additional_val 	= find_next_value();
-				u64 *key = find_next_key();
-				if(!key || additional_val==STATUS_ERR)
-					return STATUS_ERR;
-				dss_opt_script->data.dss.dack.dack4 =
-					htonl(sha_least_64bits(*key,
-							       mp_state.hash) +
-					      additional_val);
-			}else{
-				if (dss_opt_script->data.dss.dack.dack4 > 0)
-					dss_opt_live->data.dss.dack.dack4 =
-						htonl(sha_least_64bits(mp_state.kernel_key,
-								       mp_state.hash) +
-						      dss_opt_script->data.dss.dack.dack4);
-				else
-					return STATUS_ERR;
-			}
-
+			set_dack4(dack_live, dack_script);
 		}
 	}
 	subflow->ssn += tcp_payload_length;
