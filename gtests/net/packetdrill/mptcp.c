@@ -1007,6 +1007,51 @@ static int set_dack8(struct dack *dack_live, struct dack *dack_script)
 	return STATUS_OK;
 }
 
+static int set_dsn4(struct dsn *dsn_live, struct dsn *dsn_script)
+{
+	u32 bytes_sent_on_all_ssn = get_sum_ssn();
+	if(dsn_script->dsn4 == UNDEFINED){
+		dsn_live->dsn4 = htonl(mp_state.idsn + bytes_sent_on_all_ssn);
+	}else if(dsn_script->dsn4 == SCRIPT_DEFINED_TO_HASH_LSB){
+		u64 additional_val 	= find_next_value();
+		u64 *key = find_next_key();
+		if(!key || additional_val==STATUS_ERR)
+			return STATUS_ERR;
+		dsn_live->dsn4 = htonl(sha_least_64bits(*key,
+							mp_state.hash) +
+				       additional_val);
+	}else{
+		if (dsn_script->dsn4 > 0)
+			dsn_live->dsn4 =
+				htonl(sha_least_64bits(mp_state.packetdrill_key,
+						       mp_state.hash) +
+				      dsn_script->dsn4);
+	}
+        return STATUS_OK;
+}
+
+static int set_dsn8(struct dsn *dsn_live, struct dsn *dsn_script)
+{
+	u32 bytes_sent_on_all_ssn = get_sum_ssn();
+	if(dsn_script->dsn8 == UNDEFINED)
+		dsn_live->dsn8 = htonll(mp_state.idsn + bytes_sent_on_all_ssn);
+	else if(dsn_script->dsn8 == SCRIPT_DEFINED_TO_HASH_LSB){
+		u64 additional_val 	= find_next_value();
+		u64 *key = find_next_key();
+		if(!key || additional_val==STATUS_ERR)
+			return STATUS_ERR;
+		dsn_live->dsn8 =
+			htonll(sha_least_64bits(*key, mp_state.hash) +
+			       additional_val);
+	}else{
+		if (dsn_script->dsn8 > 0)
+			dsn_live->dsn8 =
+				htonll(sha_least_64bits(mp_state.packetdrill_key,
+						        mp_state.hash) +
+				       dsn_script->dsn8);
+	}
+        return STATUS_OK;
+}
 /**
  *  It will parse an inbound packet and modify the script packet
  *  in order to correspond with the scripted tests.
@@ -1031,8 +1076,6 @@ int dss_inbound_parser(struct packet *packet_to_modify,
 		return STATUS_ERR;
 	// if a packet is going from packetdrill with DSN and DACK to kernel
 	if(dss_opt_script->data.dss.flag_M && dss_opt_script->data.dss.flag_A){
-
-		u32 bytes_sent_on_all_ssn = get_sum_ssn();
 		// if dsn4 and dack4
 		if(!dss_opt_script->data.dss.flag_m && !dss_opt_script->data.dss.flag_a){
 
@@ -1043,24 +1086,7 @@ int dss_inbound_parser(struct packet *packet_to_modify,
 			struct dsn *dsn_script	= (struct dsn*) ((u32*)dss_opt_script+2);
 
 			set_dack4(dack_live, dack_script);
-
-			if(dsn_script->dsn4 == UNDEFINED){
-				dsn_live->dsn4 = htonl(mp_state.idsn + bytes_sent_on_all_ssn); //subflow->ssn);
-			}else if(dsn_script->dsn4 == SCRIPT_DEFINED_TO_HASH_LSB){
-				u64 additional_val 	= find_next_value();
-				u64 *key = find_next_key();
-				if(!key || additional_val==STATUS_ERR)
-					return STATUS_ERR;
-				dsn_live->dsn4 = htonl(sha_least_64bits(*key,
-									mp_state.hash) +
-						       additional_val);
-			}else{
-				if (dsn_script->dsn4 > 0)
-					dsn_live->dsn4 =
-						htonl(sha_least_64bits(mp_state.packetdrill_key,
-								       mp_state.hash) +
-						      dsn_script->dsn4);
-			}
+			set_dsn4(dsn_live, dsn_script);
 
 			if(dss_opt_script->length == TCPOLEN_DSS_DACK4_DSN4){
 				//Compute checksum
@@ -1104,25 +1130,7 @@ int dss_inbound_parser(struct packet *packet_to_modify,
 			struct dsn *dsn_script	= (struct dsn*)((u32*)dss_opt_script+3);
 
 			set_dack8(dack_live, dack_script);
-
-			if(dsn_script->dsn4 == UNDEFINED)
-				dsn_live->dsn4 = htonl( mp_state.idsn + bytes_sent_on_all_ssn); //subflow->ssn);
-			else if(dsn_script->dsn4 == SCRIPT_DEFINED_TO_HASH_LSB){
-				u64 additional_val 	= find_next_value();
-				u64 *key = find_next_key();
-				if(!key || additional_val==STATUS_ERR)
-					return STATUS_ERR;
-				dsn_live->dsn4 =
-					htonl(sha_least_64bits(*key,
-							       mp_state.hash) +
-					      additional_val);
-			}else{
-				if (dsn_script->dsn4 > 0)
-					dsn_live->dsn4 =
-						htonl(sha_least_64bits(mp_state.packetdrill_key,
-								       mp_state.hash) +
-						      dsn_script->dsn4);
-			}
+			set_dsn4(dsn_live, dsn_script);
 
 			if(dss_opt_script->length == TCPOLEN_DSS_DACK4_DSN4){
 				//Compute checksum
@@ -1166,24 +1174,7 @@ int dss_inbound_parser(struct packet *packet_to_modify,
 			struct dsn *dsn_script	= (struct dsn*)((u32*)dss_opt_script+2);
 
 			set_dack4(dack_live, dack_script);
-
-			if(dss_opt_script->data.dss.dack_dsn.dsn.dsn8 == UNDEFINED)
-				dsn_live->dsn8 = htonll(mp_state.idsn + bytes_sent_on_all_ssn); //subflow->ssn);
-			else if(dss_opt_script->data.dss.dack_dsn.dsn.dsn8 == SCRIPT_DEFINED_TO_HASH_LSB){
-				u64 additional_val 	= find_next_value();
-				u64 *key = find_next_key();
-				if(!key || additional_val==STATUS_ERR)
-					return STATUS_ERR;
-				dsn_live->dsn8 =
-					htonll(sha_least_64bits(*key, mp_state.hash) +
-					       additional_val);
-			}else{
-				if (dsn_script->dsn8 > 0)
-					dsn_live->dsn8 =
-						htonl(sha_least_64bits(mp_state.packetdrill_key,
-								       mp_state.hash) +
-						      dsn_script->dsn8);
-			}
+			set_dsn8(dsn_live, dsn_script);
 
 			if(dss_opt_script->length == TCPOLEN_DSS_DACK4_DSN4){
 				//Compute checksum
@@ -1224,25 +1215,7 @@ int dss_inbound_parser(struct packet *packet_to_modify,
 			struct dsn *dsn_script	= (struct dsn*)((u32*)dss_opt_script+3);
 
 			set_dack8(dack_live, dack_script);
-
-			if(dss_opt_script->data.dss.dack_dsn.dsn.dsn8 == UNDEFINED)
-				dsn_live->dsn8 = htonll(mp_state.idsn + bytes_sent_on_all_ssn); //subflow->ssn);
-			else if(dss_opt_script->data.dss.dack_dsn.dsn.dsn8 == SCRIPT_DEFINED_TO_HASH_LSB){
-				u64 additional_val 	= find_next_value();
-				u64 *key = find_next_key();
-				if(!key || additional_val==STATUS_ERR)
-					return STATUS_ERR;
-				dsn_live->dsn8 =
-					htonll(sha_least_64bits(*key,
-							        mp_state.hash) +
-					       additional_val);
-			}else{
-				if (dsn_script->dsn8 > 0)
-					dsn_live->dsn8 =
-						htonll(sha_least_64bits(mp_state.packetdrill_key,
-								       mp_state.hash) +
-						      dsn_script->dsn8);
-			}
+			set_dsn8(dsn_live, dsn_script);
 
 			if(dss_opt_script->length == TCPOLEN_DSS_DACK4_DSN4){
 				//Compute checksum
@@ -1280,29 +1253,9 @@ int dss_inbound_parser(struct packet *packet_to_modify,
 		struct dsn *dsn_live 	= (struct dsn*)((u32*)dss_opt_live+1);
 		struct dsn *dsn_script	= (struct dsn*)((u32*)dss_opt_script+1);
 
-		u32 bytes_sent_on_all_ssn = get_sum_ssn();
 		//DSN4
 		if(!dss_opt_script->data.dss.flag_m){
-			// get original information from live_packet
-
-			if(dss_opt_script->data.dss.dsn.dsn4 == UNDEFINED)
-				dsn_live->dsn4 = htonl(mp_state.idsn + bytes_sent_on_all_ssn); //subflow->ssn);
-			else if(dss_opt_script->data.dss.dsn.dsn4 == SCRIPT_DEFINED_TO_HASH_LSB){
-				u64 additional_val 	= find_next_value();
-				u64 *key = find_next_key();
-				if(!key || additional_val==STATUS_ERR)
-					return STATUS_ERR;
-				dsn_live->dsn4 =
-					htobe32(sha_least_64bits(*key,
-								 mp_state.hash) +
-						additional_val);
-			}else{
-				if (dsn_script->dsn4 > 0)
-					dsn_live->dsn4 =
-						htonl(sha_least_64bits(mp_state.packetdrill_key,
-								       mp_state.hash) +
-						      dsn_script->dsn4);
-			}
+			set_dsn4(dsn_live, dsn_script);
 
 			if(dss_opt_script->length == TCPOLEN_DSS_DACK4_DSN4){
 				//Compute checksum
@@ -1336,24 +1289,7 @@ int dss_inbound_parser(struct packet *packet_to_modify,
 
 		//DSN8
 		}else{
-			if(dss_opt_script->data.dss.dsn.dsn8 == UNDEFINED)
-				dsn_live->dsn8 = htonll(mp_state.idsn + bytes_sent_on_all_ssn); //subflow->ssn);
-			else if(dss_opt_script->data.dss.dsn.dsn8 == SCRIPT_DEFINED_TO_HASH_LSB){
-				u64 additional_val 	= find_next_value();
-				u64 *key = find_next_key();
-				if(!key || additional_val==STATUS_ERR)
-					return STATUS_ERR;
-				dsn_live->dsn8 =
-					htonll(sha_least_64bits(*key,
-								mp_state.hash) +
-					       additional_val);
-			}else{
-				if (dsn_script->dsn8 > 0)
-					dsn_live->dsn8 =
-						htonll(sha_least_64bits(mp_state.packetdrill_key,
-								        mp_state.hash) +
-						       dsn_script->dsn8);
-			}
+			set_dsn8(dsn_live, dsn_script);
 
 			if(dss_opt_script->length == TCPOLEN_DSS_DACK4_DSN4){
 				//Compute checksum
