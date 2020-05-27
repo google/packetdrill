@@ -417,7 +417,7 @@ static int extract_and_set_kernel_key(
 {
 
 	struct tcp_option* mpcap_opt =
-			get_tcp_option(live_packet, TCPOPT_MPTCP);
+			get_mptcp_option(live_packet, MP_CAPABLE_SUBTYPE);
 
 	if(!mpcap_opt)
 		return STATUS_ERR;
@@ -717,7 +717,7 @@ static int mp_join_syn_ack(struct packet *packet_to_modify,
 		struct mp_subflow *subflow =
 				find_subflow_matching_outbound_packet(live_packet);
 		struct tcp_option *live_mp_join =
-				get_tcp_option(live_packet, TCPOPT_MPTCP);
+				get_mptcp_option(live_packet, MP_JOIN_SUBTYPE);
 
 		if(!subflow || !live_mp_join)
 			return STATUS_ERR;
@@ -783,7 +783,7 @@ int mptcp_subtype_mp_join(struct packet *packet_to_modify,
 		struct mp_subflow *subflow =
 				find_subflow_matching_outbound_packet(live_packet);
 		struct tcp_option *live_mp_join =
-				get_tcp_option(live_packet, TCPOPT_MPTCP);
+				get_mptcp_option(live_packet, MP_JOIN_SUBTYPE);
 
 		if(!subflow || !live_mp_join)
 			return STATUS_ERR;
@@ -978,7 +978,7 @@ int dss_inbound_parser(struct packet *packet_to_modify,
 	if(dss_opt_script->data.dss.flag_F)
 		tcp_payload_length++;
 
-	struct tcp_option* dss_opt_live = get_tcp_option(live_packet, TCPOPT_MPTCP);
+	struct tcp_option* dss_opt_live = get_mptcp_option(live_packet, DSS_SUBTYPE);
 	if(!dss_opt_live)
 		return STATUS_ERR;
 	// if a packet is going from packetdrill with DSN and DACK to kernel
@@ -2062,7 +2062,7 @@ int mptcp_subtype_mp_fail(struct packet *packet_to_modify,
 		struct tcp_option *dss_opt_script,
 		unsigned direction)
 {
-	struct tcp_option* dss_opt_live = get_tcp_option(live_packet, TCPOPT_MPTCP);
+	struct tcp_option* dss_opt_live = get_mptcp_option(live_packet, DSS_SUBTYPE);
 	if(!dss_opt_live)
 		return STATUS_ERR;
 
