@@ -1132,7 +1132,7 @@ int dss_inbound_parser(struct packet *packet_to_modify,
 			set_dack8(dack_live, dack_script);
 			set_dsn4(dsn_live, dsn_script);
 
-			if(dss_opt_script->length == TCPOLEN_DSS_DACK4_DSN4){
+			if(dss_opt_script->length == TCPOLEN_DSS_DACK8_DSN4){
 				//Compute checksum
 				struct {
 					u64 dsn;
@@ -1176,7 +1176,7 @@ int dss_inbound_parser(struct packet *packet_to_modify,
 			set_dack4(dack_live, dack_script);
 			set_dsn8(dsn_live, dsn_script);
 
-			if(dss_opt_script->length == TCPOLEN_DSS_DACK4_DSN4){
+			if(dss_opt_script->length == TCPOLEN_DSS_DACK4_DSN8){
 				//Compute checksum
 				struct {
 					u64 dsn;
@@ -1217,7 +1217,7 @@ int dss_inbound_parser(struct packet *packet_to_modify,
 			set_dack8(dack_live, dack_script);
 			set_dsn8(dsn_live, dsn_script);
 
-			if(dss_opt_script->length == TCPOLEN_DSS_DACK4_DSN4){
+			if(dss_opt_script->length == TCPOLEN_DSS_DACK8_DSN8){
 				//Compute checksum
 				struct {
 					u64 dsn;
@@ -1257,7 +1257,7 @@ int dss_inbound_parser(struct packet *packet_to_modify,
 		if(!dss_opt_script->data.dss.flag_m){
 			set_dsn4(dsn_live, dsn_script);
 
-			if(dss_opt_script->length == TCPOLEN_DSS_DACK4_DSN4){
+			if(dss_opt_script->length == TCPOLEN_DSS_DSN4){
 				//Compute checksum
 				struct {
 					u64 dsn;
@@ -1291,7 +1291,7 @@ int dss_inbound_parser(struct packet *packet_to_modify,
 		}else{
 			set_dsn8(dsn_live, dsn_script);
 
-			if(dss_opt_script->length == TCPOLEN_DSS_DACK4_DSN4){
+			if(dss_opt_script->length == TCPOLEN_DSS_DSN8){
 				//Compute checksum
 				struct {
 					u64 dsn;
