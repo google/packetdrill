@@ -1052,6 +1052,33 @@ static int set_dsn8(struct dsn *dsn_live, struct dsn *dsn_script)
 	}
         return STATUS_OK;
 }
+
+static void set_ssn_dll_cs(u32* ssn_live, u64 dsn, u32 ssn, u16 dll, bool with_checksum)
+{
+	*ssn_live = *ssn_live == UNDEFINED ? htonl(ssn): htonl(*ssn_live);
+
+	u16 *dll_live = (u16*)(ssn_live+1);
+	*dll_live = (s16)*(dll_live) == UNDEFINED ? htons(dll): htons(*(dll_live));
+
+	if(with_checksum){
+		//Compute checksum
+		struct {
+			u64 dsn;
+			u32 ssn;
+			u16 dll;
+			u16 zeros;
+		} __packed buff_chk;
+
+		buff_chk.dsn = dsn;
+		buff_chk.ssn = ntohl(*ssn_live);
+		buff_chk.dll = ntohs(*dll_live);
+		buff_chk.zeros = (u16)0;
+
+		// checksum
+		*(dll_live+1) = (s16)*(dll_live+1) == UNDEFINED ? htons(checksum_dss((u16*)&buff_chk, sizeof(buff_chk))): *(dll_live+1);
+	}
+}
+
 /**
  *  It will parse an inbound packet and modify the script packet
  *  in order to correspond with the scripted tests.
@@ -1076,93 +1103,40 @@ int dss_inbound_parser(struct packet *packet_to_modify,
 		return STATUS_ERR;
 	// if a packet is going from packetdrill with DSN and DACK to kernel
 	if(dss_opt_script->data.dss.flag_M && dss_opt_script->data.dss.flag_A){
-		// if dsn4 and dack4
+		// DSN4 & DACK4
 		if(!dss_opt_script->data.dss.flag_m && !dss_opt_script->data.dss.flag_a){
 
 			// get original information from live_packet
 			struct dack *dack_live	= (struct dack*)((u32*)dss_opt_live+1);
 			struct dsn *dsn_live 	= (struct dsn*) ((u32*)dss_opt_live+2);
+			u32* ssn_live           = (u32*)dsn_live+1;
 			struct dack *dack_script= (struct dack*)((u32*)dss_opt_script+1);
 			struct dsn *dsn_script	= (struct dsn*) ((u32*)dss_opt_script+2);
 
 			set_dack4(dack_live, dack_script);
 			set_dsn4(dsn_live, dsn_script);
-
-			if(dss_opt_script->length == TCPOLEN_DSS_DACK4_DSN4){
-				//Compute checksum
-				struct {
-					u64 dsn;
-					u32 ssn;
-					u16 dll;
-					u16 zeros;
-				} __packed buff_chk;
-
-				// ssn + dll + checksum
-				u32* w_cs = (u32*)dsn_live+1;	// w_cs == ssn
-				*w_cs = *w_cs==UNDEFINED ? htonl(subflow->ssn): htonl(*w_cs);
-				u16 *dll_first = (u16*)(w_cs+1);// w_cs + 1 == dll & chk
-				*dll_first = (s16)*(dll_first) == UNDEFINED ? htons(tcp_payload_length): htons(*(dll_first));
-
-				//buff_chk.dsn = mp_state.idsn + bytes_sent_on_all_ssn;
-				buff_chk.dsn = ((mp_state.idsn >>32)<<32) + ntohl(dsn_live->dsn4);
-				buff_chk.ssn = ntohl(*w_cs); //subflow->ssn;
-				buff_chk.dll = ntohs(*dll_first); //(u16)tcp_payload_length;
-				buff_chk.zeros = (u16)0;
-
-				// checksum
-				*(dll_first+1) = (s16)*(dll_first+1) == UNDEFINED ? htons(checksum_dss((u16*)&buff_chk, sizeof(buff_chk))): *(dll_first+1); // dll_first+1 = checksum
-				//	printf("dsn: %llu==%llu, ssn:%u, dll:%u ==> %u\n", buff_chk.dsn, mp_state.idsn + bytes_sent_on_all_ssn, buff_chk.ssn, buff_chk.dll, *(dll_first+1));
-			}else{
-				u32* w_cs = (u32*)dsn_live+1;	// w_cs == ssn (== dsn_live + 1 )
-				// ssn
-				*w_cs = *w_cs==UNDEFINED ? htonl(subflow->ssn): htonl(*w_cs); //htonl(subflow->ssn);
-				u16 *dll_first = (u16*)(w_cs+1);// w_cs + 1 == dll & chk
-				// dll
-				*dll_first = (s16)*(dll_first) == UNDEFINED ? htons(tcp_payload_length): htons(*(dll_first)); //htons(tcp_payload_length);
-			}
+			set_ssn_dll_cs(ssn_live,
+			               ((mp_state.idsn >>32)<<32) + ntohl(dsn_live->dsn4),
+			               subflow->ssn,
+			               tcp_payload_length,
+			               dss_opt_script->length == TCPOLEN_DSS_DACK4_DSN4);
 
 		// DSN4 & DACK8
 		}else if(!dss_opt_script->data.dss.flag_m && dss_opt_script->data.dss.flag_a){
 			// get original information from live_packet
 			struct dack *dack_live	= (struct dack*)((u32*)dss_opt_live+1);
 			struct dsn *dsn_live 	= (struct dsn*)((u32*)dss_opt_live+3);
+			u32* ssn_live           = (u32*)dsn_live+1;
 			struct dack *dack_script= (struct dack*)((u32*)dss_opt_script+1);
 			struct dsn *dsn_script	= (struct dsn*)((u32*)dss_opt_script+3);
 
 			set_dack8(dack_live, dack_script);
 			set_dsn4(dsn_live, dsn_script);
-
-			if(dss_opt_script->length == TCPOLEN_DSS_DACK8_DSN4){
-				//Compute checksum
-				struct {
-					u64 dsn;
-					u32 ssn;
-					u16 dll;
-					u16 zeros;
-				} __packed buff_chk;
-
-				// ssn + dll + checksum
-				u32* w_cs = (u32*)dsn_live+1;	// w_cs == ssn
-				*w_cs = *w_cs==UNDEFINED ? htonl(subflow->ssn): htonl(*w_cs);
-				u16 *dll_first = (u16*)(w_cs+1);// w_cs + 1 == dll & chk
-				*dll_first = (s16)*(dll_first) == UNDEFINED ? htons(tcp_payload_length): htons(*(dll_first));
-
-				//buff_chk.dsn = mp_state.idsn + bytes_sent_on_all_ssn;
-				buff_chk.dsn = ((mp_state.idsn >>32)<<32) + ntohl(dsn_live->dsn4);
-				buff_chk.ssn = ntohl(*w_cs); //subflow->ssn;
-				buff_chk.dll = ntohs(*dll_first); //(u16)tcp_payload_length;
-				buff_chk.zeros = (u16)0;
-				// checksum
-				*(dll_first+1) = (s16)*(dll_first+1) == UNDEFINED ? htons(checksum_dss((u16*)&buff_chk, sizeof(buff_chk))): *(dll_first+1); // dll_first+1 = checksum
-			}else{
-				u32* w_cs = (u32*)dsn_live+1;	// w_cs == ssn (== dsn_live + 1 )
-				// ssn
-				*w_cs = *w_cs==UNDEFINED ? htonl(subflow->ssn): htonl(*w_cs); //htonl(subflow->ssn);
-				u16 *dll_first = (u16*)(w_cs+1);// w_cs + 1 == dll & chk
-				// dll
-				*dll_first = (s16)*(dll_first) == UNDEFINED ? htons(tcp_payload_length): htons(*(dll_first)); //htons(tcp_payload_length);
-			}
-
+			set_ssn_dll_cs(ssn_live,
+			               ((mp_state.idsn >>32)<<32) + ntohl(dsn_live->dsn4),
+			               subflow->ssn,
+			               tcp_payload_length,
+			               dss_opt_script->length == TCPOLEN_DSS_DACK8_DSN4);
 
 		// DSN8 & DACK4
 		} else if (dss_opt_script->data.dss.flag_m &&
@@ -1170,83 +1144,34 @@ int dss_inbound_parser(struct packet *packet_to_modify,
 			// get original information from live_packet
 			struct dack *dack_live	= (struct dack*)((u32*)dss_opt_live+1);
 			struct dsn *dsn_live 	= (struct dsn*)((u32*)dss_opt_live+2);
+			u32* ssn_live           = (u32*)dsn_live+2;
 			struct dack *dack_script= (struct dack*)((u32*)dss_opt_script+1);
 			struct dsn *dsn_script	= (struct dsn*)((u32*)dss_opt_script+2);
 
 			set_dack4(dack_live, dack_script);
 			set_dsn8(dsn_live, dsn_script);
+			set_ssn_dll_cs(ssn_live,
+			               dsn_live->dsn8,
+			               subflow->ssn,
+			               tcp_payload_length,
+			               dss_opt_script->length == TCPOLEN_DSS_DACK4_DSN8);
 
-			if(dss_opt_script->length == TCPOLEN_DSS_DACK4_DSN8){
-				//Compute checksum
-				struct {
-					u64 dsn;
-					u32 ssn;
-					u16 dll;
-					u16 zeros;
-				} __packed buff_chk;
-
-				// ssn + dll + checksum
-				u32* w_cs = (u32*)dsn_live+2;	// w_cs == ssn
-				*w_cs = *w_cs==UNDEFINED ? htonl(subflow->ssn): htonl(*w_cs);
-				u16 *dll_first = (u16*)(w_cs+1);// w_cs + 1 == dll & chk
-				*dll_first = (s16)*(dll_first) == UNDEFINED ? htons(tcp_payload_length): htons(*(dll_first));
-
-				//buff_chk.dsn = mp_state.idsn + bytes_sent_on_all_ssn;
-				buff_chk.dsn = dsn_live->dsn8;
-				buff_chk.ssn = ntohl(*w_cs); //subflow->ssn;
-				buff_chk.dll = ntohs(*dll_first); //(u16)tcp_payload_length;
-				buff_chk.zeros = (u16)0;
-				// checksum
-				*(dll_first+1) = (s16)*(dll_first+1) == UNDEFINED ? htons(checksum_dss((u16*)&buff_chk, sizeof(buff_chk))): *(dll_first+1); // dll_first+1 = checksum
-			}else{
-				u32* w_cs = (u32*)dsn_live+2;	// w_cs == ssn (== dsn_live + 1 )
-				// ssn
-				*w_cs = *w_cs==UNDEFINED ? htonl(subflow->ssn): htonl(*w_cs); //htonl(subflow->ssn);
-				u16 *dll_first = (u16*)(w_cs+1);// w_cs + 1 == dll & chk
-				// dll
-				*dll_first = (s16)*(dll_first) == UNDEFINED ? htons(tcp_payload_length): htons(*(dll_first)); //htons(tcp_payload_length);
-			}
 		// DSN8 & DACK8
 		}else if(dss_opt_script->data.dss.flag_m && dss_opt_script->data.dss.flag_a){
 			// get original information from live_packet
 			struct dack *dack_live	= (struct dack*)((u32*)dss_opt_live+1);
 			struct dsn *dsn_live 	= (struct dsn*)((u32*)dss_opt_live+3);
+			u32* ssn_live           = (u32*)dsn_live+2;
 			struct dack *dack_script= (struct dack*)((u32*)dss_opt_script+1);
 			struct dsn *dsn_script	= (struct dsn*)((u32*)dss_opt_script+3);
 
 			set_dack8(dack_live, dack_script);
 			set_dsn8(dsn_live, dsn_script);
-
-			if(dss_opt_script->length == TCPOLEN_DSS_DACK8_DSN8){
-				//Compute checksum
-				struct {
-					u64 dsn;
-					u32 ssn;
-					u16 dll;
-					u16 zeros;
-				} __packed buff_chk;
-
-				// ssn + dll + checksum
-				u32* w_cs = (u32*)dsn_live+2;	// w_cs == ssn
-				*w_cs = *w_cs==UNDEFINED ? htonl(subflow->ssn): htonl(*w_cs);
-				u16 *dll_first = (u16*)(w_cs+1);// w_cs + 1 == dll & chk
-				*dll_first = (s16)*(dll_first) == UNDEFINED ? htons(tcp_payload_length): htons(*(dll_first));
-
-				//buff_chk.dsn = mp_state.idsn + bytes_sent_on_all_ssn;
-				buff_chk.dsn = dsn_live->dsn8;
-				buff_chk.ssn = ntohl(*w_cs); //subflow->ssn;
-				buff_chk.dll = ntohs(*dll_first); //(u16)tcp_payload_length;
-				buff_chk.zeros = (u16)0;
-				// checksum
-				*(dll_first+1) = (s16)*(dll_first+1) == UNDEFINED ? htons(checksum_dss((u16*)&buff_chk, sizeof(buff_chk))): *(dll_first+1); // dll_first+1 = checksum
-			}else{
-				u32* w_cs = (u32*)dsn_live+2;	// w_cs == ssn (== dsn_live + 1 )
-				// ssn
-				*w_cs = *w_cs==UNDEFINED ? htonl(subflow->ssn): htonl(*w_cs); //htonl(subflow->ssn);
-				u16 *dll_first = (u16*)(w_cs+1);// w_cs + 1 == dll & chk
-				// dll
-				*dll_first = (s16)*(dll_first) == UNDEFINED ? htons(tcp_payload_length): htons(*(dll_first)); //htons(tcp_payload_length);
-			}
+			set_ssn_dll_cs(ssn_live,
+			               dsn_live->dsn8,
+			               subflow->ssn,
+			               tcp_payload_length,
+			               dss_opt_script->length == TCPOLEN_DSS_DACK8_DSN8);
 		}
 	// IF DSN only
 	}else if(dss_opt_script->data.dss.flag_M){
@@ -1255,71 +1180,25 @@ int dss_inbound_parser(struct packet *packet_to_modify,
 
 		//DSN4
 		if(!dss_opt_script->data.dss.flag_m){
+			u32* ssn_live           = (u32*)dsn_live+1;
+
 			set_dsn4(dsn_live, dsn_script);
-
-			if(dss_opt_script->length == TCPOLEN_DSS_DSN4){
-				//Compute checksum
-				struct {
-					u64 dsn;
-					u32 ssn;
-					u16 dll;
-					u16 zeros;
-				} __packed buff_chk;
-
-				// ssn + dll + checksum
-				u32* w_cs = (u32*)dsn_live+1;	// w_cs == ssn
-				*w_cs = *w_cs==UNDEFINED ? htonl(subflow->ssn): htonl(*w_cs);
-				u16 *dll_first = (u16*)(w_cs+1);// w_cs + 1 == dll & chk
-				*dll_first = (s16)*(dll_first) == UNDEFINED ? htons(tcp_payload_length): htons(*(dll_first));
-
-				buff_chk.dsn = ((mp_state.idsn >>32)<<32) + ntohl(dsn_live->dsn4);
-				buff_chk.ssn = ntohl(*w_cs); //subflow->ssn;
-				buff_chk.dll = ntohs(*dll_first); //(u16)tcp_payload_length;
-				buff_chk.zeros = (u16)0;
-				// checksum
-				*(dll_first+1) = (s16)*(dll_first+1) == UNDEFINED ? htons(checksum_dss((u16*)&buff_chk, sizeof(buff_chk))): *(dll_first+1); // dll_first+1 = checksum
-			}else{
-				u32* w_cs = (u32*)dsn_live+1;	// w_cs == ssn (== dsn_live + 1 )
-				// ssn
-				*w_cs = *w_cs==UNDEFINED ? htonl(subflow->ssn): htonl(*w_cs); //htonl(subflow->ssn);
-				u16 *dll_first = (u16*)(w_cs+1);// w_cs + 1 == dll & chk
-				// dll
-				*dll_first = (s16)*(dll_first) == UNDEFINED ? htons(tcp_payload_length): htons(*(dll_first)); //htons(tcp_payload_length);
-			}
+			set_ssn_dll_cs(ssn_live,
+			               ((mp_state.idsn >>32)<<32) + ntohl(dsn_live->dsn4),
+			               subflow->ssn,
+			               tcp_payload_length,
+			               dss_opt_script->length == TCPOLEN_DSS_DSN4);
 
 		//DSN8
 		}else{
+			u32* ssn_live           = (u32*)dsn_live+2;
+
 			set_dsn8(dsn_live, dsn_script);
-
-			if(dss_opt_script->length == TCPOLEN_DSS_DSN8){
-				//Compute checksum
-				struct {
-					u64 dsn;
-					u32 ssn;
-					u16 dll;
-					u16 zeros;
-				} __packed buff_chk;
-
-				// ssn + dll + checksum
-				u32* w_cs = (u32*)dsn_live+2;	// w_cs == ssn
-				*w_cs = *w_cs==UNDEFINED ? htonl(subflow->ssn): htonl(*w_cs);
-				u16 *dll_first = (u16*)(w_cs+1);// w_cs + 1 == dll & chk
-				*dll_first = (s16)*(dll_first) == UNDEFINED ? htons(tcp_payload_length): htons(*(dll_first));
-
-				buff_chk.dsn = dsn_live->dsn8;
-				buff_chk.ssn = ntohl(*w_cs); //subflow->ssn;
-				buff_chk.dll = ntohs(*dll_first); //(u16)tcp_payload_length;
-				buff_chk.zeros = (u16)0;
-				// checksum
-				*(dll_first+1) = (s16)*(dll_first+1) == UNDEFINED ? htons(checksum_dss((u16*)&buff_chk, sizeof(buff_chk))): *(dll_first+1); // dll_first+1 = checksum
-			}else{
-				u32* w_cs = (u32*)dsn_live+2;	// w_cs == ssn (== dsn_live + 1 )
-				// ssn
-				*w_cs = *w_cs==UNDEFINED ? htonl(subflow->ssn): htonl(*w_cs); //htonl(subflow->ssn);
-				u16 *dll_first = (u16*)(w_cs+1);// w_cs + 1 == dll & chk
-				// dll
-				*dll_first = (s16)*(dll_first) == UNDEFINED ? htons(tcp_payload_length): htons(*(dll_first)); //htons(tcp_payload_length);
-			}
+			set_ssn_dll_cs(ssn_live,
+			               dsn_live->dsn8,
+			               subflow->ssn,
+			               tcp_payload_length,
+			               dss_opt_script->length == TCPOLEN_DSS_DSN8);
 		}
 	}
 	// IF ACK only
