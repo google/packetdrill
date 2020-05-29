@@ -340,32 +340,53 @@ int tcp_options_to_string(struct packet *packet,
         		break;
 
         	case MP_JOIN_SUBTYPE:
-
         		if(option->length == TCPOLEN_MP_JOIN_SYN){
-        			fprintf(s, "mp_join_syn flags: %u, address id: %u, receiver token: %u, sender random number: %u",
-        					option->data.mp_join.syn.flags,
-        					option->data.mp_join.syn.address_id,
-        					ntohl(option->data.mp_join.syn.no_ack.receiver_token),
-        					option->data.mp_join.syn.no_ack.sender_random_number
-        					);
-        		}
+				fprintf(s, "mp_join_syn");
+				fprintf(s, " flags: ");
+				u8 flags = option->data.mp_join.syn.flags;
+				if(flags==0){
+					fprintf(s, "| |");
+				}else{
+					if(flags>=1){
+						fprintf(s, "|B");
+						flags = flags-1;
+					}
+					fprintf(s, "|");
+				}
+				fprintf(s, " address_id: %u receiver_token: %u sender_random_number: %u",
+						option->data.mp_join.syn.address_id,
+						ntohl(option->data.mp_join.syn.no_ack.receiver_token),
+						option->data.mp_join.syn.no_ack.sender_random_number
+						);
+			}
 
         		else if(option->length == TCPOLEN_MP_JOIN_SYN_ACK){
-        			fprintf(s, "mp_join_syn_ack flags: %u, address id: %u, sender hmac: %lu, sender random number: %u",
-        					option->data.mp_join.syn.flags,
-        					option->data.mp_join.syn.address_id,
-        					(unsigned long)option->data.mp_join.syn.ack.sender_hmac,
-        					option->data.mp_join.syn.ack.sender_random_number);
-        		}
+				fprintf(s, "mp_join_syn_ack");
+				fprintf(s, " flags: ");
+				u8 flags = option->data.mp_join.syn.flags;
+				if(flags==0){
+					fprintf(s, "| |");
+				}else{
+					if(flags>=1){
+						fprintf(s, "|B");
+						flags = flags-1;
+					}
+					fprintf(s, "|");
+				}
+				fprintf(s, " address_id: %u sender_hmac: %lu sender_random_number: %u",
+						option->data.mp_join.syn.address_id,
+						(unsigned long)option->data.mp_join.syn.ack.sender_hmac,
+						option->data.mp_join.syn.ack.sender_random_number);
+			}
 
-        		else if(option->length == TCPOLEN_MP_JOIN_ACK){
-        			fprintf(s, "mp_join_ack sender hmac (160) bits, by 32bits bloc from [0] to [4]: %u, %u, %u, %u, %u",
-        					option->data.mp_join.no_syn.sender_hmac[0],
-        					option->data.mp_join.no_syn.sender_hmac[1],
-        					option->data.mp_join.no_syn.sender_hmac[2],
-        					option->data.mp_join.no_syn.sender_hmac[3],
-        					option->data.mp_join.no_syn.sender_hmac[4]);
-        		}
+			else if(option->length == TCPOLEN_MP_JOIN_ACK){
+				fprintf(s, "mp_join_ack sender_hmac: %u %u %u %u %u",
+						option->data.mp_join.no_syn.sender_hmac[0],
+						option->data.mp_join.no_syn.sender_hmac[1],
+						option->data.mp_join.no_syn.sender_hmac[2],
+						option->data.mp_join.no_syn.sender_hmac[3],
+						option->data.mp_join.no_syn.sender_hmac[4]);
+			}
 
         		else{
         			fprintf(s, "mp_join from bad length");
