@@ -13,6 +13,8 @@ void init_mp_state()
 	queue_init_val(&mp_state.vals_queue);
 	queue_init_val(&mp_state.script_only_vals_queue);
 	mp_state.vars = NULL; //Init hashmap
+	mp_state.token = UNDEFINED;
+	mp_state.remote_token = UNDEFINED;
 	mp_state.idsn = UNDEFINED;
 	mp_state.remote_idsn = UNDEFINED;
 	mp_state.remote_ssn = 0;
@@ -597,7 +599,11 @@ int mptcp_subtype_mp_capable(struct packet *packet_to_modify,
 		}
 
 		error = mptcp_set_mp_cap_keys(tcp_opt_to_modify);
-		// Automatically put the idsn tokens
+		// Automatically put the tokens and idsns
+		mp_state.token = sha_most_32bits(mp_state.packetdrill_key,
+						 mp_state.hash);
+		mp_state.remote_token = sha_most_32bits(mp_state.kernel_key,
+							mp_state.hash);
 		mp_state.idsn = sha_least_64bits(mp_state.packetdrill_key,
 						 mp_state.hash);
 		mp_state.remote_idsn = sha_least_64bits(mp_state.kernel_key,
@@ -644,11 +650,11 @@ static void mp_join_syn_rcv_token(struct tcp_option *tcp_opt_to_modify,
 	}
 	else if(direction == DIRECTION_INBOUND){
 		tcp_opt_to_modify->data.mp_join.syn.no_ack.receiver_token =
-				htonl(sha1_least_32bits(mp_state.kernel_key));
+				htonl(mp_state.remote_token);
 	}
 	else if(direction == DIRECTION_OUTBOUND){
 		tcp_opt_to_modify->data.mp_join.syn.no_ack.receiver_token =
-				htonl(sha1_least_32bits(mp_state.packetdrill_key));
+				htonl(mp_state.token);
 	}
 }
 

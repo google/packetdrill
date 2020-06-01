@@ -34,6 +34,7 @@ u32 sha1_least_32bits(u64 key);
 u64 sha1_least_64bits(u64 key);
 
 u64 sha_least_64bits(u64 key, enum hash_algo algo);
+u32 sha_most_32bits(u64 key, enum hash_algo algo);
 
 void hash_key_sha1(uint8_t *hash, key64 key);
 key64 get_barray_from_key64(unsigned long long key);

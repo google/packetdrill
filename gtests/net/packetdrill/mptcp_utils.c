@@ -417,6 +417,14 @@ u64 sha1_least_64bits(u64 key) {
 	return (u64) be64toh(*((u64*)&hash[12]));
 }
 
+u64 sha1_most_32bits(u64 key) {
+	key64 key_arr = get_barray_from_key64(key);
+	u8 hash[SHA_DIGEST_LENGTH] = { 0 };
+
+	hash_key_sha1(hash, key_arr);
+	return (u32) be32toh(*((u32*)hash));
+}
+
 u64 sha256_least_64bits(u64 key) {
 	key64 key_arr = get_barray_from_key64(key);
 	u8 hash[SHA256_DIGEST_LENGTH] = { 0 };
@@ -425,6 +433,13 @@ u64 sha256_least_64bits(u64 key) {
 	return (u64)be64toh(*((u64*)&hash[24]));
 }
 
+u64 sha256_most_32bits(u64 key) {
+	key64 key_arr = get_barray_from_key64(key);
+	u8 hash[SHA256_DIGEST_LENGTH] = { 0 };
+
+	hash_key_sha256(hash, key_arr);
+	return (u32)be32toh(*((u32*)hash));
+}
 
 u64 sha_least_64bits(u64 key, enum hash_algo algo) {
 	switch (algo) {
@@ -432,6 +447,18 @@ u64 sha_least_64bits(u64 key, enum hash_algo algo) {
 			return sha1_least_64bits(key);
 		case HASH_ALGO_SHA256:
 			return sha256_least_64bits(key);
+		default:
+			DEBUGP("unknown algo %d\n", algo);
+	}
+	return 0;
+}
+
+u32 sha_most_32bits(u64 key, enum hash_algo algo) {
+	switch (algo) {
+		case HASH_ALGO_SHA1:
+			return sha1_most_32bits(key);
+		case HASH_ALGO_SHA256:
+			return sha256_most_32bits(key);
 		default:
 			DEBUGP("unknown algo %d\n", algo);
 	}
