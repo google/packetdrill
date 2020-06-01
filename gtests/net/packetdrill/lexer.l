@@ -248,7 +248,6 @@ nokey			return NOKEY;
 mp_join_syn		return MP_JOIN_SYN;
 backup			return BACKUP;
 mp_join_syn_ack	return MP_JOIN_SYN_ACK;
-mp_join_syn_ack_backup	return MP_JOIN_SYN_ACK_BACKUP;
 mp_join_ack		return MP_JOIN_ACK;
 add_address		return ADD_ADDRESS;
 port			return PORT;
