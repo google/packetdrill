@@ -695,7 +695,7 @@ static void mp_join_syn_rand(struct tcp_option *tcp_opt_to_modify,
 	}
 	if(direction == DIRECTION_INBOUND){
 		tcp_opt_to_modify->data.mp_join.syn.no_ack.sender_random_number =
-				subflow->packetdrill_rand_nbr;
+				htonl(subflow->packetdrill_rand_nbr);
 	}
 	else if(direction == DIRECTION_OUTBOUND){
 		tcp_opt_to_modify->data.mp_join.syn.no_ack.sender_random_number =
@@ -723,7 +723,7 @@ static int mp_join_syn(struct packet *packet_to_modify,
 			return STATUS_ERR;
 		subflow = new_subflow_outbound(live_packet);
 		subflow->kernel_rand_nbr =
-				mp_join_syn->data.mp_join.syn.no_ack.sender_random_number;
+				ntohl(mp_join_syn->data.mp_join.syn.no_ack.sender_random_number);
 		subflow->kernel_addr_id =
 				mp_join_syn->data.mp_join.syn.address_id;
 	}
@@ -827,7 +827,7 @@ static int mp_join_syn_ack(struct packet *packet_to_modify,
 		subflow->kernel_addr_id =
 				live_mp_join->data.mp_join.syn.address_id;
 		subflow->kernel_rand_nbr =
-				live_mp_join->data.mp_join.syn.ack.sender_random_number;
+				ntohl(live_mp_join->data.mp_join.syn.ack.sender_random_number);
 
 		//Build key for HMAC-SHA1
 		unsigned char hmac_key[16];
@@ -893,7 +893,7 @@ int mptcp_subtype_mp_join(struct packet *packet_to_modify,
 		subflow->kernel_addr_id =
 				live_mp_join->data.mp_join.syn.address_id;
 		subflow->kernel_rand_nbr =
-				live_mp_join->data.mp_join.syn.ack.sender_random_number;
+				ntohl(live_mp_join->data.mp_join.syn.ack.sender_random_number);
 
 		//Update script packet mp_join option fields
 		tcp_opt_to_modify->data.mp_join.syn.address_id =
