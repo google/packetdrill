@@ -488,6 +488,7 @@ struct tcp_option *mp_join_do_syn(bool is_backup,
 		int address_id,
 		bool auto_conf,
 		bool is_integer,
+		enum hash_algo algo,
 		u64 hash,
 		char *str,
 		char *str2,
@@ -521,6 +522,7 @@ struct tcp_option *mp_join_do_syn(bool is_backup,
 		if(is_integer)
 			mp_join_script_info->syn_or_syn_ack.hash = hash;
 		else{
+			mp_join_script_info->syn_or_syn_ack.algo = algo;
 			u32 var_length = strlen(str);
 			if(var_length>253) //TODO REFACTOR
 				semantic_error("Too big token variable name, mptcp - mp_join");
@@ -799,6 +801,7 @@ struct tcp_option *dss_do_dsn_dack( int dack_type, int dack_val,
 	struct {
 		bool auto_conf;
 		bool is_integer;
+		enum hash_algo algo;
 		u64 hash;
 		char *str;
 		char *str2;
@@ -842,7 +845,7 @@ struct tcp_option *dss_do_dsn_dack( int dack_type, int dack_val,
 %token <reserved> MP_JOIN_SYN MP_JOIN_ACK MP_JOIN_SYN_ACK
 %token <reserved> DSS DACK4 DSN4 DACK8 DSN8 FIN SSN DLL NOCS CKSUM ADDR ADDRESS_ID BACKUP TOKEN AUTO RAND
 %token <reserved> TRUNC_R64_HMAC TRUNC_R64_HMAC_SHA1 TRUNC_R64_HMAC_SHA256
-%token <reserved> SENDER_HMAC TRUNC_L64_HMAC FULL_160_HMAC SHA1_32 ADD_ADDR_HMAC
+%token <reserved> SENDER_HMAC TRUNC_L64_HMAC FULL_160_HMAC SHA1_32 SHA256_32 ADD_ADDR_HMAC
 %token <reserved> ADD_ADDRESS ADD_ADDR_IPV4 ADD_ADDR_IPV6 PORT MP_FAIL
 %token <reserved> REMOVE_ADDRESS ADDRESSES_ID LIST_ID
 %token <reserved> MP_PRIO
@@ -1816,6 +1819,13 @@ TOKEN '=' INTEGER {
 | TOKEN '=' SHA1_32 '(' WORD ')' {
 	$$.auto_conf = false;
 	$$.is_integer = false;
+	$$.algo = HASH_ALGO_SHA1;
+	$$.str = $5;
+}
+| TOKEN '=' SHA256_32 '(' WORD ')' {
+	$$.auto_conf = false;
+	$$.is_integer = false;
+	$$.algo = HASH_ALGO_SHA256;
 	$$.str = $5;
 }
 | TOKEN '=' AUTO {
@@ -2081,7 +2091,7 @@ tcp_option
 }
 
 | MP_JOIN_SYN is_backup address_id mptcp_token rand {
-	$$ = mp_join_do_syn($2, $3, $4.auto_conf, $4.is_integer, $4.hash,
+	$$ = mp_join_do_syn($2, $3, $4.auto_conf, $4.is_integer, $4.algo, $4.hash,
 			$4.str, $4.str2, $5);
 }
 

@@ -128,6 +128,7 @@ struct mp_join_info {
 			bool is_var;
 			char var[255];
 			char var2[255]; //TODO warning to input length
+			enum hash_algo algo;
 			u64 hash;
 			bool rand_script_defined;
 			u32 rand;

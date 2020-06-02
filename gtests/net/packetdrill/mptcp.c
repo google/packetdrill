@@ -641,7 +641,7 @@ static void mp_join_syn_rcv_token(struct tcp_option *tcp_opt_to_modify,
 		if(mp_join_script_info->syn_or_syn_ack.is_var){
 			struct mp_var *var = find_mp_var(mp_join_script_info->syn_or_syn_ack.var);
 			tcp_opt_to_modify->data.mp_join.syn.no_ack.receiver_token =
-					htonl(sha1_least_32bits(*(u64*)var->value));
+					htonl(sha_most_32bits(*(u64*)var->value, mp_join_script_info->syn_or_syn_ack.algo));
 		}
 		else{
 			tcp_opt_to_modify->data.mp_join.syn.no_ack.receiver_token =

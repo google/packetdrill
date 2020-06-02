@@ -52,6 +52,8 @@
 #include "parse.h"
 #include "config.h"
 
+#include <linux/hash_info.h>
+
 /* This include of the bison-generated .h file must go last so that we
  * can first include all of the declarations on which it depends.
  */
@@ -262,6 +264,7 @@ rand			return RAND;
 sender_hmac		return SENDER_HMAC;
 hmac                    return ADD_ADDR_HMAC;
 sha1_32			return SHA1_32;
+sha256_32		return SHA256_32;
 token			return TOKEN;
 trunc_l64_hmac		return TRUNC_L64_HMAC;
 trunc_r64_hmac		return TRUNC_R64_HMAC;
