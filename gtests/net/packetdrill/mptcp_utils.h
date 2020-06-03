@@ -57,9 +57,16 @@ int hmac_sha1(const u8 *key,
 	      const u8 *data,
 	      size_t data_length,
 	      u8 *output);
+int hmac_sha256(const u8 *key,
+                size_t key_len,
+                const u8 *data,
+                size_t data_len,
+                u8 *mac);
 u16 checksum_dss(u16 *buffer, int size);
 uint16_t checksum_d(void* vdata, size_t length);
 void mptcp_hmac_sha1(u8 *key_1, u8 *key_2, u8 *rand_1, u8 *rand_2,
 		u32 *hash_out);
+void mptcp_hmac_sha256(u64 key_1, u64 key_2, u32 rand_1, u32 rand_2,
+		       u8* hmac);
 #endif
 

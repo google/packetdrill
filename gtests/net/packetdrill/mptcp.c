@@ -744,24 +744,11 @@ static int mp_join_syn(struct packet *packet_to_modify,
 }
 
 void mp_join_syn_ack_sender_hmac(struct tcp_option *tcp_opt_to_modify,
-		u64 key1, u64 key2, u32 msg1, u32 msg2)
+		u64 key1, u64 key2, u32 rand1, u32 rand2)
 {
-	//Build key for HMAC-SHA1
-	unsigned char hmac_key[16];
-	unsigned long *key_a = (unsigned long*)hmac_key;
-	unsigned long *key_b = (unsigned long*)&(hmac_key[8]);
-	*key_a = key1;
-	*key_b = key2;
-
-	//Build message for HMAC-SHA1
-	u32 msg[2];
-	msg[0] = msg1;
-	msg[1] = msg2;
-	tcp_opt_to_modify->data.mp_join.syn.ack.sender_hmac =
-			htobe64(hmac_sha1_truncat_64(hmac_key,
-					16,
-					(u8 *)msg,
-					8));
+	u8 mptcp_hash_mac[32];
+	mptcp_hmac_sha256(key1, key2, htonl(rand1), htonl(rand2), mptcp_hash_mac);
+	tcp_opt_to_modify->data.mp_join.syn.ack.sender_hmac = *(u64*)mptcp_hash_mac;
 }
 
 static int mp_join_syn_ack(struct packet *packet_to_modify,
@@ -851,6 +838,7 @@ static int mp_join_syn_ack(struct packet *packet_to_modify,
 	}
 	return STATUS_OK;
 }
+
 /**
  * Update mptcp subflows state according to sent/sniffed mp_join packets.
  * Insert appropriate values retrieved from this up-to-date state in inbound
@@ -901,24 +889,12 @@ int mptcp_subtype_mp_join(struct packet *packet_to_modify,
 		tcp_opt_to_modify->data.mp_join.syn.ack.sender_random_number =
 				live_mp_join->data.mp_join.syn.ack.sender_random_number;
 
-		//Build key for HMAC-SHA1
-		u64 loc_key = mp_state.packetdrill_key;
-		u64 rem_key = mp_state.kernel_key;
-		u32 loc_nonce = subflow->packetdrill_rand_nbr;
-		u32 rem_nonce = live_mp_join->data.mp_join.syn.ack.sender_random_number;
-
-		// return value
-		u8 mptcp_hash_mac[20];
-		mptcp_hmac_sha1(
-				(u8*)&rem_key,
-				(u8*)&loc_key,
-				(u8*)&rem_nonce,
-				(u8*)&loc_nonce,
-				(u32*)mptcp_hash_mac );
-
-//		u64 live_hmac = live_mp_join->data.mp_join.syn.ack.sender_hmac;
-//		printf("822: %llu == %llu\n", live_hmac, *(u64*)mptcp_hash_mac );
-
+		u8 mptcp_hash_mac[32];
+		mptcp_hmac_sha256(mp_state.kernel_key,
+				  mp_state.packetdrill_key,
+				  live_mp_join->data.mp_join.syn.ack.sender_random_number,
+				  htonl(subflow->packetdrill_rand_nbr),
+				  mptcp_hash_mac);
 		tcp_opt_to_modify->data.mp_join.syn.ack.sender_hmac = *(u64*)mptcp_hash_mac;
 	}
 	//mp_join ack XXX
@@ -931,21 +907,12 @@ int mptcp_subtype_mp_join(struct packet *packet_to_modify,
 			return STATUS_ERR;
 
 		if(mp_join_script_info->ack.is_var){
-			//Build key for HMAC-SHA1
-			u64 loc_key = mp_state.packetdrill_key;
-			u64 rem_key = mp_state.kernel_key;
-			u32 loc_nonce = subflow->packetdrill_rand_nbr;
-			u32 rem_nonce = subflow->kernel_rand_nbr;
-
-			// return value
-			u8 mptcp_hash_mac[20];
-			mptcp_hmac_sha1(
-					(u8*)&loc_key,
-					(u8*)&rem_key,
-					(u8*)&loc_nonce,
-					(u8*)&rem_nonce,
-					(u32*)mptcp_hash_mac );
-
+			u8 mptcp_hash_mac[32];
+			mptcp_hmac_sha256(mp_state.packetdrill_key,
+					  mp_state.kernel_key,
+					  htonl(subflow->packetdrill_rand_nbr),
+					  htonl(subflow->kernel_rand_nbr),
+					  mptcp_hash_mac);
 			memcpy(tcp_opt_to_modify->data.mp_join.no_syn.sender_hmac,
 					mptcp_hash_mac,
 					20);
@@ -957,19 +924,13 @@ int mptcp_subtype_mp_join(struct packet *packet_to_modify,
 			struct mp_var *var2 = find_mp_var(key_2);
 			if(var1==NULL || var2==NULL)
 				return STATUS_ERR;
-			u64 loc_key = *(u64*)var1->value;
-			u64 rem_key = *(u64*)var2->value;
-			u32 loc_nonce = subflow->packetdrill_rand_nbr;
-			u32 rem_nonce = subflow->kernel_rand_nbr;
-			// return value
-			u8 mptcp_hash_mac[20];
-			mptcp_hmac_sha1(
-					(u8*)&loc_key,
-					(u8*)&rem_key,
-					(u8*)&loc_nonce,
-					(u8*)&rem_nonce,
-					(u32*)mptcp_hash_mac );
 
+			u8 mptcp_hash_mac[32];
+			mptcp_hmac_sha256(*(u64*)var1->value,
+					  *(u64*)var2->value,
+					  htonl(subflow->packetdrill_rand_nbr),
+					  htonl(subflow->kernel_rand_nbr),
+					  mptcp_hash_mac);
 			memcpy(tcp_opt_to_modify->data.mp_join.no_syn.sender_hmac,
 					mptcp_hash_mac,
 					20);
@@ -1008,26 +969,17 @@ int mptcp_subtype_mp_join(struct packet *packet_to_modify,
 			tcp_opt_to_modify->length == TCPOLEN_MP_JOIN_ACK){
 
 		struct mp_subflow *subflow =
-				find_subflow_matching_outbound_packet(packet_to_modify);
+				find_subflow_matching_outbound_packet(live_packet);
 
 		if(!subflow)
 			return STATUS_ERR;
 
-		//Build key for HMAC-SHA1
-		u64 loc_key = mp_state.packetdrill_key;
-		u64 rem_key = mp_state.kernel_key;
-		u32 loc_nonce = subflow->packetdrill_rand_nbr;
-		u32 rem_nonce = subflow->kernel_rand_nbr;
-
-		// return value
-		u8 mptcp_hash_mac[20];
-		mptcp_hmac_sha1(
-				(u8*)&rem_key,
-				(u8*)&loc_key,
-				(u8*)&rem_nonce,
-				(u8*)&loc_nonce,
-				(u32*)mptcp_hash_mac );
-
+		u8 mptcp_hash_mac[32];
+		mptcp_hmac_sha256(mp_state.kernel_key,
+				  mp_state.packetdrill_key,
+				  htonl(subflow->kernel_rand_nbr),
+				  htonl(subflow->packetdrill_rand_nbr),
+				  mptcp_hash_mac);
 		memcpy(tcp_opt_to_modify->data.mp_join.no_syn.sender_hmac,
 				mptcp_hash_mac, 20);
 	}
