@@ -994,7 +994,7 @@ bool same_mptcp_opt(struct tcp_option *opt_a, struct tcp_option *opt_b, struct p
 					opt_a->data.mp_join.syn.ack.sender_random_number != opt_b->data.mp_join.syn.ack.sender_random_number)
 					return false;
 			}else if(opt_a->length == TCPOLEN_MP_JOIN_ACK && packet_a->tcp->ack && !packet_a->tcp->syn){
-				if(opt_a->data.mp_join.no_syn.sender_hmac != opt_b->data.mp_join.no_syn.sender_hmac)
+				if(memcmp(opt_a->data.mp_join.no_syn.sender_hmac, opt_b->data.mp_join.no_syn.sender_hmac, sizeof(opt_b->data.mp_join.no_syn.sender_hmac)))
 					return false;
 			}
 			break;
