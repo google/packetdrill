@@ -176,6 +176,15 @@ struct mp_subflow {
 };
 
 /**
+ * Address ID and address association
+ */
+struct mp_address {
+    u8 addr_id;
+    struct ip_address ip;
+    struct mp_address *next;
+};
+
+/**
  * Global state for multipath TCP
  */
 struct mp_state_s {
@@ -201,7 +210,7 @@ struct mp_state_s {
     struct mp_var *vars;
     struct mp_subflow *subflows;
 
-    unsigned last_packetdrill_addr_id;
+    struct mp_address *packetdrill_addrs;
 
     u64 remote_idsn; 	// least 64 bits of Hash(kernel_key)
     u64 idsn;			// least 64 bits of Hash(packetdrill_key)
@@ -259,6 +268,17 @@ void free_val_queue();
 void add_mp_var_key(char *name, u64 *key);
 
 /**
+ *
+ * Save a variable <name, value> in variables hashmap.
+ * Where value is of struct endpoint.
+ *
+ * Value is copied in a newly allocated pointer and will be freed when
+ * free_vars function will be executed.
+ *
+ */
+void add_mp_var_addr(char *name, struct endpoint *endpoint);
+
+/**
  * Save a variable <name, value> in variables hashmap.
  * Value is copied in a newly allocated pointer and will be freed when
  * free_vars function will be executed.
@@ -306,8 +326,6 @@ void free_vars();
  * time (src_ip, dst_ip, src_port, dst_port, packetdrill_rand_nbr,
  * packetdrill_addr_id). kernel_addr_id and kernel_rand_nbr should be set when
  * receiving syn+ack with mp_join mptcp option from kernel.
- *
- * - last_packetdrill_addr_id is incremented.
  */
 struct mp_subflow *new_subflow_inbound(struct packet *packet);
 struct mp_subflow *new_subflow_outbound(struct packet *outbound_packet);
@@ -380,5 +398,17 @@ int mptcp_subtype_dss(struct packet *packet_to_modify,
 int mptcp_insert_and_extract_opt_fields(struct packet *packet_to_modify,
 		struct packet *live_packet, // could be the same as packet_to_modify
 		unsigned direction);
+
+/**
+ * Lookup or create a packetdrill mptcp endpoint.  The behavior is to first
+ * lookup an existing endpoint matching the provided values, and if not
+ * found create a new endpoint with the values.
+ *
+ * An *address_id value of UNDEFINED is a wildcard match and automatically
+ * generated on creation.  An *ip value of NULL is a wildcard match and
+ * automatically generated on creation.  On return *address_id and *ip are
+ * the found or created endpoint values.
+ */
+void find_or_create_packetdrill_addr(u8 *address_id, struct ip_address **ip);
 
 #endif /* __MPTCP_H__ */

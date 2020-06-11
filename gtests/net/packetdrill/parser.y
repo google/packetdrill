@@ -92,6 +92,7 @@
 #include <unistd.h>
 #include "gre_packet.h"
 #include "ip.h"
+#include "ip_address.h"
 #include "ip_packet.h"
 #include "icmp_packet.h"
 #include "logging.h"
@@ -806,13 +807,7 @@ struct tcp_option *dss_do_dsn_dack( int dack_type, int dack_val,
 		bool auto_conf;
 		u64 hash;
 	} mptcp_add_addr_hmac;
-	struct {
-		int type;
-		union{
-			struct in_addr ip_addr;
-			struct in6_addr ip6_addr;
-		};
-	} address;
+	struct ip_address ip_address;
 	struct option_list *option;
 	struct event *event;
 	struct packet *packet;
@@ -845,7 +840,7 @@ struct tcp_option *dss_do_dsn_dack( int dack_type, int dack_val,
 %token <reserved> MP_CAPABLE MP_CAPABLE_NO_CS MP_FASTCLOSE FLAG_A FLAG_B FLAG_C FLAG_D FLAG_E FLAG_F FLAG_G FLAG_H NO_FLAGS
 %token <reserved> MPCAPABLE V0 V1 NOKEY MPCDATALEN
 %token <reserved> MP_JOIN_SYN MP_JOIN_SYN_BACKUP MP_JOIN_SYN_ACK_BACKUP MP_JOIN_ACK MP_JOIN_SYN_ACK
-%token <reserved> DSS DACK4 DSN4 DACK8 DSN8 FIN SSN DLL NOCS CKSUM ADDRESS_ID BACKUP TOKEN AUTO RAND
+%token <reserved> DSS DACK4 DSN4 DACK8 DSN8 FIN SSN DLL NOCS CKSUM ADDR ADDRESS_ID BACKUP TOKEN AUTO RAND
 %token <reserved> TRUNC_R64_HMAC TRUNC_R64_HMAC_SHA1 TRUNC_R64_HMAC_SHA256
 %token <reserved> SENDER_HMAC TRUNC_L64_HMAC FULL_160_HMAC SHA1_32 ADD_ADDR_HMAC
 %token <reserved> ADD_ADDRESS ADD_ADDR_IPV4 ADD_ADDR_IPV6 PORT MP_FAIL
@@ -902,7 +897,7 @@ struct tcp_option *dss_do_dsn_dack( int dack_type, int dack_val,
 %type <mptcp_add_addr_hmac> add_addr_hmac
 %type <tcp_options> opt_tcp_options tcp_option_list
 %type <tcp_option> tcp_option sack_block_list sack_block
-%type <address> add_addr_ip
+%type <integer> add_addr_ip
 %type <string> function_name
 %type <expression_list> expression_list function_arguments
 %type <expression> expression binary_expression array sub_expr_list
@@ -1771,16 +1766,32 @@ list_id
 ;
 
 add_addr_ip
-:			{$$.type = UNDEFINED;	 }
-| IPV4 '=' INET_ADDR '(' STRING ')' {
-	struct ip_address ip_formatted = ipv4_parse($5);
-	$$.ip_addr = ip_formatted.ip.v4;
-	$$.type = AF_INET;
+: ADDR '[' WORD '=' INET_ADDR '(' STRING ')' ']' {
+	struct endpoint endpoint;
+	memset(&endpoint, 0, sizeof(endpoint));
+	struct ip_address ip_formatted = ipv4_parse($7);
+	endpoint.ip.ip.v4 = ip_formatted.ip.v4;
+	endpoint.ip.address_family = AF_INET;
+	if (enqueue_var($3))
+		semantic_error("MPTCP variables queue is full!\n");
+	add_mp_var_addr($3, &endpoint);
+	$$ = AF_INET;
 }
-| IPV6 '=' INET6_ADDR '(' STRING ')' {
+| ADDR '[' WORD '=' INET6_ADDR '(' STRING ')' ']' {
+	struct endpoint endpoint;
+	memset(&endpoint, 0, sizeof(endpoint));
 	struct ip_address ip_formatted = ipv6_parse($5);
-	$$.ip6_addr = ip_formatted.ip.v6;
-	$$.type = AF_INET6;
+	endpoint.ip.ip.v6 = ip_formatted.ip.v6;
+	endpoint.ip.address_family = AF_INET6;
+	if (enqueue_var($3))
+		semantic_error("MPTCP variables queue is full!\n");
+	add_mp_var_addr($3, &endpoint);
+	$$ = AF_INET6;
+}
+| ADDR '[' WORD ']' {
+	if (enqueue_var($3))
+		semantic_error("MPTCP variables queue is full!\n");
+	$$ = AF_UNSPEC;
 }
 ;
 
@@ -2096,76 +2107,61 @@ tcp_option
 
 }
 | ADD_ADDRESS address_id add_addr_ip port add_addr_hmac { // address_id = $2, add_addr_ip = $3, port = $4 add_addr_hmac = $5
-	// default = ipv4
-	if($3.type == UNDEFINED){
-		struct in_addr adr4_zero = ipv4_parse("0.0.0.0").ip.v4;
-//		struct in6_addr adr6_zero = ipv6_parse("::").ip.v6;
-
+	// default = ipv4 // TODO(malsbat): default should come from in_config
+	if($3 == AF_UNSPEC){
                 // ipv4
 		if($4 == UNDEFINED && !$5.auto_conf && $5.hash == UNDEFINED){
 			$$ = tcp_option_new(TCPOPT_MPTCP, TCPOLEN_ADD_ADDR_V4);
-			$$->data.add_addr.ipv4 = adr4_zero;
                         $$->data.add_addr.flag_E = 1;
                 // ipv4 + port
 		}else if($4 != UNDEFINED && !$5.auto_conf && $5.hash == UNDEFINED){
 			$$ = tcp_option_new(TCPOPT_MPTCP, TCPOLEN_ADD_ADDR_V4_PORT);
-			$$->data.add_addr.ipv4_w_port.ipv4 = adr4_zero;
 			$$->data.add_addr.ipv4_w_port.port = htons($4);
                         $$->data.add_addr.flag_E = 1;
                 // ipv4 + hmac
                 }else if($4 == UNDEFINED && ($5.auto_conf || $5.hash != UNDEFINED)){
                         $$ = tcp_option_new(TCPOPT_MPTCP, TCPOLEN_ADD_ADDR_V4_HMAC);
-                        $$->data.add_addr.ipv4_w_hmac.ipv4 = adr4_zero;
                         $$->data.add_addr.ipv4_w_hmac.hmac = htobe64($5.hash);
                 // ipv4 + port + hmac
                 }else if($4 != UNDEFINED && ($5.auto_conf || $5.hash != UNDEFINED)){
                         $$ = tcp_option_new(TCPOPT_MPTCP, TCPOLEN_ADD_ADDR_V4_PORT_HMAC);
-                        $$->data.add_addr.ipv4_w_hmac.ipv4 = adr4_zero;
 			$$->data.add_addr.ipv4_w_port.port = htons($4);
                         $$->data.add_addr.ipv4_w_hmac.hmac = htobe64($5.hash);
 		}
 	// ipv4
-	}else if($3.type == AF_INET && $4 == UNDEFINED && !$5.auto_conf && $5.hash == UNDEFINED){
+	}else if($3 == AF_INET && $4 == UNDEFINED && !$5.auto_conf && $5.hash == UNDEFINED){
 		$$ = tcp_option_new(TCPOPT_MPTCP, TCPOLEN_ADD_ADDR_V4);
-		$$->data.add_addr.ipv4 = $3.ip_addr;
                 $$->data.add_addr.flag_E = 1;
 	// ipv4 + port
-	}else if($3.type == AF_INET && $4 != UNDEFINED && !$5.auto_conf && $5.hash == UNDEFINED){
+	}else if($3 == AF_INET && $4 != UNDEFINED && !$5.auto_conf && $5.hash == UNDEFINED){
 		$$ = tcp_option_new(TCPOPT_MPTCP, TCPOLEN_ADD_ADDR_V4_PORT);
-		$$->data.add_addr.ipv4_w_port.ipv4 = $3.ip_addr;
 		$$->data.add_addr.ipv4_w_port.port = htons($4);
                 $$->data.add_addr.flag_E = 1;
         // ipv4 + hmac
-	}else if($3.type == AF_INET && $4 == UNDEFINED && ($5.auto_conf || $5.hash != UNDEFINED)){
+	}else if($3 == AF_INET && $4 == UNDEFINED && ($5.auto_conf || $5.hash != UNDEFINED)){
 		$$ = tcp_option_new(TCPOPT_MPTCP, TCPOLEN_ADD_ADDR_V4_HMAC);
-		$$->data.add_addr.ipv4_w_hmac.ipv4 = $3.ip_addr;
 		$$->data.add_addr.ipv4_w_hmac.hmac = htobe64($5.hash);
         // ipv4 + port + hmac
-        }else if($3.type == AF_INET && $4 != UNDEFINED && ($5.auto_conf || $5.hash != UNDEFINED)){
+        }else if($3 == AF_INET && $4 != UNDEFINED && ($5.auto_conf || $5.hash != UNDEFINED)){
                 $$ = tcp_option_new(TCPOPT_MPTCP, TCPOLEN_ADD_ADDR_V4_PORT_HMAC);
-                $$->data.add_addr.ipv4_w_hmac.ipv4 = $3.ip_addr;
 		$$->data.add_addr.ipv4_w_port.port = htons($4);
                 $$->data.add_addr.ipv4_w_hmac.hmac = htobe64($5.hash);
 	// ipv6
-	}else if($3.type == AF_INET6 && $4 == UNDEFINED && !$5.auto_conf && $5.hash == UNDEFINED){
+	}else if($3 == AF_INET6 && $4 == UNDEFINED && !$5.auto_conf && $5.hash == UNDEFINED){
 		$$ = tcp_option_new(TCPOPT_MPTCP, TCPOLEN_ADD_ADDR_V6);
-		$$->data.add_addr.ipv6 = $3.ip6_addr;
                 $$->data.add_addr.flag_E = 1;
 	// ipv6 + port
-	}else if($3.type == AF_INET6 && $4 != UNDEFINED && !$5.auto_conf && $5.hash == UNDEFINED){
+	}else if($3 == AF_INET6 && $4 != UNDEFINED && !$5.auto_conf && $5.hash == UNDEFINED){
 		$$ = tcp_option_new(TCPOPT_MPTCP, TCPOLEN_ADD_ADDR_V6_PORT);
-		$$->data.add_addr.ipv6_w_port.ipv6 = $3.ip6_addr;
 		$$->data.add_addr.ipv6_w_port.port = htons($4);
                 $$->data.add_addr.flag_E = 1;
         // ipv6 + hmac
-	}else if($3.type == AF_INET6 && $4 == UNDEFINED && ($5.auto_conf || $5.hash != UNDEFINED)){
+	}else if($3 == AF_INET6 && $4 == UNDEFINED && ($5.auto_conf || $5.hash != UNDEFINED)){
 		$$ = tcp_option_new(TCPOPT_MPTCP, TCPOLEN_ADD_ADDR_V6_HMAC);
-		$$->data.add_addr.ipv6_w_hmac.ipv6 = $3.ip6_addr;
 		$$->data.add_addr.ipv6_w_hmac.hmac = htobe64($5.hash);
         // ipv6 + port + hmac
-	}else if($3.type == AF_INET6 && $4 != UNDEFINED && ($5.auto_conf || $5.hash != UNDEFINED)){
+	}else if($3 == AF_INET6 && $4 != UNDEFINED && ($5.auto_conf || $5.hash != UNDEFINED)){
 		$$ = tcp_option_new(TCPOPT_MPTCP, TCPOLEN_ADD_ADDR_V6_PORT_HMAC);
-		$$->data.add_addr.ipv6_w_port_hmac.ipv6 = $3.ip6_addr;
 		$$->data.add_addr.ipv6_w_port_hmac.port = htons($4);
 		$$->data.add_addr.ipv6_w_port_hmac.hmac = htobe64($5.hash);
 	}else{

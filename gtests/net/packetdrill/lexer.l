@@ -215,6 +215,7 @@ revents			return REVENTS;
 onoff			return ONOFF;
 linger			return LINGER;
 htons			return _HTONS_;
+addr			return ADDR;
 address_id		return ADDRESS_ID;
 addresses_id	return ADDRESSES_ID;
 dack4			return DACK4;
