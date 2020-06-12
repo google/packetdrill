@@ -48,6 +48,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include "script.h"
+#include "socket.h"
 #include "tcp_options.h"
 #include "parse.h"
 #include "config.h"

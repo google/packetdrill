@@ -822,10 +822,7 @@ struct tcp_option *dss_do_dsn_dack( int dack_type, int dack_val,
 	struct expression *expression;
 	struct expression_list *expression_list;
 	struct errno_spec *errno_info;
-	struct {
-		u16 src_port;
-		u16 dst_port;
-	} port_info;
+	struct tuple tuple_info;
 }
 
 /* The specific type of the output for a symbol is given by the %type
@@ -913,7 +910,7 @@ struct tcp_option *dss_do_dsn_dack( int dack_type, int dack_val,
 %type <expression> gre_header_expression
 %type <expression> epollev
 %type <errno_info> opt_errno
-%type <port_info> opt_port_info
+%type <tuple_info> opt_tuple_info
 
 %%  /* The grammar follows. */
 
@@ -1104,7 +1101,7 @@ packet_spec
 ;
 
 tcp_packet_spec
-: packet_prefix opt_ip_info opt_port_info flags seq opt_ack opt_window opt_urg_ptr opt_tcp_options {
+: packet_prefix opt_ip_info opt_tuple_info flags seq opt_ack opt_window opt_urg_ptr opt_tcp_options {
 	char *error = NULL;
 	struct packet *outer = $1, *inner = NULL;
 	enum direction_t direction = outer->direction;
@@ -1121,7 +1118,7 @@ tcp_packet_spec
 	}
 
 	inner = new_tcp_packet(in_config->wire_protocol,
-			       direction, $2, $3.src_port, $3.dst_port, $4,
+			       direction, $2, $3.src.port, $3.dst.port, $4,
 			       $5.start_sequence, $5.payload_bytes,
 			       $6, $7, $8, $9, &error);
 	free($4);
@@ -1130,6 +1127,8 @@ tcp_packet_spec
 		assert(error != NULL);
 		semantic_error(error);
 		free(error);
+	} else {
+		set_packet_tuple(inner, &$3);
 	}
 
 	$$ = packet_encapsulate_and_free(outer, inner);
@@ -1137,7 +1136,7 @@ tcp_packet_spec
 ;
 
 udp_packet_spec
-: packet_prefix opt_ip_info UDP opt_port_info '(' INTEGER ')' {
+: packet_prefix opt_ip_info UDP opt_tuple_info '(' INTEGER ')' {
 	char *error = NULL;
 	struct packet *outer = $1, *inner = NULL;
 	enum direction_t direction = outer->direction;
@@ -1151,11 +1150,13 @@ udp_packet_spec
 	}
 
 	inner = new_udp_packet(in_config->wire_protocol, direction, $2,
-			       $6, $4.src_port, $4.dst_port, &error);
+			       $6, $4.src.port, $4.dst.port, &error);
 	if (inner == NULL) {
 		assert(error != NULL);
 		semantic_error(error);
 		free(error);
+	} else {
+		set_packet_tuple(inner, &$4);
 	}
 
 	$$ = packet_encapsulate_and_free(outer, inner);
@@ -1378,10 +1379,9 @@ opt_icmp_echo_id
 | ID INTEGER     { $$ = $2; }
 ;
 
-opt_port_info
+opt_tuple_info
 :		{
-	$$.src_port		= 0;
-	$$.dst_port		= 0;
+	memset(&$$, 0, sizeof($$));
 }
 | INTEGER '>' INTEGER	{
 	if (!is_valid_u16($1)) {
@@ -1391,8 +1391,44 @@ opt_port_info
 		semantic_error("dst port out of range");
 	}
 
-	$$.src_port		= $1;
-	$$.dst_port		= $3;
+	$$.src.port		= htons($1);
+	$$.dst.port		= htons($3);
+}
+| IPV4_ADDR ':' INTEGER '>' IPV4_ADDR ':' INTEGER {
+	if (!is_valid_u16($3)) {
+		semantic_error("src port out of range");
+	}
+	if (!is_valid_u16($7)) {
+		semantic_error("dst port out of range");
+	}
+
+        struct ip_address ip_formatted;
+	ip_formatted			= ipv4_parse($1);
+	$$.src.ip.address_family	= AF_INET;
+	$$.src.ip.ip.v4			= ip_formatted.ip.v4;
+	$$.src.port			= htons($3);
+	ip_formatted			= ipv4_parse($5);
+	$$.dst.ip.address_family	= AF_INET;
+	$$.dst.ip.ip.v4			= ip_formatted.ip.v4;
+	$$.dst.port			= htons($7);
+}
+| IPV6_ADDR ':' INTEGER '>' IPV6_ADDR ':' INTEGER {
+	if (!is_valid_u16($3)) {
+		semantic_error("src port out of range");
+	}
+	if (!is_valid_u16($7)) {
+		semantic_error("dst port out of range");
+	}
+
+        struct ip_address ip_formatted;
+	ip_formatted			= ipv6_parse($1);
+	$$.src.ip.address_family	= AF_INET6;
+	$$.src.ip.ip.v6			= ip_formatted.ip.v6;
+	$$.src.port			= htons($3);
+	ip_formatted			= ipv6_parse($5);
+	$$.dst.ip.address_family	= AF_INET6;
+	$$.dst.ip.ip.v6			= ip_formatted.ip.v6;
+	$$.dst.port			= htons($7);
 }
 ;
 
