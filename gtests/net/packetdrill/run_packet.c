@@ -367,6 +367,20 @@ static struct socket *find_connect_for_live_packet(
 	return socket;
 }
 
+static struct endpoint *find_next_addr()
+{
+	char *var_name;
+	if (dequeue_var(&var_name) || !var_name) {
+		return NULL;
+	}
+	struct mp_var *var = find_mp_var(var_name);
+	free(var_name);
+	if(!var || var->mptcp_subtype != ADD_ADDR_SUBTYPE){
+		return NULL;
+	}
+	return (struct endpoint*)var->value;
+}
+
 static struct socket *handle_mp_join_for_script_packet(
 	struct state *state, const struct packet *packet,
 	enum direction_t direction)
@@ -376,8 +390,21 @@ static struct socket *handle_mp_join_for_script_packet(
 	 */
 	struct config *config = state->config;
 	struct socket *socket = state->socket_under_test;	/* shortcut */
+
 	struct tuple tuple;
 	get_packet_tuple(packet, &tuple);
+	if (packet->flags & FLAG_IP_SRC_VAR) {
+		struct endpoint *endpoint = find_next_addr();
+		if (!endpoint)
+			return NULL;
+		tuple.src = *endpoint;
+	}
+	if (packet->flags & FLAG_IP_DST_VAR) {
+		struct endpoint *endpoint = find_next_addr();
+		if (!endpoint)
+			return NULL;
+		tuple.dst = *endpoint;
+	}
 
 	bool match = packet->tcp->syn && !packet->tcp->ack &&
 		get_mptcp_option((struct packet *)packet, MP_JOIN_SUBTYPE);

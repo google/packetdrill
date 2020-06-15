@@ -822,7 +822,15 @@ struct tcp_option *dss_do_dsn_dack( int dack_type, int dack_val,
 	struct expression *expression;
 	struct expression_list *expression_list;
 	struct errno_spec *errno_info;
-	struct tuple tuple_info;
+	struct endpoint_var {
+		char *name;
+		struct endpoint value;
+		bool exist;
+	} endpoint_var;
+	struct {
+		struct endpoint_var src;
+		struct endpoint_var dst;
+	} tuple_info;
 }
 
 /* The specific type of the output for a symbol is given by the %type
@@ -910,6 +918,7 @@ struct tcp_option *dss_do_dsn_dack( int dack_type, int dack_val,
 %type <expression> gre_header_expression
 %type <expression> epollev
 %type <errno_info> opt_errno
+%type <endpoint_var> endpoint_var
 %type <tuple_info> opt_tuple_info
 
 %%  /* The grammar follows. */
@@ -1118,7 +1127,7 @@ tcp_packet_spec
 	}
 
 	inner = new_tcp_packet(in_config->wire_protocol,
-			       direction, $2, $3.src.port, $3.dst.port, $4,
+			       direction, $2, $3.src.value.port, $3.dst.value.port, $4,
 			       $5.start_sequence, $5.payload_bytes,
 			       $6, $7, $8, $9, &error);
 	free($4);
@@ -1128,7 +1137,14 @@ tcp_packet_spec
 		semantic_error(error);
 		free(error);
 	} else {
-		set_packet_tuple(inner, &$3);
+		struct tuple tuple;
+		tuple.src = $3.src.value;
+		tuple.dst = $3.dst.value;
+		set_packet_tuple(inner, &tuple);
+		if ($3.src.name != NULL)
+			inner->flags |= FLAG_IP_SRC_VAR;
+		if ($3.dst.name != NULL)
+			inner->flags |= FLAG_IP_DST_VAR;
 	}
 
 	$$ = packet_encapsulate_and_free(outer, inner);
@@ -1150,13 +1166,20 @@ udp_packet_spec
 	}
 
 	inner = new_udp_packet(in_config->wire_protocol, direction, $2,
-			       $6, $4.src.port, $4.dst.port, &error);
+			       $6, $4.src.value.port, $4.dst.value.port, &error);
 	if (inner == NULL) {
 		assert(error != NULL);
 		semantic_error(error);
 		free(error);
 	} else {
-		set_packet_tuple(inner, &$4);
+		struct tuple tuple;
+		tuple.src = $4.src.value;
+		tuple.dst = $4.dst.value;
+		set_packet_tuple(inner, &tuple);
+		if ($4.src.name != NULL)
+			inner->flags |= FLAG_IP_SRC_VAR;
+		if ($4.dst.name != NULL)
+			inner->flags |= FLAG_IP_DST_VAR;
 	}
 
 	$$ = packet_encapsulate_and_free(outer, inner);
@@ -1379,56 +1402,61 @@ opt_icmp_echo_id
 | ID INTEGER     { $$ = $2; }
 ;
 
+endpoint_var
+:		{
+	memset(&$$, 0, sizeof($$));
+}
+| INTEGER	{
+	if (!is_valid_u16($1)) {
+		semantic_error("port out of range");
+	}
+
+	memset(&$$, 0, sizeof($$));
+	$$.value.port	= htons($1);
+	$$.exist	= true;
+}
+| IPV4_ADDR ':' INTEGER {
+	if (!is_valid_u16($3)) {
+		semantic_error("port out of range");
+	}
+
+	memset(&$$, 0, sizeof($$));
+        struct ip_address ip_formatted;
+	ip_formatted			= ipv4_parse($1);
+	$$.value.ip.address_family	= AF_INET;
+	$$.value.ip.ip.v4		= ip_formatted.ip.v4;
+	$$.value.port			= htons($3);
+	$$.exist			= true;
+}
+| IPV6_ADDR ':' INTEGER {
+	if (!is_valid_u16($3)) {
+		semantic_error("port out of range");
+	}
+
+	memset(&$$, 0, sizeof($$));
+        struct ip_address ip_formatted;
+	ip_formatted			= ipv6_parse($1);
+	$$.value.ip.address_family	= AF_INET6;
+	$$.value.ip.ip.v6		= ip_formatted.ip.v6;
+	$$.value.port			= htons($3);
+	$$.exist			= true;
+}
+| ADDR '[' WORD ']' {
+	memset(&$$, 0, sizeof($$));
+	$$.name		= $3;
+	$$.exist	= true;
+	if (enqueue_var($3))
+		semantic_error("MPTCP variables queue is full!\n");
+}
+;
+
 opt_tuple_info
 :		{
 	memset(&$$, 0, sizeof($$));
 }
-| INTEGER '>' INTEGER	{
-	if (!is_valid_u16($1)) {
-		semantic_error("src port out of range");
-	}
-	if (!is_valid_u16($3)) {
-		semantic_error("dst port out of range");
-	}
-
-	$$.src.port		= htons($1);
-	$$.dst.port		= htons($3);
-}
-| IPV4_ADDR ':' INTEGER '>' IPV4_ADDR ':' INTEGER {
-	if (!is_valid_u16($3)) {
-		semantic_error("src port out of range");
-	}
-	if (!is_valid_u16($7)) {
-		semantic_error("dst port out of range");
-	}
-
-        struct ip_address ip_formatted;
-	ip_formatted			= ipv4_parse($1);
-	$$.src.ip.address_family	= AF_INET;
-	$$.src.ip.ip.v4			= ip_formatted.ip.v4;
-	$$.src.port			= htons($3);
-	ip_formatted			= ipv4_parse($5);
-	$$.dst.ip.address_family	= AF_INET;
-	$$.dst.ip.ip.v4			= ip_formatted.ip.v4;
-	$$.dst.port			= htons($7);
-}
-| IPV6_ADDR ':' INTEGER '>' IPV6_ADDR ':' INTEGER {
-	if (!is_valid_u16($3)) {
-		semantic_error("src port out of range");
-	}
-	if (!is_valid_u16($7)) {
-		semantic_error("dst port out of range");
-	}
-
-        struct ip_address ip_formatted;
-	ip_formatted			= ipv6_parse($1);
-	$$.src.ip.address_family	= AF_INET6;
-	$$.src.ip.ip.v6			= ip_formatted.ip.v6;
-	$$.src.port			= htons($3);
-	ip_formatted			= ipv6_parse($5);
-	$$.dst.ip.address_family	= AF_INET6;
-	$$.dst.ip.ip.v6			= ip_formatted.ip.v6;
-	$$.dst.port			= htons($7);
+| endpoint_var '>' endpoint_var {
+	$$.src = $1;
+	$$.dst = $3;
 }
 ;
 
