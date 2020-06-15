@@ -1389,9 +1389,23 @@ static int run_syscall_bind(struct state *state,
 	DEBUGP("run_syscall_bind\n");
 
 	/* Fill in the live address we want to bind to */
-	ip_to_sockaddr(&state->config->live_bind_ip,
-		       state->config->live_bind_port,
-		       live_addr, live_addrlen);
+        if (state->socket_under_test && state->socket_under_test->protocol == IPPROTO_MPTCP) {
+		struct ip_address bind_ip;
+		bind_ip.address_family = state->config->live_bind_ip.address_family;
+		if (bind_ip.address_family == AF_INET)
+			bind_ip.ip.v4 = in4addr_any;
+		else if (bind_ip.address_family == AF_INET6)
+			bind_ip.ip.v6 = in6addr_any;
+		else
+			return STATUS_ERR;
+		ip_to_sockaddr(&bind_ip,
+			       state->config->live_bind_port,
+			       live_addr, live_addrlen);
+	} else {
+		ip_to_sockaddr(&state->config->live_bind_ip,
+			       state->config->live_bind_port,
+			       live_addr, live_addrlen);
+	}
 
 	return STATUS_OK;
 }
