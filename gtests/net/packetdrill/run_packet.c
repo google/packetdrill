@@ -367,6 +367,70 @@ static struct socket *find_connect_for_live_packet(
 	return socket;
 }
 
+static struct socket *handle_mp_join_for_script_packet(
+	struct state *state, const struct packet *packet,
+	enum direction_t direction)
+{
+	/* Does this packet match this socket? For now we only support
+	 * testing one socket at a time.
+	 */
+	struct config *config = state->config;
+	struct socket *socket = state->socket_under_test;	/* shortcut */
+	struct tuple tuple;
+	get_packet_tuple(packet, &tuple);
+
+	bool match = packet->tcp->syn && !packet->tcp->ack &&
+		get_mptcp_option((struct packet *)packet, MP_JOIN_SUBTYPE);
+	if (!match)
+		return NULL;
+
+	if (config->is_wire_server) {
+		match = false; // TODO(malsbat): handle mp_join SYN for wire server
+	} else {
+		/* In local mode we will certainly know about this socket. */
+		match = (socket != NULL);
+	}
+	if (!match)
+		return NULL;
+
+	/* Create a socket for this outbound SYN packet. Any further
+	 * packets in the test script are mapped here.
+	 */
+	socket = socket_new(state);
+	state->socket_under_test = socket;
+	assert(socket->state == SOCKET_INIT);
+	socket->address_family = packet_address_family(packet);
+	socket->protocol = IPPROTO_MPTCP;
+
+	socket->fd.script_fd	= -1;
+	socket->fd.live_fd	= -1;
+
+	/* Fill in the new info about this connection. */
+	if (direction == DIRECTION_OUTBOUND) {
+		socket->state = SOCKET_ACTIVE_SYN_SENT;
+
+		socket->live.remote             = tuple.dst;
+
+		socket->script.remote		= tuple.dst;
+		socket->script.local		= tuple.src;
+		socket->script.local_isn	= ntohl(packet->tcp->seq);
+
+	} else {
+		socket->state = SOCKET_PASSIVE_PACKET_RECEIVED;
+
+		// TODO(malsbat): live.remote assignment needs some work, for now trusting the script
+		socket->live.remote		= tuple.src;
+		socket->live.remote_isn		= ntohl(packet->tcp->seq);
+		socket->live.local		= tuple.dst;
+
+		socket->script.remote		= tuple.src;
+		socket->script.local		= tuple.dst;
+		socket->script.remote_isn	= ntohl(packet->tcp->seq);
+	}
+
+	return socket;
+}
+
 /* Convert outbound TCP timestamp value from scripted value to live value. */
 static int get_outbound_ts_val_mapping(
 	struct socket *socket, u32 script_timestamp, u32 *live_timestamp)
@@ -1789,6 +1853,12 @@ static int find_or_create_socket_for_script_packet(
 
 		/* Is this an outbound packet matching a connecting socket? */
 		*socket = handle_connect_for_script_packet(state,
+							   packet, direction);
+		if (*socket != NULL)
+			return STATUS_OK;
+
+		/* Is this a packet starting a new mptcp subflow? */
+		*socket = handle_mp_join_for_script_packet(state,
 							   packet, direction);
 		if (*socket != NULL)
 			return STATUS_OK;
