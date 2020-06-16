@@ -381,6 +381,34 @@ static struct endpoint *find_next_addr()
 	return (struct endpoint*)var->value;
 }
 
+static struct endpoint *find_or_create_next_addr(struct state *state)
+{
+	char *var_name;
+	if (dequeue_var(&var_name) || !var_name) {
+		return NULL;
+	}
+	struct endpoint *endpoint = NULL;
+	struct mp_var *var = find_mp_var(var_name);
+	if (var && var->mptcp_subtype == ADD_ADDR_SUBTYPE)
+		endpoint = (struct endpoint*)var->value;
+	if (endpoint == NULL) {
+		u8 address_id = UNDEFINED;
+		struct ip_address *ip = NULL;
+		find_or_create_packetdrill_addr(&address_id, &ip);
+		struct endpoint packetdrill_endpoint;
+		memcpy(&packetdrill_endpoint, ip, sizeof(*ip));
+		packetdrill_endpoint.port = htons(next_ephemeral_port(state));
+		add_mp_var_addr(var_name, &packetdrill_endpoint);
+	}
+
+	var = find_mp_var(var_name);
+	free(var_name);
+	if(!var || var->mptcp_subtype != ADD_ADDR_SUBTYPE){
+		return NULL;
+	}
+	return (struct endpoint*)var->value;
+}
+
 static struct socket *handle_mp_join_for_script_packet(
 	struct state *state, const struct packet *packet,
 	enum direction_t direction)
@@ -394,7 +422,11 @@ static struct socket *handle_mp_join_for_script_packet(
 	struct tuple tuple;
 	get_packet_tuple(packet, &tuple);
 	if (packet->flags & FLAG_IP_SRC_VAR) {
-		struct endpoint *endpoint = find_next_addr();
+		struct endpoint *endpoint;
+		if (direction == DIRECTION_INBOUND)
+			endpoint = find_or_create_next_addr(state);
+		else
+			endpoint = find_next_addr();
 		if (!endpoint)
 			return NULL;
 		tuple.src = *endpoint;
