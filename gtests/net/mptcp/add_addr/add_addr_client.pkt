@@ -2,9 +2,7 @@
 --tolerance_usecs=100000
 `../common/defaults.sh`
 
-// TODO(malsbat):
-+0    `ip mptcp endpoint flush`
-+0    `ip mptcp limits set add_addr_accepted 8 subflows 8`
++0   `../mptcp/common/client.sh`
 
 0.0   socket(..., SOCK_STREAM, IPPROTO_MPTCP) = 3
 +0.0  setsockopt(3, SOL_SOCKET, SO_REUSEADDR, [1], 4) = 0
@@ -21,7 +19,6 @@
 +0.01 write(3,..., 100) = 100
 +0.0    > P. 1:101(100) ack 1 win 256 <nop,nop,TS val 305 ecr 700,mpcapable v1 flags[flag_h] key[ckey,skey] mpcdatalen 100,nop,nop>
 +0.0    < . 1:1(0) ack 101 win 256 <nop,nop,TS val 705 ecr 305,add_address addr[saddr] hmac=auto,dss dack8=101 dll=0 nocs>
-+0.0    > . 101:101(0) ack 1 win 256 <nop,nop,TS val 305 ecr 705,dss dack4=1 nocs>
 
 +0.4 close(3) = 0
-+0.0   > F. 101:101(0) ack 1 win 256 <nop, nop,TS val 494 ecr 700,dss dack8=1 dsn8=101 ssn=0 dll=1 nocs fin, nop, nop>
++0.0   > F. 101:101(0) ack 1 win 256 <nop, nop,TS val 494 ecr 700,dss dack4=1 dsn8=101 ssn=0 dll=1 nocs fin, nop, nop>

@@ -1,9 +1,7 @@
 --tolerance_usecs=100000
 `../common/defaults.sh`
 
-// TODO(malsbat):
-+0    `ip mptcp endpoint flush`
-+0    `ip mptcp limits set add_addr_accepted 8 subflows 8`
++0   `../mptcp/common/client.sh`
 
 +0.0  socket(..., SOCK_STREAM, IPPROTO_MPTCP) = 3
 +0.0  setsockopt(3, SOL_SOCKET, SO_REUSEADDR, [1], 4) = 0

@@ -1,13 +1,7 @@
 --tolerance_usecs=100000
---local_ip=192.168.200.1
---bind_port=8090
 `../common/defaults.sh`
 
-// TODO(malsbat):
-+0    `ip mptcp endpoint flush`
-+0    `ip addr add 192.168.200.2/16 dev tun0`
-+0    `ip mptcp endpoint add 192.168.200.2 signal`
-+0    `ip mptcp limits set add_addr_accepted 8 subflows 8`
++0    `../mptcp/common/server.sh`
 
 0.0   socket(..., SOCK_STREAM, IPPROTO_MPTCP) = 3
 +0.0  setsockopt(3, SOL_SOCKET, SO_REUSEADDR, [1], 4) = 0
