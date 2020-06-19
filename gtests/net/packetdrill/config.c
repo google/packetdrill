@@ -519,6 +519,67 @@ static void process_option(int opt, char *optarg, struct config *config,
 	}
 }
 
+static void safe_setenv(const char *name, const char *value)
+{
+	if (value)
+		setenv(name, value, 1);
+}
+
+static void setenv_config(struct config *config)
+{
+	char value[255];
+	if (config->ip_version == IP_VERSION_4)
+		safe_setenv("OPT_IP_VERSION", "ipv4");
+	else if (config->ip_version == IP_VERSION_4_MAPPED_6)
+		safe_setenv("OPT_IP_VERSION", "ipv4-mapped-ipv6");
+	else if (config->ip_version == IP_VERSION_6)
+		safe_setenv("OPT_IP_VERSION", "ipv6");
+	sprintf(value, "%d", config->live_bind_port);
+	safe_setenv("OPT_BIND_PORT", value);
+	safe_setenv("OPT_CODE_COMMAND", config->code_command_line);
+	safe_setenv("OPT_CODE_FORMAT", config->code_format);
+	safe_setenv("OPT_CODE_SOCKOPT", config->code_sockopt);
+	sprintf(value, "%d", config->live_connect_port);
+	safe_setenv("OPT_CONNECT_PORT", value);
+	safe_setenv("OPT_REMOTE_IP", config->live_remote_ip_string);
+	safe_setenv("OPT_LOCAL_IP", config->live_local_ip_string);
+	safe_setenv("OPT_GATEWAY_IP", config->live_gateway_ip_string);
+	sprintf(value, "%d", config->mss);
+	safe_setenv("OPT_MSS", value);
+	sprintf(value, "%d", config->mtu);
+	safe_setenv("OPT_MTU", value);
+	safe_setenv("OPT_NETMASK_IP", config->live_netmask_ip_string);
+	safe_setenv("OPT_INIT_SCRIPTS", config->init_scripts);
+	sprintf(value, "%s%s%s",
+		config->non_fatal_packet ? "packet" : "",
+		(config->non_fatal_packet && config->non_fatal_syscall) ? "," : "",
+		config->non_fatal_syscall ? "syscall" : "");
+	safe_setenv("OPT_NON_FATAL", value);
+	sprintf(value, "%u", config->speed);
+	safe_setenv("OPT_SPEED", value);
+	sprintf(value, "%d", config->tolerance_usecs);
+	safe_setenv("OPT_TOLERANCE_USECS", value);
+	safe_setenv("OPT_TCP_TS_ECR_SCALED", config->tcp_ts_ecr_scaled ? "1" : "0");
+	sprintf(value, "%d", config->tcp_ts_tick_usecs);
+	safe_setenv("OPT_TCP_TS_TICK_USECS", value);
+	safe_setenv("OPT_STRICT_SEGMENTS", config->strict_segments ? "1" : "0");
+	safe_setenv("OPT_WIRE_CLIENT", config->is_wire_client ? "1" : "0");
+	safe_setenv("OPT_WIRE_SERVER", config->is_wire_server ? "1" : "0");
+	safe_setenv("OPT_WIRE_SERVER_IP", config->wire_server_ip_string);
+	sprintf(value, "%d", config->wire_server_port);
+	safe_setenv("OPT_WIRE_SERVER_PORT", value);
+	safe_setenv("OPT_WIRE_CLIENT_DEV", config->wire_client_device);
+	safe_setenv("OPT_WIRE_SERVER_DEV", config->wire_server_device);
+	safe_setenv("OPT_SO_FILENAME", config->so_filename);
+	safe_setenv("OPT_SO_FLAGS", config->so_flags);
+	safe_setenv("OPT_DRY_RUN", config->dry_run ? "1" : "0");
+	safe_setenv("OPT_IS_ANYIP", config->is_anyip ? "1" : "0");
+	safe_setenv("OPT_SEND_OMIT_FREE", config->send_omit_free ? "1" : "0");
+	struct definition *def;
+	for (def = config->defines; def != NULL; def = def->next)
+		safe_setenv(def->symbol, def->value);
+	safe_setenv("OPT_VERBOSE", config->verbose ? "1" : "0");
+}
 
 /* Parse command line options. Returns a pointer to the first argument
  * beyond the options.
@@ -602,4 +663,7 @@ void parse_and_finalize_config(struct invocation *invocation)
 
 	/* Now take care of the last details */
 	finalize_config(invocation->config);
+
+	/* Add the config to the environment for use by the script */
+	setenv_config(invocation->config);
 }
