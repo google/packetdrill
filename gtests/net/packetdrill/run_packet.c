@@ -189,7 +189,8 @@ static struct socket *handle_listen_for_script_packet(
 	struct config *config = state->config;
 	struct socket *socket = state->socket_under_test;	/* shortcut */
 
-	bool match = (direction == DIRECTION_INBOUND); // TODO(malsbat): check for syn && !ack here, same as connect?  YES, see comment below that says "incoming SYN packet"
+	bool match = ((direction == DIRECTION_INBOUND)  &&
+		      packet->tcp->syn && !packet->tcp->ack);
 	if (!match)
 		return NULL;
 
