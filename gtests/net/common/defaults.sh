@@ -54,6 +54,9 @@ sysctl -q net.ipv4.tcp_fastopen_key=a1a1a1a1-b2b2b2b2-c3c3c3c3-d4d4d4d4
 
 sysctl -q net.ipv4.tcp_syncookies=1
 
+# enable MPTCP
+sysctl -q net.mptcp.enabled=1
+
 # Override the default qdisc on the tun device.
 # Many tests fail with timing errors if the default
 # is FQ and that paces their flows.
