@@ -48,9 +48,12 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include "script.h"
+#include "socket.h"
 #include "tcp_options.h"
 #include "parse.h"
 #include "config.h"
+
+#include <linux/hash_info.h>
 
 /* This include of the bison-generated .h file must go last so that we
  * can first include all of the declarations on which it depends.
@@ -215,6 +218,7 @@ revents			return REVENTS;
 onoff			return ONOFF;
 linger			return LINGER;
 htons			return _HTONS_;
+addr			return ADDR;
 address_id		return ADDRESS_ID;
 addresses_id	return ADDRESSES_ID;
 dack4			return DACK4;
@@ -247,7 +251,6 @@ nokey			return NOKEY;
 mp_join_syn		return MP_JOIN_SYN;
 backup			return BACKUP;
 mp_join_syn_ack	return MP_JOIN_SYN_ACK;
-mp_join_syn_ack_backup	return MP_JOIN_SYN_ACK_BACKUP;
 mp_join_ack		return MP_JOIN_ACK;
 add_address		return ADD_ADDRESS;
 port			return PORT;
@@ -260,7 +263,9 @@ mp_fail			return MP_FAIL;
 mp_fastclose 	return MP_FASTCLOSE;
 rand			return RAND;
 sender_hmac		return SENDER_HMAC;
+hmac                    return ADD_ADDR_HMAC;
 sha1_32			return SHA1_32;
+sha256_32		return SHA256_32;
 token			return TOKEN;
 trunc_l64_hmac		return TRUNC_L64_HMAC;
 trunc_r64_hmac		return TRUNC_R64_HMAC;

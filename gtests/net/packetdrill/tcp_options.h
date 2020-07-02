@@ -243,36 +243,58 @@ struct tcp_option {
 		} __packed dss;
 		struct {
 			#if __BYTE_ORDER == __LITTLE_ENDIAN
-			__u8 ipver:4, subtype:4;
+                        __u8 flag_E:1, reserved_bits: 3, subtype:4;
 			__u8 address_id;
 			#elif __BYTE_ORDER == __BIG_ENDIAN
-			__u8 subtype:4, ipver:4;
+                        __u8 subtype:4, reserved_bits: 3, flag_E:1;
 			__u8 address_id;
 			#else
 			#error "Adjust your <asm/byteorder.h> defines"
 			#endif
 			/*
-						1                   2                   3
-		0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2
-		+---------------+---------------+-------+-------+---------------+
-		|     Kind      |     Length    |Subtype| IPVer |  Address ID   |
-		+---------------+---------------+-------+-------+---------------+
-		|          Address (IPv4 - 4 octets / IPv6 - 16 octets)         |
-		+-------------------------------+-------------------------------+
-		|   Port (2 octets, optional)   |
-		+-------------------------------+
+                                                 1                   2                   3
+                             0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+                            +---------------+---------------+-------+-------+---------------+
+                            |     Kind      |     Length    |Subtype|(rsv)|E|  Address ID   |
+                            +---------------+---------------+-------+-------+---------------+
+                            |          Address (IPv4 - 4 octets / IPv6 - 16 octets)         |
+                            +-------------------------------+-------------------------------+
+                            |   Port (2 octets, optional)   |                               |
+                            +-------------------------------+                               |
+                            |                Truncated HMAC (8 octets, if E=0)              |
+                            |                               +-------------------------------+
+                            |                               |
+                            +-------------------------------+
 			 */
 			union{
 				struct in_addr ipv4;
 				struct{
 					struct in_addr ipv4;
 					u16 port;
-				}ipv4_w_port;
+				} __packed ipv4_w_port;
+				struct{
+                                        struct in_addr ipv4;
+                                        u64 hmac;
+                                } __packed ipv4_w_hmac;
+				struct{
+					struct in_addr ipv4;
+					u16 port;
+                                        u64 hmac;
+				} __packed ipv4_w_port_hmac;
 				struct in6_addr ipv6;
 				struct{
 					struct in6_addr ipv6;
 					u16 port;
-				}ipv6_w_port;
+				} __packed ipv6_w_port;
+				struct{
+                                        struct in6_addr ipv6;
+                                        u64 hmac;
+                                } __packed ipv6_w_hmac;
+				struct{
+					struct in6_addr ipv6;
+					u16 port;
+                                        u64 hmac;
+				} __packed ipv6_w_port_hmac;
 			};
 		} __packed add_addr;
 		struct {

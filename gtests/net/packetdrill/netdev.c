@@ -216,6 +216,9 @@ loop:
 
 	/* Open a socket we can use to configure the tun interface. */
 	netdev->control_fd = wrap_socket(config->ip_version, SOCK_DGRAM);
+
+	/* Make device name available to scripts. */
+	setenv("OPT_LOCAL_DEV", netdev->name, 1);
 }
 
 /* Set the offload flags to be like a typical ethernet device */

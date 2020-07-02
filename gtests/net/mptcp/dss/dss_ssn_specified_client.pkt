@@ -4,6 +4,7 @@
 
 
 0.0   socket(..., SOCK_STREAM, IPPROTO_MPTCP) = 3
++0.0  setsockopt(3, SOL_SOCKET, SO_REUSEADDR, [1], 4) = 0
 +0.0  fcntl(3, F_GETFL) = 0x2 (flags O_RDWR)
 +0.0  fcntl(3, F_SETFL, O_RDWR|O_NONBLOCK) = 0
 

@@ -1,0 +1,29 @@
+--tolerance_usecs=100000
+`../common/defaults.sh`
+
++0   `../mptcp/common/client.sh`
+
++0.0  socket(..., SOCK_STREAM, IPPROTO_MPTCP) = 3
++0.0  setsockopt(3, SOL_SOCKET, SO_REUSEADDR, [1], 4) = 0
++0.0  fcntl(3, F_GETFL) = 0x2 (flags O_RDWR)
++0.0  fcntl(3, F_SETFL, O_RDWR|O_NONBLOCK) = 0
+
++0.0 connect(3, ..., ...) = -1 EINPROGRESS (Operation now in progress)
++0.0 > addr[caddr0] > addr[saddr0] S 0:0(0) win 65535 <mss 1460,sackOK,TS val 4074410674 ecr 0,nop,wscale 8,mpcapable v1 flags[flag_h] nokey>
++0.0 < S. 0:0(0) ack 1 win 65535 <mss 1460,sackOK,TS val 4074410674 ecr 4074410674,nop,wscale 8,mpcapable v1 flags[flag_h] key[skey=2]>
++0.0 > . 1:1(0) ack 1 win 256 <nop,nop,TS val 4074410674 ecr 4074410674,mpcapable v1 flags[flag_h] key[ckey,skey]>
++0.2 getsockopt(3, SOL_SOCKET, SO_ERROR, [0], [4]) = 0
++0.0 fcntl(3, F_SETFL, O_RDWR) = 0   // set back to blocking
+
++1.0 write(3,..., 2) = 2
++0.0 > P. 1:3(2) ack 1 win 256 <nop,nop,TS val 4074418292 ecr 4074410674,mpcapable v1 flags[flag_h] key[ckey,skey] mpcdatalen 2,nop,nop>
++0.0 < . 1:1(0) ack 3 win 256 <nop,nop,TS val 4074418293 ecr 4074418292,add_address addr[saddr1] hmac=auto,dss dack8=3 dll=0 nocs>
+
++0.0 > > addr[saddr1] S 0:0(0) win 65535 <mss 1460,sackOK,TS val 448955294 ecr 0,nop,wscale 8,mp_join_syn backup=1 address_id=0 token=sha256_32(skey)>
++0.0 < S. 0:0(0) ack 1 win 65535 <mss 1460,sackOK,TS val 448955294 ecr 448955294,nop,wscale 8,mp_join_syn_ack backup=1 address_id=1 sender_hmac=auto>
++0.0 > . 1:1(0) ack 1 win 256 <nop,nop,TS val 448955294 ecr 448955294,mp_join_ack sender_hmac=auto>
++0.0 < . 1:1(0) ack 1 win 256 <nop,nop,TS val 448955294 ecr 448955294>
+
++1.0 close(3) = 0
++0.0 > addr[caddr0] > addr[saddr0] F. 3:3(0) ack 1 win 256 <nop,nop,TS val 4074418292 ecr 4074418293,dss dack4=1 dsn8=3 ssn=0 dll=1 nocs fin,nop,nop>
++0.0 > > addr[saddr1] F. 1:1(0) ack 1 win 256 <nop,nop,TS val 448955294 ecr 448955294>

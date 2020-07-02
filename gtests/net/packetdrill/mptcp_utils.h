@@ -34,6 +34,7 @@ u32 sha1_least_32bits(u64 key);
 u64 sha1_least_64bits(u64 key);
 
 u64 sha_least_64bits(u64 key, enum hash_algo algo);
+u32 sha_most_32bits(u64 key, enum hash_algo algo);
 
 void hash_key_sha1(uint8_t *hash, key64 key);
 key64 get_barray_from_key64(unsigned long long key);
@@ -43,14 +44,29 @@ u64 hmac_sha1_truncat_64(const u8 *key,
 			 unsigned key_length,
 			 u8 *data,
 			 unsigned data_length);
+u64 hmac_sha256_truncat_64(const u8 *key,
+                           unsigned key_length,
+                           u8 *data,
+                           unsigned data_length);
+u64 hmac_sha256_truncat_most_64(const u8 *key,
+                                unsigned key_length,
+                                u8 *data,
+                                unsigned data_length);
 int hmac_sha1(const u8 *key,
 	      size_t key_length,
 	      const u8 *data,
 	      size_t data_length,
 	      u8 *output);
+int hmac_sha256(const u8 *key,
+                size_t key_len,
+                const u8 *data,
+                size_t data_len,
+                u8 *mac);
 u16 checksum_dss(u16 *buffer, int size);
 uint16_t checksum_d(void* vdata, size_t length);
 void mptcp_hmac_sha1(u8 *key_1, u8 *key_2, u8 *rand_1, u8 *rand_2,
 		u32 *hash_out);
+void mptcp_hmac_sha256(u64 key_1, u64 key_2, u32 rand_1, u32 rand_2,
+		       u8* hmac);
 #endif
 

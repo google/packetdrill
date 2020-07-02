@@ -92,6 +92,7 @@
 #include <unistd.h>
 #include "gre_packet.h"
 #include "ip.h"
+#include "ip_address.h"
 #include "ip_packet.h"
 #include "icmp_packet.h"
 #include "logging.h"
@@ -487,6 +488,7 @@ struct tcp_option *mp_join_do_syn(bool is_backup,
 		int address_id,
 		bool auto_conf,
 		bool is_integer,
+		enum hash_algo algo,
 		u64 hash,
 		char *str,
 		char *str2,
@@ -520,6 +522,7 @@ struct tcp_option *mp_join_do_syn(bool is_backup,
 		if(is_integer)
 			mp_join_script_info->syn_or_syn_ack.hash = hash;
 		else{
+			mp_join_script_info->syn_or_syn_ack.algo = algo;
 			u32 var_length = strlen(str);
 			if(var_length>253) //TODO REFACTOR
 				semantic_error("Too big token variable name, mptcp - mp_join");
@@ -798,17 +801,16 @@ struct tcp_option *dss_do_dsn_dack( int dack_type, int dack_val,
 	struct {
 		bool auto_conf;
 		bool is_integer;
+		enum hash_algo algo;
 		u64 hash;
 		char *str;
 		char *str2;
 	} mptcp_token_or_hmac;
 	struct {
-		int type;
-		union{
-			struct in_addr ip_addr;
-			struct in6_addr ip6_addr;
-		};
-	} address;
+		bool auto_conf;
+		u64 hash;
+	} mptcp_add_addr_hmac;
+	struct ip_address ip_address;
 	struct option_list *option;
 	struct event *event;
 	struct packet *packet;
@@ -820,10 +822,15 @@ struct tcp_option *dss_do_dsn_dack( int dack_type, int dack_val,
 	struct expression *expression;
 	struct expression_list *expression_list;
 	struct errno_spec *errno_info;
+	struct endpoint_var {
+		char *name;
+		struct endpoint value;
+		bool exist;
+	} endpoint_var;
 	struct {
-		u16 src_port;
-		u16 dst_port;
-	} port_info;
+		struct endpoint_var src;
+		struct endpoint_var dst;
+	} tuple_info;
 }
 
 /* The specific type of the output for a symbol is given by the %type
@@ -840,10 +847,10 @@ struct tcp_option *dss_do_dsn_dack( int dack_type, int dack_val,
 %token <reserved> URG MD5 FAST_OPEN FAST_OPEN_EXP
 %token <reserved> MP_CAPABLE MP_CAPABLE_NO_CS MP_FASTCLOSE FLAG_A FLAG_B FLAG_C FLAG_D FLAG_E FLAG_F FLAG_G FLAG_H NO_FLAGS
 %token <reserved> MPCAPABLE V0 V1 NOKEY MPCDATALEN
-%token <reserved> MP_JOIN_SYN MP_JOIN_SYN_BACKUP MP_JOIN_SYN_ACK_BACKUP MP_JOIN_ACK MP_JOIN_SYN_ACK
-%token <reserved> DSS DACK4 DSN4 DACK8 DSN8 FIN SSN DLL NOCS CKSUM ADDRESS_ID BACKUP TOKEN AUTO RAND
+%token <reserved> MP_JOIN_SYN MP_JOIN_ACK MP_JOIN_SYN_ACK
+%token <reserved> DSS DACK4 DSN4 DACK8 DSN8 FIN SSN DLL NOCS CKSUM ADDR ADDRESS_ID BACKUP TOKEN AUTO RAND
 %token <reserved> TRUNC_R64_HMAC TRUNC_R64_HMAC_SHA1 TRUNC_R64_HMAC_SHA256
-%token <reserved> SENDER_HMAC TRUNC_L64_HMAC FULL_160_HMAC SHA1_32
+%token <reserved> SENDER_HMAC TRUNC_L64_HMAC FULL_160_HMAC SHA1_32 SHA256_32 ADD_ADDR_HMAC
 %token <reserved> ADD_ADDRESS ADD_ADDR_IPV4 ADD_ADDR_IPV6 PORT MP_FAIL
 %token <reserved> REMOVE_ADDRESS ADDRESSES_ID LIST_ID
 %token <reserved> MP_PRIO
@@ -895,9 +902,10 @@ struct tcp_option *dss_do_dsn_dack( int dack_type, int dack_val,
 %type <mptcp_dack> dack
 %type <mptcp_var> mptcp_var mptcp_var_or_empty
 %type <mptcp_token_or_hmac> mptcp_token sender_hmac
+%type <mptcp_add_addr_hmac> add_addr_hmac
 %type <tcp_options> opt_tcp_options tcp_option_list
 %type <tcp_option> tcp_option sack_block_list sack_block
-%type <address> add_addr_ip
+%type <integer> add_addr_ip
 %type <string> function_name
 %type <expression_list> expression_list function_arguments
 %type <expression> expression binary_expression array sub_expr_list
@@ -910,7 +918,8 @@ struct tcp_option *dss_do_dsn_dack( int dack_type, int dack_val,
 %type <expression> gre_header_expression
 %type <expression> epollev
 %type <errno_info> opt_errno
-%type <port_info> opt_port_info
+%type <endpoint_var> endpoint_var
+%type <tuple_info> opt_tuple_info
 
 %%  /* The grammar follows. */
 
@@ -1101,7 +1110,7 @@ packet_spec
 ;
 
 tcp_packet_spec
-: packet_prefix opt_ip_info opt_port_info flags seq opt_ack opt_window opt_urg_ptr opt_tcp_options {
+: packet_prefix opt_ip_info opt_tuple_info flags seq opt_ack opt_window opt_urg_ptr opt_tcp_options {
 	char *error = NULL;
 	struct packet *outer = $1, *inner = NULL;
 	enum direction_t direction = outer->direction;
@@ -1118,7 +1127,7 @@ tcp_packet_spec
 	}
 
 	inner = new_tcp_packet(in_config->wire_protocol,
-			       direction, $2, $3.src_port, $3.dst_port, $4,
+			       direction, $2, $3.src.value.port, $3.dst.value.port, $4,
 			       $5.start_sequence, $5.payload_bytes,
 			       $6, $7, $8, $9, &error);
 	free($4);
@@ -1127,6 +1136,15 @@ tcp_packet_spec
 		assert(error != NULL);
 		semantic_error(error);
 		free(error);
+	} else {
+		struct tuple tuple;
+		tuple.src = $3.src.value;
+		tuple.dst = $3.dst.value;
+		set_packet_tuple(inner, &tuple);
+		if ($3.src.name != NULL)
+			inner->flags |= FLAG_IP_SRC_VAR;
+		if ($3.dst.name != NULL)
+			inner->flags |= FLAG_IP_DST_VAR;
 	}
 
 	$$ = packet_encapsulate_and_free(outer, inner);
@@ -1134,7 +1152,7 @@ tcp_packet_spec
 ;
 
 udp_packet_spec
-: packet_prefix opt_ip_info UDP opt_port_info '(' INTEGER ')' {
+: packet_prefix opt_ip_info UDP opt_tuple_info '(' INTEGER ')' {
 	char *error = NULL;
 	struct packet *outer = $1, *inner = NULL;
 	enum direction_t direction = outer->direction;
@@ -1148,11 +1166,20 @@ udp_packet_spec
 	}
 
 	inner = new_udp_packet(in_config->wire_protocol, direction, $2,
-			       $6, $4.src_port, $4.dst_port, &error);
+			       $6, $4.src.value.port, $4.dst.value.port, &error);
 	if (inner == NULL) {
 		assert(error != NULL);
 		semantic_error(error);
 		free(error);
+	} else {
+		struct tuple tuple;
+		tuple.src = $4.src.value;
+		tuple.dst = $4.dst.value;
+		set_packet_tuple(inner, &tuple);
+		if ($4.src.name != NULL)
+			inner->flags |= FLAG_IP_SRC_VAR;
+		if ($4.dst.name != NULL)
+			inner->flags |= FLAG_IP_DST_VAR;
 	}
 
 	$$ = packet_encapsulate_and_free(outer, inner);
@@ -1375,21 +1402,61 @@ opt_icmp_echo_id
 | ID INTEGER     { $$ = $2; }
 ;
 
-opt_port_info
+endpoint_var
 :		{
-	$$.src_port		= 0;
-	$$.dst_port		= 0;
+	memset(&$$, 0, sizeof($$));
 }
-| INTEGER '>' INTEGER	{
+| INTEGER	{
 	if (!is_valid_u16($1)) {
-		semantic_error("src port out of range");
-	}
-	if (!is_valid_u16($3)) {
-		semantic_error("dst port out of range");
+		semantic_error("port out of range");
 	}
 
-	$$.src_port		= $1;
-	$$.dst_port		= $3;
+	memset(&$$, 0, sizeof($$));
+	$$.value.port	= htons($1);
+	$$.exist	= true;
+}
+| IPV4_ADDR ':' INTEGER {
+	if (!is_valid_u16($3)) {
+		semantic_error("port out of range");
+	}
+
+	memset(&$$, 0, sizeof($$));
+        struct ip_address ip_formatted;
+	ip_formatted			= ipv4_parse($1);
+	$$.value.ip.address_family	= AF_INET;
+	$$.value.ip.ip.v4		= ip_formatted.ip.v4;
+	$$.value.port			= htons($3);
+	$$.exist			= true;
+}
+| IPV6_ADDR ':' INTEGER {
+	if (!is_valid_u16($3)) {
+		semantic_error("port out of range");
+	}
+
+	memset(&$$, 0, sizeof($$));
+        struct ip_address ip_formatted;
+	ip_formatted			= ipv6_parse($1);
+	$$.value.ip.address_family	= AF_INET6;
+	$$.value.ip.ip.v6		= ip_formatted.ip.v6;
+	$$.value.port			= htons($3);
+	$$.exist			= true;
+}
+| ADDR '[' WORD ']' {
+	memset(&$$, 0, sizeof($$));
+	$$.name		= $3;
+	$$.exist	= true;
+	if (enqueue_var($3))
+		semantic_error("MPTCP variables queue is full!\n");
+}
+;
+
+opt_tuple_info
+:		{
+	memset(&$$, 0, sizeof($$));
+}
+| endpoint_var '>' endpoint_var {
+	$$.src = $1;
+	$$.dst = $3;
 }
 ;
 
@@ -1766,16 +1833,32 @@ list_id
 ;
 
 add_addr_ip
-:			{$$.type = UNDEFINED;	 }
-| IPV4 '=' INET_ADDR '(' STRING ')' {
-	struct ip_address ip_formatted = ipv4_parse($5);
-	$$.ip_addr = ip_formatted.ip.v4;
-	$$.type = AF_INET;
+: ADDR '[' WORD '=' INET_ADDR '(' STRING ')' ']' {
+	struct endpoint endpoint;
+	memset(&endpoint, 0, sizeof(endpoint));
+	struct ip_address ip_formatted = ipv4_parse($7);
+	endpoint.ip.ip.v4 = ip_formatted.ip.v4;
+	endpoint.ip.address_family = AF_INET;
+	if (enqueue_var($3))
+		semantic_error("MPTCP variables queue is full!\n");
+	add_mp_var_addr($3, &endpoint);
+	$$ = AF_INET;
 }
-| IPV6 '=' INET_ADDR '(' STRING ')' {
+| ADDR '[' WORD '=' INET6_ADDR '(' STRING ')' ']' {
+	struct endpoint endpoint;
+	memset(&endpoint, 0, sizeof(endpoint));
 	struct ip_address ip_formatted = ipv6_parse($5);
-	$$.ip6_addr = ip_formatted.ip.v6;
-	$$.type = AF_INET6;
+	endpoint.ip.ip.v6 = ip_formatted.ip.v6;
+	endpoint.ip.address_family = AF_INET6;
+	if (enqueue_var($3))
+		semantic_error("MPTCP variables queue is full!\n");
+	add_mp_var_addr($3, &endpoint);
+	$$ = AF_INET6;
+}
+| ADDR '[' WORD ']' {
+	if (enqueue_var($3))
+		semantic_error("MPTCP variables queue is full!\n");
+	$$ = AF_UNSPEC;
 }
 ;
 
@@ -1800,6 +1883,13 @@ TOKEN '=' INTEGER {
 | TOKEN '=' SHA1_32 '(' WORD ')' {
 	$$.auto_conf = false;
 	$$.is_integer = false;
+	$$.algo = HASH_ALGO_SHA1;
+	$$.str = $5;
+}
+| TOKEN '=' SHA256_32 '(' WORD ')' {
+	$$.auto_conf = false;
+	$$.is_integer = false;
+	$$.algo = HASH_ALGO_SHA256;
 	$$.str = $5;
 }
 | TOKEN '=' AUTO {
@@ -1831,6 +1921,21 @@ SENDER_HMAC '=' TRUNC_L64_HMAC '(' INTEGER ')' {
 }
 | SENDER_HMAC '=' AUTO{
 	$$.auto_conf = true;
+}
+;
+
+add_addr_hmac
+: {
+        $$.auto_conf = false;
+        $$.hash = UNDEFINED;
+}
+| ADD_ADDR_HMAC '=' INTEGER {
+        $$.auto_conf = false;
+        $$.hash = $3;
+}
+| ADD_ADDR_HMAC '=' AUTO {
+	$$.auto_conf = true;
+        $$.hash = UNDEFINED;
 }
 ;
 
@@ -2050,7 +2155,7 @@ tcp_option
 }
 
 | MP_JOIN_SYN is_backup address_id mptcp_token rand {
-	$$ = mp_join_do_syn($2, $3, $4.auto_conf, $4.is_integer, $4.hash,
+	$$ = mp_join_do_syn($2, $3, $4.auto_conf, $4.is_integer, $4.algo, $4.hash,
 			$4.str, $4.str2, $5);
 }
 
@@ -2075,43 +2180,64 @@ tcp_option
 		$$ = dss_do_dsn_dack($2.type, $2.dack, $3.type, $3.val, $4, $5, $6, $7); // $2=dsn, $3=dack, $4:ssn, $5:dll, $6=0|1, $7=0|1 XXX
 
 }
-| ADD_ADDRESS address_id add_addr_ip port { // address_id = $2, add_addr_ip = $3, port = $4
-	// default = ipv4
-	if($3.type == UNDEFINED){
-		struct in_addr adr4_zero = ipv4_parse("0.0.0.0").ip.v4;
-//		struct in6_addr adr6_zero = ipv6_parse("::").ip.v6;
-
-		if($4 == UNDEFINED){
+| ADD_ADDRESS address_id add_addr_ip port add_addr_hmac { // address_id = $2, add_addr_ip = $3, port = $4 add_addr_hmac = $5
+	// default = ipv4 // TODO(malsbat): default should come from in_config
+	if($3 == AF_UNSPEC){
+                // ipv4
+		if($4 == UNDEFINED && !$5.auto_conf && $5.hash == UNDEFINED){
 			$$ = tcp_option_new(TCPOPT_MPTCP, TCPOLEN_ADD_ADDR_V4);
-			$$->data.add_addr.ipv4 = adr4_zero;
-		}else if($4 != UNDEFINED){
+                        $$->data.add_addr.flag_E = 1;
+                // ipv4 + port
+		}else if($4 != UNDEFINED && !$5.auto_conf && $5.hash == UNDEFINED){
 			$$ = tcp_option_new(TCPOPT_MPTCP, TCPOLEN_ADD_ADDR_V4_PORT);
-			$$->data.add_addr.ipv4_w_port.ipv4 = adr4_zero;
 			$$->data.add_addr.ipv4_w_port.port = htons($4);
+                        $$->data.add_addr.flag_E = 1;
+                // ipv4 + hmac
+                }else if($4 == UNDEFINED && ($5.auto_conf || $5.hash != UNDEFINED)){
+                        $$ = tcp_option_new(TCPOPT_MPTCP, TCPOLEN_ADD_ADDR_V4_HMAC);
+                        $$->data.add_addr.ipv4_w_hmac.hmac = htobe64($5.hash);
+                // ipv4 + port + hmac
+                }else if($4 != UNDEFINED && ($5.auto_conf || $5.hash != UNDEFINED)){
+                        $$ = tcp_option_new(TCPOPT_MPTCP, TCPOLEN_ADD_ADDR_V4_PORT_HMAC);
+			$$->data.add_addr.ipv4_w_port.port = htons($4);
+                        $$->data.add_addr.ipv4_w_hmac.hmac = htobe64($5.hash);
 		}
-		$$->data.add_addr.ipver = 4;
 	// ipv4
-	}else if($3.type == AF_INET && $4 == UNDEFINED){
+	}else if($3 == AF_INET && $4 == UNDEFINED && !$5.auto_conf && $5.hash == UNDEFINED){
 		$$ = tcp_option_new(TCPOPT_MPTCP, TCPOLEN_ADD_ADDR_V4);
-		$$->data.add_addr.ipv4 = $3.ip_addr;
-		$$->data.add_addr.ipver = 4;
+                $$->data.add_addr.flag_E = 1;
 	// ipv4 + port
-	}else if($3.type == AF_INET && $4 != UNDEFINED){
+	}else if($3 == AF_INET && $4 != UNDEFINED && !$5.auto_conf && $5.hash == UNDEFINED){
 		$$ = tcp_option_new(TCPOPT_MPTCP, TCPOLEN_ADD_ADDR_V4_PORT);
-		$$->data.add_addr.ipv4_w_port.ipv4 = $3.ip_addr;
 		$$->data.add_addr.ipv4_w_port.port = htons($4);
-		$$->data.add_addr.ipver = 4;
+                $$->data.add_addr.flag_E = 1;
+        // ipv4 + hmac
+	}else if($3 == AF_INET && $4 == UNDEFINED && ($5.auto_conf || $5.hash != UNDEFINED)){
+		$$ = tcp_option_new(TCPOPT_MPTCP, TCPOLEN_ADD_ADDR_V4_HMAC);
+		$$->data.add_addr.ipv4_w_hmac.hmac = htobe64($5.hash);
+        // ipv4 + port + hmac
+        }else if($3 == AF_INET && $4 != UNDEFINED && ($5.auto_conf || $5.hash != UNDEFINED)){
+                $$ = tcp_option_new(TCPOPT_MPTCP, TCPOLEN_ADD_ADDR_V4_PORT_HMAC);
+		$$->data.add_addr.ipv4_w_port.port = htons($4);
+                $$->data.add_addr.ipv4_w_hmac.hmac = htobe64($5.hash);
 	// ipv6
-	}else if($3.type == AF_INET6 && $4 == UNDEFINED){
+	}else if($3 == AF_INET6 && $4 == UNDEFINED && !$5.auto_conf && $5.hash == UNDEFINED){
 		$$ = tcp_option_new(TCPOPT_MPTCP, TCPOLEN_ADD_ADDR_V6);
-		$$->data.add_addr.ipv6 = $3.ip6_addr;
-		$$->data.add_addr.ipver = 6;
+                $$->data.add_addr.flag_E = 1;
 	// ipv6 + port
-	}else if($3.type == AF_INET6 && $4 != UNDEFINED){
+	}else if($3 == AF_INET6 && $4 != UNDEFINED && !$5.auto_conf && $5.hash == UNDEFINED){
 		$$ = tcp_option_new(TCPOPT_MPTCP, TCPOLEN_ADD_ADDR_V6_PORT);
-		$$->data.add_addr.ipv6_w_port.ipv6 = $3.ip6_addr;
 		$$->data.add_addr.ipv6_w_port.port = htons($4);
-		$$->data.add_addr.ipver = 6;
+                $$->data.add_addr.flag_E = 1;
+        // ipv6 + hmac
+	}else if($3 == AF_INET6 && $4 == UNDEFINED && ($5.auto_conf || $5.hash != UNDEFINED)){
+		$$ = tcp_option_new(TCPOPT_MPTCP, TCPOLEN_ADD_ADDR_V6_HMAC);
+		$$->data.add_addr.ipv6_w_hmac.hmac = htobe64($5.hash);
+        // ipv6 + port + hmac
+	}else if($3 == AF_INET6 && $4 != UNDEFINED && ($5.auto_conf || $5.hash != UNDEFINED)){
+		$$ = tcp_option_new(TCPOPT_MPTCP, TCPOLEN_ADD_ADDR_V6_PORT_HMAC);
+		$$->data.add_addr.ipv6_w_port_hmac.port = htons($4);
+		$$->data.add_addr.ipv6_w_port_hmac.hmac = htobe64($5.hash);
 	}else{
 		semantic_error("Values assigned to add_address option are not valid");
 	}

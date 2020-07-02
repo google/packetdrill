@@ -366,6 +366,25 @@ u64 hmac_sha1_truncat_64(const u8 *key, u32 key_length, u8 *data,
 	return *((u64*) hash);
 }
 
+u64 hmac_sha256_truncat_64(const u8 *key, u32 key_length, u8 *data,
+                           u32 data_length) {
+	u8 hash[32];
+
+	hmac_sha256(key, key_length, data, data_length, hash);
+	return *((u64*) hash);
+}
+
+u64 hmac_sha256_truncat_most_64(const u8 *key, u32 key_length, u8 *data,
+                                u32 data_length) {
+	u8 hash[32];
+        u64 mac;
+
+	hmac_sha256(key, key_length, data, data_length, hash);
+        /* Return the rightmost 64 bits of the hash */
+        memcpy(&mac, &hash[24], sizeof(u64));
+        return mac;
+}
+
 void hash_key_sha1(uint8_t *hash, key64 key) {
 	size_t len = 8;
 	u8 *k[1];
@@ -398,6 +417,14 @@ u64 sha1_least_64bits(u64 key) {
 	return (u64) be64toh(*((u64*)&hash[12]));
 }
 
+u64 sha1_most_32bits(u64 key) {
+	key64 key_arr = get_barray_from_key64(key);
+	u8 hash[SHA_DIGEST_LENGTH] = { 0 };
+
+	hash_key_sha1(hash, key_arr);
+	return (u32) be32toh(*((u32*)hash));
+}
+
 u64 sha256_least_64bits(u64 key) {
 	key64 key_arr = get_barray_from_key64(key);
 	u8 hash[SHA256_DIGEST_LENGTH] = { 0 };
@@ -406,6 +433,13 @@ u64 sha256_least_64bits(u64 key) {
 	return (u64)be64toh(*((u64*)&hash[24]));
 }
 
+u64 sha256_most_32bits(u64 key) {
+	key64 key_arr = get_barray_from_key64(key);
+	u8 hash[SHA256_DIGEST_LENGTH] = { 0 };
+
+	hash_key_sha256(hash, key_arr);
+	return (u32)be32toh(*((u32*)hash));
+}
 
 u64 sha_least_64bits(u64 key, enum hash_algo algo) {
 	switch (algo) {
@@ -413,6 +447,18 @@ u64 sha_least_64bits(u64 key, enum hash_algo algo) {
 			return sha1_least_64bits(key);
 		case HASH_ALGO_SHA256:
 			return sha256_least_64bits(key);
+		default:
+			DEBUGP("unknown algo %d\n", algo);
+	}
+	return 0;
+}
+
+u32 sha_most_32bits(u64 key, enum hash_algo algo) {
+	switch (algo) {
+		case HASH_ALGO_SHA1:
+			return sha1_most_32bits(key);
+		case HASH_ALGO_SHA256:
+			return sha256_most_32bits(key);
 		default:
 			DEBUGP("unknown algo %d\n", algo);
 	}
@@ -534,4 +580,21 @@ void mptcp_hmac_sha1(u8 *key_1, u8 *key_2, u8 *rand_1, u8 *rand_2,
 
 	for (i = 0; i < 5; i++)
 		hash_out[i] =  be32toh(hash_out[i]);
+}
+
+void mptcp_hmac_sha256(u64 key_1, u64 key_2, u32 rand_1, u32 rand_2,
+		       u8* hmac)
+{
+	/* Build key for HMAC-SHA256 */
+	unsigned char hmac_key[16];
+	unsigned long *key_a = (unsigned long*)hmac_key;
+	unsigned long *key_b = (unsigned long*)&(hmac_key[8]);
+	*key_a = key_1;
+	*key_b = key_2;
+
+	/* Build message for HMAC-SHA256 */
+	u32 msg[2];
+	msg[0] = rand_1;
+	msg[1] = rand_2;
+	hmac_sha256(hmac_key, 16, (u8 *)msg, 8, hmac);
 }

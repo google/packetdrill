@@ -71,8 +71,12 @@
 // ADD_ADDR
 #define TCPOLEN_ADD_ADDR_V4 8
 #define TCPOLEN_ADD_ADDR_V4_PORT 10
+#define TCPOLEN_ADD_ADDR_V4_HMAC 16
+#define TCPOLEN_ADD_ADDR_V4_PORT_HMAC 18
 #define TCPOLEN_ADD_ADDR_V6 20
 #define TCPOLEN_ADD_ADDR_V6_PORT 22
+#define TCPOLEN_ADD_ADDR_V6_HMAC 28
+#define TCPOLEN_ADD_ADDR_V6_PORT_HMAC 30
 // REMOVE_ADDR
 #define TCPOLEN_REMOVE_ADDR 3 // the rest is the number of address_id's added
 // MP_PRIO
@@ -124,6 +128,7 @@ struct mp_join_info {
 			bool is_var;
 			char var[255];
 			char var2[255]; //TODO warning to input length
+			enum hash_algo algo;
 			u64 hash;
 			bool rand_script_defined;
 			u32 rand;
@@ -172,6 +177,15 @@ struct mp_subflow {
 };
 
 /**
+ * Address ID and address association
+ */
+struct mp_address {
+    u8 addr_id;
+    struct ip_address ip;
+    struct mp_address *next;
+};
+
+/**
  * Global state for multipath TCP
  */
 struct mp_state_s {
@@ -197,8 +211,10 @@ struct mp_state_s {
     struct mp_var *vars;
     struct mp_subflow *subflows;
 
-    unsigned last_packetdrill_addr_id;
+    struct mp_address *packetdrill_addrs;
 
+    u32 remote_token; 	// most 32 bits of Hash(kernel_key)
+    u32 token;			// most 32 bits of Hash(packetdrill_key)
     u64 remote_idsn; 	// least 64 bits of Hash(kernel_key)
     u64 idsn;			// least 64 bits of Hash(packetdrill_key)
     u32 remote_ssn;		// number of packets received from kernel
@@ -255,6 +271,17 @@ void free_val_queue();
 void add_mp_var_key(char *name, u64 *key);
 
 /**
+ *
+ * Save a variable <name, value> in variables hashmap.
+ * Where value is of struct endpoint.
+ *
+ * Value is copied in a newly allocated pointer and will be freed when
+ * free_vars function will be executed.
+ *
+ */
+void add_mp_var_addr(char *name, struct endpoint *endpoint);
+
+/**
  * Save a variable <name, value> in variables hashmap.
  * Value is copied in a newly allocated pointer and will be freed when
  * free_vars function will be executed.
@@ -300,10 +327,8 @@ void free_vars();
  * @post
  * - Create a new subflow structure containing all available information at this
  * time (src_ip, dst_ip, src_port, dst_port, packetdrill_rand_nbr,
- * packetdrill_addr_id). kernel_addr_id and kernel_rand_nbr should be set when
- * receiving syn+ack with mp_join mptcp option from kernel.
- *
- * - last_packetdrill_addr_id is incremented.
+ * packetdrill_addr_id). kernel_addr_id and kernel_rand_nbr should be set by the
+ * caller when receiving syn+ack with mp_join mptcp option from kernel.
  */
 struct mp_subflow *new_subflow_inbound(struct packet *packet);
 struct mp_subflow *new_subflow_outbound(struct packet *outbound_packet);
@@ -376,5 +401,17 @@ int mptcp_subtype_dss(struct packet *packet_to_modify,
 int mptcp_insert_and_extract_opt_fields(struct packet *packet_to_modify,
 		struct packet *live_packet, // could be the same as packet_to_modify
 		unsigned direction);
+
+/**
+ * Lookup or create a packetdrill mptcp endpoint.  The behavior is to first
+ * lookup an existing endpoint matching the provided values, and if not
+ * found create a new endpoint with the values.
+ *
+ * An *address_id value of UNDEFINED is a wildcard match and automatically
+ * generated on creation.  An *ip value of NULL is a wildcard match and
+ * automatically generated on creation.  On return *address_id and *ip are
+ * the found or created endpoint values.
+ */
+void find_or_create_packetdrill_addr(u8 *address_id, struct ip_address **ip);
 
 #endif /* __MPTCP_H__ */

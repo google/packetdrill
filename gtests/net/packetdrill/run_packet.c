@@ -134,38 +134,40 @@ static struct socket *find_socket_for_live_packet(
 	struct state *state, const struct packet *packet,
 	enum direction_t *direction)
 {
-	struct socket *socket = state->socket_under_test;	/* shortcut */
-	if (socket == NULL)
-		return NULL;
+	struct fd_state *fd;
+	for (fd = state->fds; fd; fd = fd->next) {
+		struct socket *socket = fd_to_socket(fd);
+		if (socket == NULL)
+			continue;
 
-	struct tuple packet_tuple, live_outbound, live_inbound;
-	bool is_icmp = (socket->protocol == IPPROTO_ICMP && packet->icmpv4) ||
-		       (socket->protocol == IPPROTO_ICMPV6 && packet->icmpv6);
-	get_packet_tuple(packet, &packet_tuple);
+		struct tuple packet_tuple, live_outbound, live_inbound;
+		bool is_icmp = (socket->protocol == IPPROTO_ICMP && packet->icmpv4) ||
+			(socket->protocol == IPPROTO_ICMPV6 && packet->icmpv6);
+		get_packet_tuple(packet, &packet_tuple);
 
-	/* Is packet inbound to the socket under test? */
-	socket_get_inbound(&socket->live, &live_inbound);
-	if (is_equal_tuple(&packet_tuple, &live_inbound) ||
-	    (is_icmp &&
-	     is_equal_ip(&packet_tuple.dst.ip, &live_inbound.dst.ip) &&
-	     is_equal_ip(&packet_tuple.src.ip, &live_inbound.src.ip))) {
-		*direction = DIRECTION_INBOUND;
-		DEBUGP("inbound live packet, socket in state %d\n",
-		       socket->state);
-		return socket;
+		/* Is packet inbound to the socket under test? */
+		socket_get_inbound(&socket->live, &live_inbound);
+		if (is_equal_tuple(&packet_tuple, &live_inbound) ||
+		    (is_icmp &&
+		     is_equal_ip(&packet_tuple.dst.ip, &live_inbound.dst.ip) &&
+		     is_equal_ip(&packet_tuple.src.ip, &live_inbound.src.ip))) {
+			*direction = DIRECTION_INBOUND;
+			DEBUGP("inbound live packet, socket in state %d\n",
+			       socket->state);
+			return socket;
+		}
+		/* Is packet outbound from the socket under test? */
+		socket_get_outbound(&socket->live, &live_outbound);
+		if (is_equal_tuple(&packet_tuple, &live_outbound) ||
+		    (is_icmp &&
+		     is_equal_ip(&packet_tuple.dst.ip, &live_outbound.dst.ip) &&
+		     is_equal_ip(&packet_tuple.src.ip, &live_outbound.src.ip))) {
+			*direction = DIRECTION_OUTBOUND;
+			DEBUGP("outbound live packet, socket in state %d\n",
+			       socket->state);
+			return socket;
+		}
 	}
-	/* Is packet outbound from the socket under test? */
-	socket_get_outbound(&socket->live, &live_outbound);
-	if (is_equal_tuple(&packet_tuple, &live_outbound) ||
-	    (is_icmp &&
-	     is_equal_ip(&packet_tuple.dst.ip, &live_outbound.dst.ip) &&
-	     is_equal_ip(&packet_tuple.src.ip, &live_outbound.src.ip))) {
-		*direction = DIRECTION_OUTBOUND;
-		DEBUGP("outbound live packet, socket in state %d\n",
-		       socket->state);
-		return socket;
-	}
-
 	return NULL;
 }
 
@@ -187,7 +189,8 @@ static struct socket *handle_listen_for_script_packet(
 	struct config *config = state->config;
 	struct socket *socket = state->socket_under_test;	/* shortcut */
 
-	bool match = (direction == DIRECTION_INBOUND);
+	bool match = ((direction == DIRECTION_INBOUND)  &&
+		      packet->tcp->syn && !packet->tcp->ack);
 	if (!match)
 		return NULL;
 
@@ -363,6 +366,78 @@ static struct socket *find_connect_for_live_packet(
 
 	if (packet->tcp)
 		socket->live.local_isn	= ntohl(packet->tcp->seq);
+
+	return socket;
+}
+
+static struct socket *handle_mp_join_for_script_packet(
+	struct state *state, const struct packet *packet,
+	enum direction_t direction)
+{
+	/* Does this packet match this socket? For now we only support
+	 * testing one socket at a time.
+	 */
+	struct config *config = state->config;
+	struct socket *socket = state->socket_under_test;	/* shortcut */
+
+	bool match = packet->tcp->syn && !packet->tcp->ack &&
+		get_mptcp_option((struct packet *)packet, MP_JOIN_SUBTYPE);
+	if (!match)
+		return NULL;
+
+	if (config->is_wire_server) {
+		match = false; // TODO(malsbat): handle mp_join SYN for wire server
+	} else {
+		/* In local mode we will certainly know about this socket. */
+		match = (socket != NULL);
+	}
+	if (!match)
+		return NULL;
+
+	struct tuple tuple;
+	get_packet_tuple(packet, &tuple);
+	if ((packet->flags & FLAG_IP_SRC_VAR) && direction == DIRECTION_INBOUND) {
+		u8 address_id = UNDEFINED;
+		struct ip_address *ip = NULL;
+		find_or_create_packetdrill_addr(&address_id, &ip);
+		memcpy(&tuple.src, ip, sizeof(*ip));
+		tuple.src.port = htons(next_ephemeral_port(state));
+	}
+
+	/* Create a socket for this outbound SYN packet. Any further
+	 * packets in the test script are mapped here.
+	 */
+	socket = socket_new(state);
+	state->socket_under_test = socket;
+	assert(socket->state == SOCKET_INIT);
+	socket->address_family = packet_address_family(packet);
+	socket->protocol = IPPROTO_MPTCP;
+
+	socket->fd.script_fd	= -1;
+	socket->fd.live_fd	= -1;
+
+	/* Fill in the new info about this connection. */
+	if (direction == DIRECTION_OUTBOUND) {
+		socket->state = SOCKET_ACTIVE_SYN_SENT;
+
+		socket->live.remote             = tuple.dst;
+
+		socket->script.remote		= tuple.dst;
+		socket->script.local		= tuple.src;
+		socket->script.local_isn	= ntohl(packet->tcp->seq);
+
+	} else {
+		socket->state = SOCKET_PASSIVE_PACKET_RECEIVED;
+
+		// TODO(malsbat): live.remote assignment needs some work, for now trusting the script
+		socket->live.remote		= tuple.src;
+		socket->live.remote_isn		= ntohl(packet->tcp->seq);
+		socket->live.local		= tuple.dst;
+
+		socket->script.remote		= tuple.src;
+		socket->script.local		= tuple.dst;
+		socket->script.remote_isn	= ntohl(packet->tcp->seq);
+	}
 
 	return socket;
 }
@@ -994,7 +1069,7 @@ bool same_mptcp_opt(struct tcp_option *opt_a, struct tcp_option *opt_b, struct p
 					opt_a->data.mp_join.syn.ack.sender_random_number != opt_b->data.mp_join.syn.ack.sender_random_number)
 					return false;
 			}else if(opt_a->length == TCPOLEN_MP_JOIN_ACK && packet_a->tcp->ack && !packet_a->tcp->syn){
-				if(opt_a->data.mp_join.no_syn.sender_hmac != opt_b->data.mp_join.no_syn.sender_hmac)
+				if(memcmp(opt_a->data.mp_join.no_syn.sender_hmac, opt_b->data.mp_join.no_syn.sender_hmac, sizeof(opt_b->data.mp_join.no_syn.sender_hmac)))
 					return false;
 			}
 			break;
@@ -1063,7 +1138,9 @@ bool same_mptcp_opt(struct tcp_option *opt_a, struct tcp_option *opt_b, struct p
 			}
 			break;
 		case ADD_ADDR_SUBTYPE:
-			if(opt_a->data.add_addr.address_id != opt_b->data.add_addr.address_id){
+			if(opt_a->data.add_addr.flag_E != opt_b->data.add_addr.flag_E){
+                                return false;
+			}else if(opt_a->data.add_addr.address_id != opt_b->data.add_addr.address_id){
 				return false;
 			}else if(opt_a->length == TCPOLEN_ADD_ADDR_V4){
 				if(opt_b->length != TCPOLEN_ADD_ADDR_V4 )
@@ -1076,16 +1153,42 @@ bool same_mptcp_opt(struct tcp_option *opt_a, struct tcp_option *opt_b, struct p
 					return false;
 				if(memcmp(&opt_a->data.add_addr.ipv4_w_port.ipv4, &opt_b->data.add_addr.ipv4_w_port.ipv4, sizeof(struct in_addr)))
 					return false;
-			}if(opt_a->length == TCPOLEN_ADD_ADDR_V6 ){
+			}else if(opt_a->length == TCPOLEN_ADD_ADDR_V4_HMAC){
+				if(	opt_b->length != TCPOLEN_ADD_ADDR_V4_HMAC ||
+					opt_a->data.add_addr.ipv4_w_hmac.hmac != opt_b->data.add_addr.ipv4_w_hmac.hmac )
+					return false;
+				if(memcmp(&opt_a->data.add_addr.ipv4_w_hmac.ipv4, &opt_b->data.add_addr.ipv4_w_hmac.ipv4, sizeof(struct in_addr)))
+					return false;
+			}else if(opt_a->length == TCPOLEN_ADD_ADDR_V4_PORT_HMAC){
+				if(	opt_b->length != TCPOLEN_ADD_ADDR_V4_PORT_HMAC ||
+					opt_a->data.add_addr.ipv4_w_port_hmac.port != opt_b->data.add_addr.ipv4_w_port_hmac.port ||
+                                        opt_a->data.add_addr.ipv4_w_port_hmac.hmac != opt_b->data.add_addr.ipv4_w_port_hmac.hmac )
+					return false;
+				if(memcmp(&opt_a->data.add_addr.ipv4_w_port_hmac.ipv4, &opt_b->data.add_addr.ipv4_w_port_hmac.ipv4, sizeof(struct in_addr)))
+					return false;
+			}else if(opt_a->length == TCPOLEN_ADD_ADDR_V6 ){
 				if(	opt_b->length != TCPOLEN_ADD_ADDR_V6 )
 					return false;
 				if(memcmp(&opt_a->data.add_addr.ipv6, &opt_b->data.add_addr.ipv6, sizeof(struct in6_addr)))
 					return false;
-			}if(opt_a->length == TCPOLEN_ADD_ADDR_V6_PORT ){
+			}else if(opt_a->length == TCPOLEN_ADD_ADDR_V6_PORT ){
 				if(	opt_b->length != TCPOLEN_ADD_ADDR_V6_PORT ||
 					opt_a->data.add_addr.ipv6_w_port.port != opt_b->data.add_addr.ipv6_w_port.port )
 					return false;
 				if(memcmp(&opt_a->data.add_addr.ipv6_w_port.ipv6, &opt_b->data.add_addr.ipv6_w_port.ipv6, sizeof(struct in6_addr)))
+					return false;
+			}else if(opt_a->length == TCPOLEN_ADD_ADDR_V6_HMAC ){
+				if(	opt_b->length != TCPOLEN_ADD_ADDR_V6_HMAC ||
+					opt_a->data.add_addr.ipv6_w_hmac.hmac != opt_b->data.add_addr.ipv6_w_hmac.hmac )
+					return false;
+				if(memcmp(&opt_a->data.add_addr.ipv6_w_hmac.ipv6, &opt_b->data.add_addr.ipv6_w_hmac.ipv6, sizeof(struct in6_addr)))
+					return false;
+			}else if(opt_a->length == TCPOLEN_ADD_ADDR_V6_PORT_HMAC ){
+				if(	opt_b->length != TCPOLEN_ADD_ADDR_V6_PORT_HMAC ||
+					opt_a->data.add_addr.ipv6_w_port_hmac.port != opt_b->data.add_addr.ipv6_w_port_hmac.port ||
+					opt_a->data.add_addr.ipv6_w_port_hmac.hmac != opt_b->data.add_addr.ipv6_w_port_hmac.hmac )
+					return false;
+				if(memcmp(&opt_a->data.add_addr.ipv6_w_port_hmac.ipv6, &opt_b->data.add_addr.ipv6_w_port_hmac.ipv6, sizeof(struct in6_addr)))
 					return false;
 			}
 			break;
@@ -1719,17 +1822,54 @@ static int sniff_outbound_live_packet(
 	return STATUS_OK;
 }
 
+static bool is_match_port(u16 a, u16 b)
+{
+	return a == 0 || b == 0 || a == b;
+}
+
+static bool is_match_ip(struct ip_address *a, struct ip_address *b)
+{
+	struct ip_address any;
+	if (a->address_family == AF_INET)
+		ip_from_ipv4(&in4addr_any, &any);
+	else if (a->address_family == AF_INET6)
+		ip_from_ipv6(&in6addr_any, &any);
+	return (a->address_family == AF_UNSPEC) ||
+		(b->address_family == AF_UNSPEC) ||
+		is_equal_ip(a, &any) ||
+		is_equal_ip(b, &any) ||
+		is_equal_ip(a, b);
+}
+
+static bool is_match_endpoint(struct endpoint *a, struct endpoint *b)
+{
+	return is_match_port(a->port, b->port) &&
+		is_match_ip(&a->ip, &b->ip);
+}
+
+static bool is_match_tuple(struct tuple *a, struct tuple *b)
+{
+	return is_match_endpoint(&a->src, &b->src) &&
+		is_match_endpoint(&a->dst, &b->dst);
+}
+
 /* Return true iff the given packet could be sent/received by the socket. */
 static bool is_script_packet_match_for_socket(
-	struct state *state, struct packet *packet, struct socket *socket)
+	struct state *state, struct packet *packet, struct socket *socket, enum direction_t direction)
 {
+	struct tuple packet_tuple, live_tuple;
 	const bool is_packet_icmp = (packet->icmpv4 || packet->icmpv6);
+	get_packet_tuple(packet, &packet_tuple);
+	if (direction == DIRECTION_OUTBOUND)
+		socket_get_outbound(&socket->live, &live_tuple);
+	else
+		socket_get_inbound(&socket->live, &live_tuple);
 
 	if (socket->protocol == IPPROTO_TCP ||
 	    socket->protocol == IPPROTO_MPTCP)
-		return packet->tcp || is_packet_icmp;
+		return (packet->tcp && is_match_tuple(&packet_tuple, &live_tuple)) || is_packet_icmp;
 	else if (socket->protocol == IPPROTO_UDP)
-		return packet->udp || is_packet_icmp;
+		return (packet->udp && is_match_tuple(&packet_tuple, &live_tuple)) || is_packet_icmp;
 	else if (socket->protocol == IPPROTO_ICMP)
 		return (packet->icmpv4 != NULL);
 	else if (socket->protocol == IPPROTO_ICMPV6)
@@ -1764,13 +1904,24 @@ static int find_or_create_socket_for_script_packet(
 							   packet, direction);
 		if (*socket != NULL)
 			return STATUS_OK;
+
+		/* Is this a packet starting a new mptcp subflow? */
+		*socket = handle_mp_join_for_script_packet(state,
+							   packet, direction);
+		if (*socket != NULL)
+			return STATUS_OK;
 	}
 	/* See if there is an existing connection to handle this packet. */
-	if (state->socket_under_test != NULL &&
-	    is_script_packet_match_for_socket(state, packet,
-					      state->socket_under_test)) {
-		*socket = state->socket_under_test;
-		return STATUS_OK;
+	struct fd_state *fd;
+	for (fd = state->fds; fd; fd = fd->next) {
+		struct socket *sk = fd_to_socket(fd);
+		if (sk == NULL)
+			continue;
+		if (is_script_packet_match_for_socket(state, packet, sk, direction)) {
+			state->socket_under_test = sk;
+			*socket = state->socket_under_test;
+			return STATUS_OK;
+		}
 	}
 	/* For tcp packet with foreign port, use state->socket_under_test */
 	if (packet->tcp &&
@@ -2049,6 +2200,66 @@ out:
 	return result;
 }
 
+/**
+ * Rewrite packet source and destination addresses with (optional)
+ * variable values.
+ *
+ * Caller should free src_var_name and dst_var_name when returned
+ * value is not NULL.
+ */
+static int set_packet_tuple_from_vars(struct packet *packet, char **src_var_name, char **dst_var_name)
+{
+	*src_var_name = NULL;
+	*dst_var_name = NULL;
+	struct tuple tuple;
+	get_packet_tuple(packet, &tuple);
+	if (packet->flags & FLAG_IP_SRC_VAR) {
+		if (dequeue_var(src_var_name))
+			return STATUS_ERR;
+		struct mp_var *var = find_mp_var(*src_var_name);
+		if (var && var->mptcp_subtype == ADD_ADDR_SUBTYPE) {
+			tuple.src = *(struct endpoint*)var->value;
+			free(*src_var_name);
+			*src_var_name = NULL;
+			packet->flags &= ~FLAG_IP_SRC_VAR;
+		}
+	}
+	if (packet->flags & FLAG_IP_DST_VAR) {
+		if (dequeue_var(dst_var_name))
+			return STATUS_ERR;
+		struct mp_var *var = find_mp_var(*dst_var_name);
+		if (var && var->mptcp_subtype == ADD_ADDR_SUBTYPE) {
+			tuple.dst = *(struct endpoint*)var->value;
+			free(*dst_var_name);
+			*dst_var_name = NULL;
+			packet->flags &= ~FLAG_IP_DST_VAR;
+		}
+	}
+	set_packet_tuple(packet, &tuple);
+	return STATUS_OK;
+}
+
+static void set_tuple_vars_from_socket(char *src_var_name, char *dst_var_name,
+				       struct socket *socket, enum direction_t direction)
+{
+	if (src_var_name) {
+		assert(!find_mp_var(src_var_name));
+		if (direction == DIRECTION_OUTBOUND)
+			add_mp_var_addr(src_var_name, &socket->live.local);
+		else
+			add_mp_var_addr(src_var_name, &socket->live.remote);
+		free(src_var_name);
+	}
+	if (dst_var_name) {
+		assert(!find_mp_var(dst_var_name));
+		if (direction == DIRECTION_OUTBOUND)
+			add_mp_var_addr(dst_var_name, &socket->live.remote);
+		else
+			add_mp_var_addr(dst_var_name, &socket->live.local);
+		free(dst_var_name);
+	}
+}
+
 int run_packet_event(
 	struct state *state, struct event *event, struct packet *packet,
 	char **error)
@@ -2061,6 +2272,11 @@ int run_packet_event(
 
 	enum direction_t direction = packet_direction(packet);
 	assert(direction != DIRECTION_INVALID);
+
+	char *src_var_name;
+	char *dst_var_name;
+	if (set_packet_tuple_from_vars(packet, &src_var_name, &dst_var_name))
+		goto out;
 
 	if (find_or_create_socket_for_script_packet(
 		    state, packet, direction, &socket, &err))
@@ -2085,6 +2301,8 @@ int run_packet_event(
 	} else {
 		assert(!"bad direction");  /* internal bug */
 	}
+
+	set_tuple_vars_from_socket(src_var_name, dst_var_name, socket, direction);
 
 	return STATUS_OK;	 /* everything went fine */
 
