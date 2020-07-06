@@ -14,7 +14,7 @@
 +0    accept(3, ..., ...) = 4
 
 +0.01   < P. 1:101(100) ack 1 win 225 <mpcapable v1 flags[flag_h] key[ckey=2,skey] mpcdatalen 100, nop, nop>
-+0.01   > . 1:1(0) ack 101 win 256 <dss dack8=101 nocs>
++0.01   > . 1:1(0) ack 101 <dss dack8=101 nocs>
 
 // send 1 data segments and ack them
 +0    write(4, ..., 1000) = 1000
