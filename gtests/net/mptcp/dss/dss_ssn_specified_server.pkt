@@ -25,7 +25,7 @@
 // read and ack 1 data segment
 +0     < P. 1:11(10) ack 2001 win 225 <dss dack8=2001 dsn8=1 ssn=1 dll=10 nocs, nop, nop>
 +0     > .  2001:2001(0) ack 11 <dss dack8=11 nocs>
-0.3  read(4, ..., 10) = 10
++0.3  read(4, ..., 10) = 10
 
 // send 1 more data segment, this time dack8 will have to be used: server sent dsn8
 +0   write(4, ..., 1000) = 1000
