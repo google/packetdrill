@@ -62,17 +62,24 @@ static int syscall_icmp_sendto(struct state *state,
 			       struct syscall_spec *syscall,
 			       struct expression_list *args, char **error);
 
-/* Provide a wrapper for the Linux gettid() system call (glibc does not). */
+#if defined(linux)
+/* Provide a wrapper for the Linux gettid() system call
+ * (glibc only provides it in version 2.30 or higher).
+ */
+#if (__GLIBC__ < 2) || ((__GLIBC__ == 2) && (__GLIBC_MINOR__ < 30))
 static pid_t gettid(void)
 {
-#ifdef linux
 	return syscall(__NR_gettid);
-#endif
+}
+#endif  /* old glibc versions */
+#endif  /* defined(linux) */
 #if defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__)
+static pid_t gettid(void)
+{
 	/* TODO(ncardwell): Implement me. XXX */
 	return 0;
-#endif /* defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__)*/
 }
+#endif /* defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__)*/
 
 /* Read a whole file into the given buffer of the given length. */
 static void read_whole_file(const char *path, char *buffer, int max_bytes)
@@ -2533,6 +2540,7 @@ static int syscall_getsockopt(struct state *state, struct syscall_spec *syscall,
 {
 	int script_fd, live_fd, level, optname, result;
 	void *live_optval = NULL, *script_optval = NULL;
+	char *live_optval_pretty = NULL, *script_optval_pretty = NULL;
 	s32 script_optlen, script_optval_s32;
 	socklen_t live_optlen;
 	struct expression *val_expression = NULL;
@@ -2582,13 +2590,31 @@ static int syscall_getsockopt(struct state *state, struct syscall_spec *syscall,
 	}
 
 	if (val_expression->type == EXPR_STRING) {
-		script_optval = val_expression->value.string;
+		script_optval = val_expression->value.buf.ptr;
+		script_optval_pretty =
+			to_printable_string(
+				val_expression->value.buf.ptr,
+				val_expression->value.buf.len);
+		live_optval_pretty =
+			to_printable_string(live_optval, live_optlen);
 
-		if (strcmp(live_optval, script_optval) != 0) {
+		if (script_optlen != val_expression->value.buf.len) {
+			asprintf(error,
+				 "Bad getsockopt optval: "
+				 "expected optlen (%d bytes) does not match "
+				 "length of expected optval string '%s' "
+				 "(%d bytes)",
+				 script_optlen,
+				 script_optval_pretty,
+				 (int)val_expression->value.buf.len);
+			goto error_out;
+		}
+
+		if (memcmp(live_optval, script_optval, script_optlen) != 0) {
 			asprintf(error,
 				 "Bad getsockopt optval: "
 				 "expected: '%s' actual: '%s'",
-				 (char *)script_optval, (char *)live_optval);
+				 script_optval_pretty, live_optval_pretty);
 			goto error_out;
 		}
 	} else if (val_expression->type == EXPR_LIST) {
@@ -2660,6 +2686,8 @@ static int syscall_getsockopt(struct state *state, struct syscall_spec *syscall,
 
 error_out:
 	free(live_optval);
+	free(live_optval_pretty);
+	free(script_optval_pretty);
 	return status;
 }
 
@@ -2695,7 +2723,7 @@ static int syscall_setsockopt(struct state *state, struct syscall_spec *syscall,
 	} else if (val_expression->type == EXPR_MPLS_STACK) {
 		optval = val_expression->value.mpls_stack;
 	} else if (val_expression->type == EXPR_STRING) {
-		optval = val_expression->value.string;
+		optval = val_expression->value.buf.ptr;
 	} else if (val_expression->type == EXPR_LIST) {
 		if (s32_bracketed_arg(args, 3, &optval_s32, error))
 			return STATUS_ERR;
@@ -2823,7 +2851,7 @@ static int syscall_open(struct state *state, struct syscall_spec *syscall,
 	name_expression = get_arg(args, 0, error);
 	if (check_type(name_expression, EXPR_STRING, error))
 		return STATUS_ERR;
-	name = name_expression->value.string;
+	name = name_expression->value.buf.ptr;
 	if (s32_arg(args, 1, &flags, error))
 		return STATUS_ERR;
 

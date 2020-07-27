@@ -768,7 +768,7 @@ struct tcp_option *dss_do_dsn_dack( int dack_type, int dack_val,
 	char *reserved;
 	s64 time_usecs;
 	enum direction_t direction;
-	enum ip_ecn_t ip_ecn;
+	u8 ip_ecn;
 	struct tos_spec tos_spec;
 	struct ip_info ip_info;
 	struct mpls_stack *mpls_stack;
@@ -889,7 +889,7 @@ struct tcp_option *dss_do_dsn_dack( int dack_type, int dack_val,
 %type <integer> gre_sum gre_off gre_key gre_seq
 %type <integer> opt_icmp_echo_id
 %type <integer> flow_label
-%type <string> icmp_type opt_icmp_code flags
+%type <string> icmp_type opt_icmp_code opt_ack_flag opt_word ack_and_ace flags
 %type <string> opt_tcp_fast_open_cookie hex_blob
 %type <string> opt_note note word_list
 %type <string> option_flag option_value script
@@ -910,6 +910,7 @@ struct tcp_option *dss_do_dsn_dack( int dack_type, int dack_val,
 %type <expression_list> expression_list function_arguments
 %type <expression> expression binary_expression array sub_expr_list
 %type <expression> any_int decimal_integer hex_integer
+%type <expression> string_expression string_sequence
 %type <expression> inaddr in6addr sockaddr msghdr iovec pollfd opt_revents linger
 %type <expression> opt_cmsg cmsg_expr
 %type <expression> scm_timestamping_expr
@@ -1115,7 +1116,7 @@ tcp_packet_spec
 	struct packet *outer = $1, *inner = NULL;
 	enum direction_t direction = outer->direction;
 
-	if (($2.tos.check == TOS_CHECK_ECN) && ($2.tos.value == ECN_ECT01) &&
+	if (($2.tos.check == TOS_CHECK_ECN_ECT01) &&
 	    (direction != DIRECTION_OUTBOUND)) {
 		semantic_error("[ect01] can only be used with outbound packets");
 	}
@@ -1193,7 +1194,7 @@ icmp_packet_spec
 	struct packet *outer = $1, *inner = NULL;
 	enum direction_t direction = outer->direction;
 
-	if (($2.tos.check == TOS_CHECK_ECN) && ($2.tos.value == ECN_ECT01) &&
+	if (($2.tos.check == TOS_CHECK_ECN_ECT01) &&
 	    (direction != DIRECTION_OUTBOUND)) {
 		semantic_error("[ect01] can only be used with outbound packets");
 	}
@@ -1467,6 +1468,7 @@ direction
 
 tos_spec
 : ip_ecn		{ $$.check = TOS_CHECK_ECN; $$.value = $1; }
+| ECT01			{ $$.check = TOS_CHECK_ECN_ECT01; $$.value = 0; }
 | TOS HEX_INTEGER	{
 	s64 tos = $2;
 
@@ -1480,17 +1482,40 @@ tos_spec
 ;
 
 ip_ecn
-: NO_ECN		{ $$ = ECN_NONE; }
-| ECT0		{ $$ = ECN_ECT0; }
-| ECT1		{ $$ = ECN_ECT1; }
-| ECT01		{ $$ = ECN_ECT01; }
-| CE		{ $$ = ECN_CE; }
+: NO_ECN	{ $$ = IP_ECN_NONE; }
+| ECT0		{ $$ = IP_ECN_ECT0; }
+| ECT1		{ $$ = IP_ECN_ECT1; }
+| CE		{ $$ = IP_ECN_CE; }
+;
+
+opt_ack_flag
+:		{
+	$$ = strdup("");
+}
+| '.'		{
+	$$ = strdup(".");
+}
+;
+
+opt_word
+:		{
+	$$ = strdup("");
+}
+| WORD		{
+	$$ = $1;
+}
+;
+
+ack_and_ace
+: FLOAT     {
+	$$ = strdup(yytext);
+}
 ;
 
 flags
-: WORD         { $$ = $1; }
+: WORD opt_ack_flag    { asprintf(&($$), "%s%s", $1, $2); free($1); free($2); }
+| opt_word ack_and_ace { asprintf(&($$), "%s%s", $1, $2); free($1); free($2); }
 | '.'          { $$ = strdup("."); }
-| WORD '.'     { asprintf(&($$), "%s.", $1); free($1); }
 | '-'          { $$ = strdup(""); }  /* no TCP flags set in segment */
 ;
 
@@ -2402,16 +2427,16 @@ expression
 | any_int           { $$ = $1; }
 | WORD              {
 	$$ = new_expression(EXPR_WORD);
-	$$->value.string = $1;
+	$$->value.buf.ptr = $1;
+	$$->value.buf.len = strlen($1);
 }
-| STRING            {
-	$$ = new_expression(EXPR_STRING);
-	$$->value.string = $1;
-	$$->format = "\"%s\"";
+| string_sequence {
+	$$ = $1;
 }
 | STRING ELLIPSIS   {
 	$$ = new_expression(EXPR_STRING);
-	$$->value.string = $1;
+	$$->value.buf.ptr = $1;
+	$$->value.buf.len = strlen($1);
 	$$->format = "\"%s\"...";
 }
 | binary_expression {
@@ -2481,6 +2506,30 @@ hex_integer
 }
 ;
 
+string_expression
+: STRING            {
+	$$ = new_expression(EXPR_STRING);
+	$$->value.buf.ptr = $1;
+	$$->value.buf.len = strlen($1);
+	$$->format = "\"%s\"";
+}
+;
+
+string_sequence
+: string_expression {
+	$$ = $1;
+}
+| string_sequence string_expression {    /* string concatenation */
+	$$ = new_expression(EXPR_BINARY);
+	struct binary_expression *binary =
+			  malloc(sizeof(struct binary_expression));
+	binary->op = strdup(".");
+	binary->lhs = $1;
+	binary->rhs = $2;
+	$$->value.binary = binary;
+}
+;
+
 binary_expression
 : expression '|' expression {       /* bitwise OR */
 	$$ = new_expression(EXPR_BINARY);
@@ -2497,7 +2546,8 @@ binary_expression
 			  malloc(sizeof(struct binary_expression));
 	binary->op = strdup("=");
 	binary->lhs = new_expression(EXPR_WORD);
-	binary->lhs->value.string = $1;
+	binary->lhs->value.buf.ptr = $1;
+	binary->lhs->value.buf.len = strlen($1);
 	binary->rhs = $3;
 	$$->value.binary = binary;
 }

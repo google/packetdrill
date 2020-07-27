@@ -230,9 +230,9 @@ static int unescape_cstring_expression(const char *input_string,
 {
 	int bytes = strlen(input_string);
 	out->type = EXPR_STRING;
-	out->value.string = (char *)calloc(1, bytes + 1);
+	out->value.buf.ptr = (char *)calloc(1, bytes + 1);
 	const char *c_in = input_string;
-	char *c_out = out->value.string;
+	char *c_out = out->value.buf.ptr;
 	while (*c_in != '\0') {
 		if (*c_in == '\\') {
 			++c_in;
@@ -284,6 +284,7 @@ static int unescape_cstring_expression(const char *input_string,
 		++c_in;
 		++c_out;
 	}
+	out->value.buf.len = c_out - out->value.buf.ptr;
 	return STATUS_OK;
 }
 
@@ -301,12 +302,12 @@ void free_expression(struct expression *expression)
 	case EXPR_LINGER:
 		break;
 	case EXPR_WORD:
-		assert(expression->value.string);
-		free(expression->value.string);
+		assert(expression->value.buf.ptr);
+		free(expression->value.buf.ptr);
 		break;
 	case EXPR_STRING:
-		assert(expression->value.string);
-		free(expression->value.string);
+		assert(expression->value.buf.ptr);
+		free(expression->value.buf.ptr);
 		break;
 	case EXPR_SOCKET_ADDRESS_IPV4:
 		assert(expression->value.socket_address_ipv4);
@@ -401,6 +402,26 @@ void free_expression_list(struct expression_list *list)
 	}
 }
 
+/* Concatenate lhs and rhs into out. Each input may contain \x00 bytes. */
+static void concatenate_string_expressions(struct expression *out,
+					   struct expression *lhs,
+					   struct expression *rhs)
+{
+	char *dest;
+	u32 buf_len;
+
+	buf_len = lhs->value.buf.len + rhs->value.buf.len;
+	out->value.buf.ptr = malloc(buf_len + 1);
+	out->value.buf.len = buf_len;
+
+	dest = out->value.buf.ptr;
+	memcpy(dest, lhs->value.buf.ptr, lhs->value.buf.len);
+	dest += lhs->value.buf.len;
+	memcpy(dest, rhs->value.buf.ptr, rhs->value.buf.len);
+	dest += rhs->value.buf.len;
+	*dest = '\0';  /* null-terminate for safety/debugging/printing */
+}
+
 static int evaluate_binary_expression(struct expression *in,
 				      struct expression *out, char **error)
 {
@@ -423,6 +444,14 @@ static int evaluate_binary_expression(struct expression *in,
 		} else {
 			out->value.num = lhs->value.num | rhs->value.num;
 			result = STATUS_OK;
+		}
+	} else if (strcmp(".", in->value.binary->op) == 0) {
+		if (lhs->type == EXPR_STRING && rhs->type == EXPR_STRING) {
+			out->type = EXPR_STRING;
+			concatenate_string_expressions(out, lhs, rhs);
+			result = STATUS_OK;
+		} else {
+			asprintf(error, "bad input types for concatenation");
 		}
 	} else if (strcmp("=", in->value.binary->op) == 0) {
 		out->value.binary = calloc(1, sizeof(struct binary_expression));
@@ -655,12 +684,12 @@ static int evaluate(struct expression *in,
 		break;
 	case EXPR_WORD:
 		out->type = EXPR_INTEGER;
-		if (symbol_to_int(in->value.string,
+		if (symbol_to_int(in->value.buf.ptr,
 				  &out->value.num, error))
 			return STATUS_ERR;
 		break;
 	case EXPR_STRING:
-		if (unescape_cstring_expression(in->value.string, out, error))
+		if (unescape_cstring_expression(in->value.buf.ptr, out, error))
 			return STATUS_ERR;
 		break;
 	case EXPR_SOCKET_ADDRESS_IPV4:	/* copy as-is */
