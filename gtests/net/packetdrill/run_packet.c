@@ -26,6 +26,7 @@
 
 #include <arpa/inet.h>
 #include <netinet/in.h>
+#include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
@@ -483,10 +484,13 @@ static int find_tcp_timestamp(struct packet *packet, char **error)
 	for (option = tcp_options_begin(packet, &iter); option != NULL;
 	     option = tcp_options_next(&iter, error))
 		if (option->kind == TCPOPT_TIMESTAMP) {
-			packet->tcp_ts_val =
-				(void *)&(option->data.time_stamp.val);
-			packet->tcp_ts_ecr =
-				(void *)&(option->data.time_stamp.ecr);
+			const size_t val_off = offsetof(struct tcp_option,
+							data.time_stamp.val);
+			const size_t ecr_off = offsetof(struct tcp_option,
+							data.time_stamp.ecr);
+
+			packet->tcp_ts_val = (void *)((char *)option + val_off);
+			packet->tcp_ts_ecr = (void *)((char *)option + ecr_off);
 		}
 	return *error ? STATUS_ERR : STATUS_OK;
 }
@@ -807,22 +811,22 @@ static int verify_outbound_live_tos(enum tos_chk_t tos_chk,
 				    u8 script_tos_byte,
 				    char **error)
 {
-	if (tos_chk == TOS_CHECK_ECN) {
-		u8 actual_ecn_bits = actual_tos_byte & IP_ECN_MASK;
-		if (script_tos_byte == ECN_ECT01) {
-			if ((actual_ecn_bits != IP_ECN_ECT0) &&
-			    (actual_ecn_bits != IP_ECN_ECT1)) {
-				asprintf(error, "live packet field ip_ecn: "
+	u8 actual_ecn_bits = actual_tos_byte & IP_ECN_MASK;
+
+	if (tos_chk == TOS_CHECK_ECN_ECT01) {
+		if ((actual_ecn_bits != IP_ECN_ECT0) &&
+		    (actual_ecn_bits != IP_ECN_ECT1)) {
+			asprintf(error, "live packet field ip_ecn: "
 					 "expected: 0x1 or 0x2 vs actual: 0x%x",
 					 actual_ecn_bits);
-				return STATUS_ERR;
-			}
-		} else if (check_field("ip_ecn",
-				       script_tos_byte,
-				       actual_ecn_bits,
-				       error)) {
 			return STATUS_ERR;
 		}
+	} else if (tos_chk == TOS_CHECK_ECN) {
+		if (check_field("ip_ecn",
+				script_tos_byte,
+				actual_ecn_bits,
+				error))
+			return STATUS_ERR;
 	} else if (tos_chk == TOS_CHECK_TOS) {
 		if (check_field("tos",
 				script_tos_byte,
@@ -860,6 +864,14 @@ static int tcp_options_allowance(const struct packet *actual_packet,
 		return packet_tcp_options_len(actual_packet);
 	else
 		return 0;
+}
+
+/* Return the AccECN ACE count associated with the given TCP header. */
+static int tcp_ace_field(const struct tcp *tcp)
+{
+	return  (tcp->ae  ? 4 : 0) |
+		(tcp->cwr ? 2 : 0) |
+		(tcp->ece ? 1 : 0);
 }
 
 /* Verify that required actual IPv4 header fields are as the script expected. */
@@ -970,12 +982,20 @@ static int verify_tcp(
 	    check_field("tcp_urg",
 			script_tcp->urg,
 			actual_tcp->urg, error) ||
-	    check_field("tcp_ece",
+	    ((script_packet->flags & FLAG_PARSE_ACE) &&
+		check_field("tcp_ace",
+			tcp_ace_field(script_tcp),
+			tcp_ace_field(actual_tcp), error)) ||
+	    (!(script_packet->flags & FLAG_PARSE_ACE) &&
+		(check_field("tcp_ece",
 			script_tcp->ece,
 			actual_tcp->ece, error) ||
-	    (strict && check_field("tcp_cwr",
+		 (strict && check_field("tcp_cwr",
 			script_tcp->cwr,
 			actual_tcp->cwr, error)) ||
+		 check_field("tcp_ae",
+			script_tcp->ae,
+			actual_tcp->ae,  error))) ||
 	    check_field("tcp_reserved_bits",
 			script_tcp->res1,
 			actual_tcp->res1, error) ||

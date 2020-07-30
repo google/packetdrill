@@ -10,7 +10,29 @@ Links:
 * [packetdrill USENIX ATC paper from June 2013](http://research.google.com/pubs/pub41316.html) describing the tool and our team's experiences
 * [packetdrill USENIX ;login: article](http://research.google.com/pubs/pub41848.html) from October 2013
 * [packetdrill mailing list](https://groups.google.com/forum/#!forum/packetdrill) for questions, discussions and patches
-* [packetdrill language syntax reference](https://code.google.com/archive/p/packetdrill/wikis/Syntax.wiki)
+* [packetdrill language syntax reference](https://github.com/google/packetdrill/blob/master/syntax.md)
+
+External links:
+* [using packetdrill for teaching TCP](http://beta.computer-networking.info/syllabus/default/exercises/tcp-2.html)
+
+# How To Get Started with packetdrill
+
+To check out and build packetdrill:
+
+```
+git clone https://github.com/google/packetdrill.git
+cd packetdrill/gtests/net/packetdrill
+./configure
+make
+```
+
+If you are on a machine with a recent Linux kernel you can then su to root and
+try running the tests included in the packetdrill distribution:
+
+```
+cd ..
+./packetdrill/run_all.py -S -l
+```
 
 # How To Submit a Patch for packetdrill
 
