@@ -16,7 +16,7 @@
  ../common/set_sysctls.py \
 	/proc/sys/net/ipv4/tcp_mtu_probing=2 \
 	/proc/sys/net/ipv4/tcp_base_mss=512
- ip -6 route change 2001:DB8::1 via fd3d:fa7b:d17d:8888::0 dev tun0 advmss 600 mtu lock 660 initcwnd 11
+ ip -6 route add 2001:DB8::1 via fd3d:fa7b:d17d:8888::0 dev tun0 advmss 600 mtu lock 660 initcwnd 11
  ethtool -K tun0 gso off tso off
 `
 
