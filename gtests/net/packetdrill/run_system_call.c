@@ -3246,8 +3246,8 @@ static int syscall_splice(struct state *state, struct syscall_spec *syscall,
 				fd_out_live, (loff_t *) &off_out,
 				len, flags);
 	} else {
-		result = splice(fd_in_live, (loff_t *) off_in, fd_out_live,
-				(loff_t *) off_out, len, flags);
+		result = splice(fd_in_live, (loff_t *) &off_in, fd_out_live,
+				(loff_t *) &off_out, len, flags);
 	}
 	if (end_syscall(state, syscall, CHECK_EXACT, result, error))
 		return STATUS_ERR;
