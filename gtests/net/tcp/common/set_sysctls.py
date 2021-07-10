@@ -1,24 +1,28 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 
-import commands
 import os
 import sys
 
 pppid = int(os.popen("ps -p %d -oppid=" % os.getppid()).read().strip())
-filename = '/tmp/sysctl_restore_%d.sh' % pppid
+restore_script_path = '/tmp/sysctl_restore_%d.sh' % pppid
 
-restore_file = open(filename, 'w')
-print >> restore_file, '#!/bin/bash'
+restore_script = open(restore_script_path, 'w')
+restore_script.write("#!/bin/sh\n")
+restore_script.write("set -ex\n")
 
 for a in sys.argv[1:]:
-  sysctl = a.split('=')
+    sysctl = a.split('=')
 
-  # save current value
-  cur_val = commands.getoutput('cat ' + sysctl[0])
-  print >> restore_file, 'echo "%s" > %s' % (cur_val, sysctl[0])
+    sysctl_path = sysctl[0]
+    new_value = sysctl[1]
+    if not os.path.exists(sysctl_path):
+        continue
+    with open(sysctl_path, "r") as sysctl_fd:
+        old_val = sysctl_fd.read().strip()
+    restore_script.write('echo {} > {}'.format(old_val, sysctl_path))
 
-  # set new value
-  cmd = 'echo "%s" > %s' % (sysctl[1], sysctl[0])
-  os.system(cmd)
+    cmd = 'echo {} > {}'.format(new_value, sysctl_path)
+    os.system(cmd)
 
-os.system('chmod u+x %s' % filename)
+os.system('chmod u+x {}'.format(restore_script_path))
+restore_script.close()
