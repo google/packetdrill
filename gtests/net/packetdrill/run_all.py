@@ -237,6 +237,8 @@ def ParseArgs():
                     help='requires verbose')
   args.add_argument('-L', '--log_on_success', action='store_true',
                     help='requires verbose')
+  args.add_argument('--no-traverse_subdirs', dest='traverse_subdirs',
+                    action='store_false')
   args.add_argument('-p', '--parallelize_dirs', action='store_true')
   args.add_argument('--no-traverse_subdirs', dest='traverse_subdirs',
                     action='store_false')
