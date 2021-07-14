@@ -31,6 +31,8 @@ class TestSet(object):
     for dirpath, _, filenames in os.walk(path):
       for filename in fnmatch.filter(filenames, '*.pkt'):
         tests.append(dirpath + '/' + filename)
+      if not self.args['traverse_subdirs']:
+        break
     return sorted(tests)
 
   def StartTest(self, path, variant, extra_args=None):
@@ -207,7 +209,7 @@ class ParallelTestSet(object):
     """Construct a test set for each subdirectory and run them in parallel."""
     errors = 0
 
-    if args['subdirs']:
+    if args['subdirs'] and args['traverse_subdirs']:
       paths = self.FindSubDirs(args['path'])
     else:
       paths = [args['path']]
@@ -236,6 +238,8 @@ def ParseArgs():
   args.add_argument('-L', '--log_on_success', action='store_true',
                     help='requires verbose')
   args.add_argument('-p', '--parallelize_dirs', action='store_true')
+  args.add_argument('--no-traverse_subdirs', dest='traverse_subdirs',
+                    action='store_false')
   args.add_argument('-s', '--subdirs', action='store_true')
   args.add_argument('-S', '--serialized', action='store_true')
   args.add_argument('-t', '--timeout_sec', nargs='?', const=180, type=int,
