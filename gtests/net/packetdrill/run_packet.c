@@ -1214,18 +1214,25 @@ static int verify_outbound_live_ipv6_flowlabel(
 }
 
 static int verify_outbound_tcp_option(
-	struct config *config,
+	struct state *state,
 	struct packet *actual_packet,
 	struct packet *script_packet,
 	struct tcp_option *actual_option,
 	struct tcp_option *script_option,
 	char **error)
 {
+	struct config *config = state->config;
 	u32 script_ts_val, actual_ts_val;
 	int ts_val_tick_usecs;
-	long tolerance_usecs;
+	s64 tolerance_usecs;
 
-	tolerance_usecs = config->tolerance_usecs;
+	/* Note that for TCP TS, we do not want to compute the tolerance based
+	* on last event (as we do in verify_time())
+	* last event might have happened few ms in the past.
+	* What matters here is the cumulative time (from the beginning of the test)
+	*/
+	tolerance_usecs = get_tolerance_usecs(state, state->event->time_usecs,
+						state->script_start_time_usecs);
 
 	switch (actual_option->kind) {
 	case TCPOPT_EOL:
@@ -1242,9 +1249,10 @@ static int verify_outbound_tcp_option(
 		 */
 		if (ts_val_tick_usecs &&
 		    ((abs((s32)(actual_ts_val - script_ts_val)) *
-		      ts_val_tick_usecs) >
-		     tolerance_usecs)) {
-			asprintf(error, "bad outbound TCP timestamp value, tolerance %ld", tolerance_usecs);
+		      ts_val_tick_usecs) > tolerance_usecs)) {
+			asprintf(error,
+				"bad outbound TCP timestamp value, tolerance %lld",
+				tolerance_usecs);
 			return STATUS_ERR;
 		}
 		break;
@@ -1270,7 +1278,7 @@ static int verify_outbound_tcp_option(
 
 /* Verify that the TCP option values matched expected values. */
 static int verify_outbound_live_tcp_options(
-	struct config *config,
+	struct state *state,
 	struct packet *actual_packet,
 	struct packet *script_packet, char **error)
 {
@@ -1293,7 +1301,7 @@ static int verify_outbound_live_tcp_options(
 			return STATUS_ERR;
 		}
 
-		if (verify_outbound_tcp_option(config, actual_packet,
+		if (verify_outbound_tcp_option(state, actual_packet,
 					script_packet, a_opt, s_opt,
 					error) != STATUS_OK) {
 			return STATUS_ERR;
@@ -1376,7 +1384,7 @@ static int verify_outbound_live_packet(
 	if (script_packet->tcp) {
 		/* Verify TCP options matched expected values. */
 		if (verify_outbound_live_tcp_options(
-			    state->config, actual_packet, script_packet,
+			    state, actual_packet, script_packet,
 			    error)) {
 			non_fatal = true;
 			goto out;
@@ -1398,6 +1406,7 @@ static int verify_outbound_live_packet(
 	DEBUGP("packet time_usecs: %lld\n", live_packet->time_usecs);
 	if (verify_time(state, time_type, script_usecs,
 				script_usecs_end, live_packet->time_usecs,
+				last_event_time_usecs(state),
 				"outbound packet", error)) {
 		non_fatal = true;
 		goto out;
