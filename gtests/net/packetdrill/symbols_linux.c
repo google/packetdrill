@@ -177,6 +177,7 @@ struct int_symbol platform_symbols_table[] = {
 	{ TCP_SYNCNT,                       "TCP_SYNCNT"                      },
 	{ TCP_LINGER2,                      "TCP_LINGER2"                     },
 	{ TCP_DEFER_ACCEPT,                 "TCP_DEFER_ACCEPT"                },
+	{ TCP_WINDOW_CLAMP,		    "TCP_WINDOW_CLAMP"		      },
 	{ TCP_INFO,                         "TCP_INFO"                        },
 	{ TCP_QUICKACK,                     "TCP_QUICKACK"                    },
 	{ TCP_CONGESTION,                   "TCP_CONGESTION"                  },
