@@ -50,7 +50,7 @@ class TestSet(object):
       cmd.append('-' + 'v' * (self.args['verbose'] - 1))
     cmd.append(basename)
 
-    return (cmd, execdir, path, variant)
+    return (cmd, execdir, path, variant, basename)
 
   def CmdTestIPv4(self, path):
     """Return a command to run a packetdrill test over ipv4."""
@@ -116,13 +116,19 @@ class TestSet(object):
     errfile.seek(0)
     sys.stderr.write(errfile.read())
 
-  def StartTest(self, cmd, execdir, path, variant):
+  def StartTest(self, cmd, execdir, path, variant, basename):
     """Run a packetdrill test"""
     outfile = tempfile.TemporaryFile(mode='w+')
     errfile = tempfile.TemporaryFile(mode='w+')
 
+    env = os.environ
+    if self.args['capture'] is not None:
+      fname = os.path.splitext(basename)[0] +  "_" + variant + ".pcap"
+      env = dict(env, TCPDUMP_OUTPUT=os.path.join(self.args['capture'], fname))
+
     time_start = time.time()
-    process = subprocess.Popen(cmd, stdout=outfile, stderr=errfile, cwd=execdir)
+    process = subprocess.Popen(cmd, stdout=outfile, stderr=errfile, cwd=execdir,
+                               env=env)
 
     return (process, path, variant, outfile, errfile, time_start)
 
@@ -254,6 +260,8 @@ def ParseArgs():
   """Parse commandline arguments."""
   args = argparse.ArgumentParser()
   args.add_argument('path', default='.', nargs='?')
+  args.add_argument('-c', '--capture', metavar='DIR',
+                    help='capture packets in the specified directory')
   args.add_argument('-l', '--log_on_error', action='store_true',
                     help='requires verbose')
   args.add_argument('-L', '--log_on_success', action='store_true',
