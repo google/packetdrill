@@ -702,9 +702,12 @@ static bool scm_timestamping_expect_eq(struct state *state,
 		s64 exp_usecs = script_time_to_live_time_usecs(state,
 			timespec_to_usecs(&expected->ts[i]));
 		s64 actual_usecs = timespec_to_usecs(&actual->ts[i]);
+		s64 tolerance_usecs = get_tolerance_usecs(state, actual_usecs,
+				state->last_tcp_timestamp_usecs);
+		state->last_tcp_timestamp_usecs = actual_usecs;
+
 		/* difference exceeds configured timing tolerance */
-		if (llabs(exp_usecs - actual_usecs) >
-		    state->config->tolerance_usecs) {
+		if (llabs(exp_usecs - actual_usecs) > tolerance_usecs) {
 			asprintf(error,
 				 "Bad timestamp %d in scm_timestamping %d: "
 				 "expected=%lld (%lld) actual=%lld (%lld) "
@@ -3509,12 +3512,18 @@ static void *system_call_thread(void *arg)
 			 */
 			invoke_system_call(state, event, syscall);
 
-			/* Check end time for the blocking system call. */
+			/* Check end time for the blocking system call.
+			 * For a blocking system call we compute the
+			 * dynamic tolerance based on the start and end
+			 * time. The last event here is unpredictable
+			 * and irrelevant.
+			 */
 			assert(state->syscalls->live_end_usecs >= 0);
 			if (verify_time(state,
 						event->time_type,
 						syscall->end_usecs, 0,
 						state->syscalls->live_end_usecs,
+						event->time_usecs,
 						"system call return", &error)) {
 				die("%s:%d: %s\n",
 				    state->config->script_path,

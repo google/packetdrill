@@ -92,6 +92,7 @@ struct state *state_new(struct config *config,
 	state->code = code_new(config);
 	state->fds = NULL;
 	state->num_events = 0;
+	state->last_tcp_timestamp_usecs = NO_TIME_RANGE;
 	return state;
 }
 
@@ -174,19 +175,23 @@ s64 now_usecs(struct state *state)
  */
 int verify_time(struct state *state, enum event_time_t time_type,
 		s64 script_usecs, s64 script_usecs_end,
-		s64 live_usecs, const char *description, char **error)
+		s64 live_usecs, s64 last_event_usecs,
+		const char *description, char **error)
 {
 	s64 expected_usecs = script_usecs - state->script_start_time_usecs;
 	s64 expected_usecs_end = script_usecs_end -
 		state->script_start_time_usecs;
 	s64 actual_usecs = live_usecs - state->live_start_time_usecs;
-	int tolerance_usecs = state->config->tolerance_usecs;
+	s64 tolerance_usecs;
 
 	DEBUGP("expected: %.3f actual: %.3f  (secs)\n",
 	       usecs_to_secs(script_usecs), usecs_to_secs(actual_usecs));
 
 	if (time_type == ANY_TIME)
 		return STATUS_OK;
+
+	tolerance_usecs = get_tolerance_usecs(state, script_usecs,
+					      last_event_usecs);
 
 	if (time_type == ABSOLUTE_RANGE_TIME ||
 	    time_type == RELATIVE_RANGE_TIME) {
@@ -280,7 +285,9 @@ void check_event_time(struct state *state, s64 live_usecs)
 	if (verify_time(state,
 			state->event->time_type,
 			state->event->time_usecs,
-			state->event->time_usecs_end, live_usecs,
+			state->event->time_usecs_end,
+			live_usecs,
+			last_event_time_usecs(state),
 			description, &error)) {
 		die("%s:%d: %s\n",
 		    state->config->script_path,
