@@ -1288,14 +1288,18 @@ static int verify_outbound_live_tcp_options(
 	/* TCP options are expected to be a deterministic order. */
 	while (a_opt != NULL || s_opt != NULL) {
 		if (a_opt == NULL || s_opt == NULL ||
-		    a_opt->kind != s_opt->kind) {
+		    (a_opt->kind & ~TCPOPT_WILDCARD) !=
+		    (s_opt->kind & ~TCPOPT_WILDCARD)) {
 			asprintf(error, "bad outbound TCP options");
 			return STATUS_ERR;
 		}
 
-		if (verify_outbound_tcp_option(config, actual_packet,
-					script_packet, a_opt, s_opt,
-					error) != STATUS_OK) {
+		/* skip btye-to-byte comparison of wildcard option */
+		if ((a_opt->kind | s_opt->kind) & TCPOPT_WILDCARD)
+			;
+		else if (verify_outbound_tcp_option(config, actual_packet,
+						    script_packet, a_opt, s_opt,
+						    error) != STATUS_OK) {
 			return STATUS_ERR;
 		}
 
