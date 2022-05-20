@@ -221,7 +221,7 @@ static void set_ipv6_defaults(struct config *config)
 void set_default_config(struct config *config)
 {
 	memset(config, 0, sizeof(*config));
-	config->code_command_line	= "/usr/bin/python";
+	config->code_command_line	= "python3";
 	config->code_format		= "python";
 	config->code_sockopt		= "";		/* auto-detect */
 	config->ip_version		= IP_VERSION_4;
