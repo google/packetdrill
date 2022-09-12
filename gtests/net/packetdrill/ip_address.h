@@ -78,6 +78,12 @@ extern struct ip_address ipv4_parse(const char *ip_string);
  */
 extern struct ip_address ipv6_parse(const char *ip_string);
 
+/* Attempt to parse a human-readable IPv4/IPv6 address and return it. Return
+ * STATUS_OK on success, or STATUS_ERR on failure (meaning the input string was
+ * not actually a valid IPv4 or IPv6 address).
+ */
+extern int ip_parse(const char *ip_string, struct ip_address *ip);
+
 /* Print a human-readable representation of the given IP address in the
  * given buffer, which must be at least ADDR_STR_LEN bytes long.
  * Returns a pointer to the given buffer.

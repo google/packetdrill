@@ -126,6 +126,19 @@ struct ip_address ipv6_parse(const char *ip_string)
 	return ipv6;
 }
 
+int ip_parse(const char *ip_string, struct ip_address *ip)
+{
+	ipv6_init(ip);
+	if (inet_pton(AF_INET6, ip_string, &ip->ip.v6) == 1)
+		return STATUS_OK;
+
+	ipv4_init(ip);
+	if (inet_pton(AF_INET, ip_string, &ip->ip.v4) == 1)
+		return STATUS_OK;
+
+	return STATUS_ERR;
+}
+
 const char *ip_to_string(const struct ip_address *ip, char *buffer)
 {
 	if (!inet_ntop(ip->address_family, &ip->ip, buffer, ADDR_STR_LEN))
