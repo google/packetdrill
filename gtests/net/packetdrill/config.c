@@ -137,7 +137,7 @@ void show_usage(void)
 		"\t[--non_fatal=<comma separated types: packet,syscall>]\n"
 		"\t[--wire_client]\n"
 		"\t[--wire_server]\n"
-		"\t[--wire_server_ip=<server_ipv4_address>]\n"
+		"\t[--wire_server_ip=<server_name_or_ip_address>]\n"
 		"\t[--wire_server_port=<server_port>]\n"
 		"\t[--wire_client_dev=<eth_dev_name>]\n"
 		"\t[--wire_server_dev=<eth_dev_name>]\n"
@@ -393,6 +393,7 @@ static void process_option(int opt, char *optarg, struct config *config,
 {
 	int port = 0;
 	char *end = NULL, *equals = NULL, *symbol = NULL, *value = NULL;
+	char *error = NULL;
 	unsigned long speed = 0;
 
 	DEBUGP("process_option %d ('%c') = %s\n",
@@ -494,8 +495,10 @@ static void process_option(int opt, char *optarg, struct config *config,
 		break;
 	case OPT_WIRE_SERVER_IP:
 		config->wire_server_ip_string = strdup(optarg);
-		config->wire_server_ip	=
-			ipv4_parse(config->wire_server_ip_string);
+		if (string_to_ip(config->wire_server_ip_string,
+				 &config->wire_server_ip, &error))
+			die("bad wire_server_ip: %s: %s\n",
+			    config->wire_server_ip_string, error);
 		break;
 	case OPT_WIRE_SERVER_PORT:
 		port = atoi(optarg);
