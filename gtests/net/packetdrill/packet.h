@@ -349,14 +349,14 @@ static inline u8 *packet_echoed_ip_header(struct packet *packet)
 }
 
 /* Return the location of the IPv4 header echoed by an ICMP message, or NULL. */
-static inline struct ipv4 *packet_echoed_ipv4_header(struct packet *packet)
+static inline struct ipv4 *packet_echoed_ipv4_header(const struct packet *packet)
 {
 	return (struct ipv4 *)((packet->icmpv4 != NULL) ?
 			       (packet->icmpv4 + 1) : NULL);
 }
 
 /* Return the location of the IPv6 header echoed by an ICMP message, or NULL. */
-static inline struct ipv6 *packet_echoed_ipv6_header(struct packet *packet)
+static inline struct ipv6 *packet_echoed_ipv6_header(const struct packet *packet)
 {
 	return (struct ipv6 *)((packet->icmpv6 != NULL) ?
 			       (packet->icmpv6 + 1) : NULL);
@@ -376,7 +376,7 @@ static inline int packet_echoed_ip_header_len(struct packet *packet)
 }
 
 /* Return the layer4 protocol of the packet echoed inside an ICMP packet. */
-static inline int packet_echoed_ip_protocol(struct packet *packet)
+static inline int packet_echoed_ip_protocol(const struct packet *packet)
 {
 	if (packet->icmpv4 != NULL)
 		return packet_echoed_ipv4_header(packet)->protocol;

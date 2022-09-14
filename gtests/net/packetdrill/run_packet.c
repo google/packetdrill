@@ -314,6 +314,74 @@ static struct socket *handle_connect_for_script_packet(
 	return socket;
 }
 
+static struct socket *create_socket_for_nontcp_script_packet(
+	struct state *state, const struct packet *packet,
+	enum direction_t direction)
+{
+	struct config *config = state->config;
+	struct socket *socket = NULL;
+	struct tuple tuple;
+
+	DEBUGP("create_socket_for_nontcp_script_packet: direction: %u "
+	       "socket_under_test: %p is_wire_server: %d\n",
+	       direction, state->socket_under_test, config->is_wire_server);
+	/* On wire servers we don't see the system calls, so we won't have any
+	 * socket_under_test yet when we see the first packet for a socket.
+	 */
+	if (!(state->socket_under_test == NULL &&
+	      config->is_wire_server))
+		return NULL;
+
+	/* On a wire server and we have no socket info yet. Create a socket for
+	 * this packet. Any further packets in the test script are mapped here.
+	 */
+	socket = socket_new(state);
+	state->socket_under_test = socket;
+	/* Set state so that find_connect_for_live_packet() will know that
+	 * outbound packets can match this socket.
+	 */
+	socket->state = SOCKET_ACTIVE_CONNECTING;
+	socket->address_family = packet_address_family(packet);
+
+	/* If this is an ICMP packet with an echoed IP/transport header inside,
+	 * then look at the layer 4 protocol indicated in the echoed IP
+	 * header.
+	 */
+	if (((packet->icmpv4 != NULL) || (packet->icmpv6 != NULL)) &&
+	    packet->echoed_header)
+		socket->protocol = packet_echoed_ip_protocol(packet);
+	else
+		socket->protocol = packet_ip_protocol(packet);
+
+	get_packet_tuple(packet, &tuple);
+
+	socket->fd.live_fd	 = -1;
+	socket->fd.script_fd	 = -1;
+
+	/* Fill in the new info about this connection. */
+	if (direction == DIRECTION_OUTBOUND) {
+		DEBUGP("setting fields for DIRECTION_OUTBOUND\n");
+		socket->script.remote		= tuple.dst;
+		socket->script.local		= tuple.src;
+
+		socket->live.remote.ip   = config->live_remote_ip;
+		socket->live.remote.port = htons(config->live_connect_port);
+	} else if (direction == DIRECTION_INBOUND) {
+		DEBUGP("setting fields for DIRECTION_INBOUND\n");
+		socket->script.remote		= tuple.src;
+		socket->script.local		= tuple.dst;
+
+		u16 remote_port = next_ephemeral_port(state);
+		socket->live.remote.ip		= config->live_remote_ip;
+		socket->live.remote.port	= htons(remote_port);
+		socket->live.local.ip		= config->live_local_ip;
+		socket->live.local.port		= htons(config->live_bind_port);
+	} else {
+		assert(!"bad direction");  /* internal bug */
+	}
+	return socket;
+}
+
 /* Look for a connecting socket that would emit this outgoing live packet. */
 static struct socket *find_connect_for_live_packet(
 	struct state *state, struct packet *packet,
@@ -1609,6 +1677,11 @@ static int find_or_create_socket_for_script_packet(
 		/* Is this an outbound packet matching a connecting socket? */
 		*socket = handle_connect_for_script_packet(state,
 							   packet, direction);
+		if (*socket != NULL)
+			return STATUS_OK;
+	} else {
+		*socket = create_socket_for_nontcp_script_packet(state, packet,
+								 direction);
 		if (*socket != NULL)
 			return STATUS_OK;
 	}
