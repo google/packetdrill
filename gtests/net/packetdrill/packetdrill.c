@@ -63,6 +63,7 @@ static void run_init_scripts(struct config *config)
 
 int main(int argc, char *argv[])
 {
+    printf("Starting Packetdrill v1");
 	struct config config;
 	set_default_config(&config);
 	/* Get command line options and list of test scripts. */

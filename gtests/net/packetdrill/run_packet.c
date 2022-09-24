@@ -1407,10 +1407,10 @@ static int verify_outbound_live_packet(
 
 out:
 	add_packet_dump(error, "script", script_packet, script_usecs,
-			DUMP_SHORT);
+			DUMP_VERBOSE);
 	if (actual_packet != NULL) {
 		add_packet_dump(error, "actual", actual_packet, actual_usecs,
-				DUMP_SHORT);
+				DUMP_VERBOSE);
 		packet_free(actual_packet);
 	}
 	if (result == STATUS_ERR &&

@@ -3336,7 +3336,7 @@ static void invoke_system_call(
 	return;
 
 error_out:
-	die("%s:%d: runtime error in %s call: %s\n",
+	die_free_so(state, "%s:%d: runtime error in %s call: %s\n",
 	    state->config->script_path, event->line_number,
 	    syscall->name, error);
 	free(error);
@@ -3434,7 +3434,7 @@ static void enqueue_system_call(
 	return;
 
 error_out:
-	die("%s:%d: runtime error in %s call: %s\n",
+	die_free_so(state, "%s:%d: runtime error in %s call: %s\n",
 	    state->config->script_path, event->line_number,
 	    syscall->name, error);
 	free(error);

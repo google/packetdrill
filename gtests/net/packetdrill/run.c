@@ -430,7 +430,9 @@ static void run_local_packet_event(struct state *state, struct event *event,
 		fprintf(stderr, "%s", error);
 		free(error);
 	} else if (result == STATUS_ERR) {
-		die("%s", error);
+
+		die_free_so(state, "%s", error);
+
 	}
 }
 
