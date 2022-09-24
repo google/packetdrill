@@ -3,7 +3,7 @@
 // arrive at the sender".
 // This variation tests a receiver that supports SACK.
 
-`../common/defaults.sh`
+//`../common/defaults.sh`
 
 // Establish a connection.
     0 socket(..., SOCK_STREAM, IPPROTO_TCP) = 3

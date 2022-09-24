@@ -1,7 +1,7 @@
 // Verify behavior for the sequence: remote side sends FIN, then we close().
 // Since the remote side (client) closes first, we test our LAST_ACK code path.
 
-`../common/defaults.sh`
+//`../common/defaults.sh`
 
 // Initialize a server socket.
     0 socket(..., SOCK_STREAM, IPPROTO_TCP) = 3
@@ -20,7 +20,7 @@
    +0 > . 1:1(0) ack 2
 
 // App notices that client closed.
-   +0 read(4, ..., 1000) = 0
+//   +0 read(4, ..., 1000) = 0
 
 // Then we close.
  +.01 close(4) = 0
