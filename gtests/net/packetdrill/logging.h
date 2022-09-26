@@ -37,6 +37,8 @@
 		fflush(stdout);			\
 	}
 
+struct state;
+
 /* Log the message to stderr and then exit with a failure status code. */
 extern void __attribute__((noreturn)) die(char *format, ...);
 

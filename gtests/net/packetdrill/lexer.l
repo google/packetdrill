@@ -262,6 +262,14 @@ ect1			return ECT1;
 noecn			return NO_ECN;
 ce			return CE;
 id			return ID;
+mut         return MUTATE;
+trun        return TRUNCATE;
+ins         return INSERT;
+ip          return IP;
+tcp         return TCP;
+ihl         return IHL;
+source_port return SOURCE_PORT;
+
 [.][.][.]		return ELLIPSIS;
 --[a-zA-Z0-9_]+		yylval.string	= option(yytext); return OPTION;
 [-]?[0-9]*[.][0-9]+	yylval.floating	= atof(yytext);   return FLOAT;

@@ -546,6 +546,9 @@ static struct packet *append_gre(struct packet *packet, struct expression *expr)
 %token <reserved> NONE CHECKSUM SEQUENCE PRESENT
 %token <reserved> EE_ERRNO EE_CODE EE_DATA EE_INFO EE_ORIGIN EE_TYPE
 %token <reserved> SCM_SEC SCM_NSEC
+%token <reserved> MUTATE TRUNCATE INSERT
+%token <reserved> IP TCP
+%token <reserved> IHL SOURCE_PORT
 %token <floating> FLOAT
 %token <integer> INTEGER HEX_INTEGER
 %token <string> WORD STRING BACK_QUOTED CODE IPV4_ADDR IPV6_ADDR
@@ -580,6 +583,10 @@ static struct packet *append_gre(struct packet *packet, struct expression *expr)
 %type <tcp_sequence_info> seq opt_icmp_echoed
 %type <tcp_options> opt_tcp_options tcp_option_list
 %type <tcp_option> tcp_option sack_block_list sack_block
+%type <fuzz_info> opt_fuzz_info opt_fuzz_params
+%type <fuzz_param> opt_fuzz_param
+%type <string> fuzz_type header_type fuzz_field field_name
+%type <integer> field_pos field_offset
 %type <string> function_name
 %type <expression_list> expression_list function_arguments
 %type <expression> expression binary_expression array sub_expr_list
@@ -784,7 +791,7 @@ packet_spec
 ;
 
 tcp_packet_spec
-: packet_prefix opt_ip_info opt_port_info flags seq opt_ack opt_window opt_urg_ptr opt_tcp_options {
+: packet_prefix opt_ip_info opt_port_info flags seq opt_ack opt_window opt_urg_ptr opt_tcp_options opt_fuzz_info {
 	char *error = NULL;
 	struct packet *outer = $1, *inner = NULL;
 	enum direction_t direction = outer->direction;
@@ -1364,6 +1371,33 @@ sack_block
 	$$->data.sack.block[0].right = htonl($3);
 }
 ;
+
+opt_fuzz_info
+: '{' opt_fuzz_params '}';
+
+opt_fuzz_params
+: opt_fuzz_param | opt_fuzz_params ';' opt_fuzz_param;
+
+opt_fuzz_param
+: fuzz_type header_type fuzz_field;
+
+fuzz_type
+: MUTATE | TRUNCATE | INSERT;
+
+header_type
+: IP | TCP;
+
+fuzz_field
+: field_name | field_pos | field_offset;
+
+field_name
+: MSS | IHL | SOURCE_PORT;
+
+field_pos
+: INTEGER '-' INTEGER;
+
+field_offset
+: INTEGER INTEGER;
 
 syscall_spec
 : opt_end_time function_name function_arguments '='
