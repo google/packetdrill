@@ -61,6 +61,8 @@
 #define TCP_SAVED_SYN            28  /* Get SYN headers recorded for connection */
 #define TCP_REPAIR_WINDOW        29  /* Get/set window parameters */
 #define TCP_FASTOPEN_CONNECT     30  /* Attempt FastOpen with connect */
+#define TCP_FASTOPEN_KEY         33  /* Set the key for Fast Open (cookie) */
+#define TCP_FASTOPEN_NO_COOKIE   34  /* Enable TFO without a TFO cookie */
 
 #ifndef TCP_INQ
 #define TCP_INQ			 36
