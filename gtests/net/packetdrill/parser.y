@@ -103,6 +103,7 @@
 #include "script.h"
 #include "tcp.h"
 #include "tcp_options.h"
+#include "fuzz_options.h"
 
 /* This include of the bison-generated .h file must go last so that we
  * can first include all of the declarations on which it depends.
@@ -523,6 +524,14 @@ static struct packet *append_gre(struct packet *packet, struct expression *expr)
 		u16 src_port;
 		u16 dst_port;
 	} port_info;
+	struct {
+		u8 offset;
+		u8 length;
+	} fuzz_field_t;
+	struct fuzz_options *fuzz_options;
+	struct fuzz_option *fuzz_option;
+	enum fuzz_type_t fuzz_type;
+	enum header_type_t header_type;
 }
 
 /* The specific type of the output for a symbol is given by the %type
@@ -583,10 +592,11 @@ static struct packet *append_gre(struct packet *packet, struct expression *expr)
 %type <tcp_sequence_info> seq opt_icmp_echoed
 %type <tcp_options> opt_tcp_options tcp_option_list
 %type <tcp_option> tcp_option sack_block_list sack_block
-%type <fuzz_info> opt_fuzz_info opt_fuzz_params
-%type <fuzz_param> opt_fuzz_param
-%type <string> fuzz_type header_type fuzz_field field_name
-%type <integer> field_pos field_offset
+%type <fuzz_options> opt_fuzz_options fuzz_option_list
+%type <fuzz_option> fuzz_option
+%type <fuzz_field_t> fuzz_field field_name field_pos field_offset
+%type <fuzz_type> fuzz_type
+%type <header_type> header_type
 %type <string> function_name
 %type <expression_list> expression_list function_arguments
 %type <expression> expression binary_expression array sub_expr_list
@@ -791,7 +801,7 @@ packet_spec
 ;
 
 tcp_packet_spec
-: packet_prefix opt_ip_info opt_port_info flags seq opt_ack opt_window opt_urg_ptr opt_tcp_options opt_fuzz_info {
+: packet_prefix opt_ip_info opt_port_info flags seq opt_ack opt_window opt_urg_ptr opt_tcp_options opt_fuzz_options {
 	char *error = NULL;
 	struct packet *outer = $1, *inner = NULL;
 	enum direction_t direction = outer->direction;
@@ -807,12 +817,15 @@ tcp_packet_spec
 			       "outbound packets");
 	}
 
+	//TODO: verify fuzz options is added to only incoming packets.
+
 	inner = new_tcp_packet(in_config->wire_protocol,
 			       direction, $2, $3.src_port, $3.dst_port, $4,
 			       $5.start_sequence, $5.payload_bytes,
-			       $6, $7, $8, $9, &error);
+			       $6, $7, $8, $9, $10, &error);
 	free($4);
 	free($9);
+	free($10);
 	if (inner == NULL) {
 		assert(error != NULL);
 		semantic_error(error);
@@ -1372,32 +1385,96 @@ sack_block
 }
 ;
 
-opt_fuzz_info
-: '{' opt_fuzz_params '}';
+opt_fuzz_options
+:								{ $$ = fuzz_options_new(); }
+| '{' fuzz_option_list '}'		{ $$ = $2; }
+;
 
-opt_fuzz_params
-: opt_fuzz_param | opt_fuzz_params ';' opt_fuzz_param;
+fuzz_option_list
+: fuzz_option {
+	$$ = fuzz_options_new();
+	if (fuzz_options_append($$, $1)) {
+		semantic_error("Error adding to fuzz option list.");
+	}
+}
+| fuzz_option_list ';' fuzz_option {
+	$$ = $1;
+	if (fuzz_options_append($$, $3)) {
+		semantic_error("Error adding to fuzz option list.");
+	}
+}
+;
 
-opt_fuzz_param
-: fuzz_type header_type fuzz_field;
+fuzz_option
+: fuzz_type header_type fuzz_field {
+	$$ = fuzz_option_new($1, $2, $3.offset, $3.length);
+}
+;
 
 fuzz_type
-: MUTATE | TRUNCATE | INSERT;
+: MUTATE {
+	$$ = OP_MUTATE;
+}
+| TRUNCATE {
+	$$ = OP_TRUNCATE;
+}
+| INSERT {
+	$$ = OP_INSERT;
+}
+;
 
 header_type
-: IP | TCP;
+: IPV4 {
+	$$ = IPv4;
+}
+| IPV6 {
+	$$ = IPv6;
+}
+| TCP {
+	$$ = xTCP;
+}
+;
 
 fuzz_field
-: field_name | field_pos | field_offset;
+: field_name {
+	$$ = $1;
+}
+| field_pos {
+	$$ = $1;
+}
+| field_offset {
+	$$ = $1;
+}
+;
 
 field_name
-: MSS | IHL | SOURCE_PORT;
+: MSS {
+	$$.offset = 25;
+	$$.length = 4;
+}
+| IHL {
+	$$.offset = 2;
+	$$.length = 1;
+}
+| SOURCE_PORT {
+	$$.offset = 20;
+	$$.length = 2;
+}
+;
 
 field_pos
-: INTEGER '-' INTEGER;
+: INTEGER '-' INTEGER {
+	$$.offset = $1;
+	$$.length = $3 - $1;
+}
+;
 
 field_offset
-: INTEGER INTEGER;
+: INTEGER INTEGER {
+	$$.offset = $1;
+	$$.length = $2;
+}
+;
 
 syscall_spec
 : opt_end_time function_name function_arguments '='

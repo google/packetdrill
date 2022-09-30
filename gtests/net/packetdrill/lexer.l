@@ -51,6 +51,7 @@
 #include "tcp_options.h"
 #include "parse.h"
 #include "config.h"
+#include "fuzz_options.h"
 
 /* This include of the bison-generated .h file must go last so that we
  * can first include all of the declarations on which it depends.
@@ -265,7 +266,6 @@ id			return ID;
 mut         return MUTATE;
 trun        return TRUNCATE;
 ins         return INSERT;
-ip          return IP;
 tcp         return TCP;
 ihl         return IHL;
 source_port return SOURCE_PORT;

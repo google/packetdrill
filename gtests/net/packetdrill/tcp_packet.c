@@ -100,6 +100,7 @@ struct packet *new_tcp_packet(int address_family,
 			       s32 window,
 			       u16 urg_ptr,
 			       const struct tcp_options *tcp_options,
+				   const struct fuzz_options *fuzz_options,
 			       char **error)
 {
 	struct packet *packet = NULL;  /* the newly-allocated result packet */
