@@ -49,6 +49,7 @@
 #include "system.h"
 #include "tcp.h"
 #include "tcp_options.h"
+#include "fm_testing.h"
 
 /* MAX_SPIN_USECS is the maximum amount of time (in microseconds) to
  * spin waiting for an event. We sleep up until this many microseconds
@@ -141,6 +142,9 @@ void state_free(struct state *state)
 
 	if (state->so_instance)
 		so_instance_free(state->so_instance);
+
+	if (state->fm_instance)
+		fm_instance_free(state->fm_instance);
 
 	run_unlock(state);
 	if (pthread_mutex_destroy(&state->mutex) != 0)
@@ -581,6 +585,11 @@ void run_script(struct config *config, struct script *script)
 	if (config->so_filename) {
 		state->so_instance = so_instance_new();
 		so_instance_init(state->so_instance, config, script, state);
+	}
+
+	if (config->fm_filename) {
+		state->fm_instance = fm_instance_new();
+		fm_instance_init(state->fm_instance, config);
 	}
 
 	init_cmd_exed = false;

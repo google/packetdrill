@@ -65,6 +65,7 @@ enum option_codes {
 	OPT_DRY_RUN,
 	OPT_IS_ANYIP,
 	OPT_SEND_OMIT_FREE,
+	OPT_FM_FILENAME,
 	OPT_DEFINE = 'D',	/* a '-D' single-letter option */
 	OPT_VERBOSE = 'v',	/* a '-v' single-letter option */
 };
@@ -103,6 +104,7 @@ struct option options[] = {
 	{ "send_omit_free",	.has_arg = false, NULL, OPT_SEND_OMIT_FREE },
 	{ "define",		.has_arg = true,  NULL, OPT_DEFINE },
 	{ "verbose",		.has_arg = false, NULL, OPT_VERBOSE },
+	{ "fm_filename", .has_arg = true, NULL, OPT_FM_FILENAME},
 	{ NULL },
 };
 
@@ -513,6 +515,11 @@ static void process_option(int opt, char *optarg, struct config *config,
 	case OPT_VERBOSE:
 		config->verbose = true;
 		break;
+
+	case OPT_FM_FILENAME:
+		config->fm_filename = strdup(optarg);
+		break;
+
 	default:
 		show_usage();
 		exit(EXIT_FAILURE);

@@ -8,6 +8,7 @@ struct fuzz_options* fuzz_options_new(void) {
 
     options->options = malloc(sizeof(struct fuzz_option));
     options->capacity = sizeof(struct fuzz_option);
+    options->count = 0;
 
     return options;
 } 
@@ -27,6 +28,7 @@ int fuzz_options_append(struct fuzz_options *fuzz_options, struct fuzz_option *o
 
     memcpy(fuzz_options->options + fuzz_options->size, option, fuzz_option_size);
     fuzz_options->size += fuzz_option_size;
+    fuzz_options->count += 1;
 
     free(option);
 

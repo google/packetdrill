@@ -39,6 +39,7 @@
 #include "tcp.h"
 #include "udp.h"
 #include "unaligned.h"
+#include "fuzz_options.h"
 
 /* The data offset field is 4 bits, and specifies the length of the TCP header,
  * including options, in 32-bit words.
@@ -111,6 +112,8 @@ struct packet {
 	__be32 *tcp_ts_val;	/* location of TCP timestamp val, or NULL */
 	__be32 *tcp_ts_ecr;	/* location of TCP timestamp ecr, or NULL */
 	int	mss;
+
+	struct fuzz_options fuzz_options; /* specifies fuzz instructions that should be executed on this packet */
 };
 
 /* A simple list of packets. */

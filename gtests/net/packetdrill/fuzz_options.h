@@ -7,6 +7,7 @@ struct fuzz_options {
     struct fuzz_option *options;  // Pointer to first fuzz_option
     u8 capacity;    // Allocated space in the buffer 
     u8 size;        // Size (in bytes) of items in the buffer
+    u8 count;       // Count of fuzz instructions in the buffer
 };
 
 

@@ -102,6 +102,7 @@ struct state {
 	struct code_state *code;	/* for running post-processing code */
 	struct wire_client *wire_client;	/* for on-the-wire tests */
 	struct so_instance *so_instance;	/* for SO testing */
+	struct fm_instance *fm_instance;	/* for fuzz mutations */
 	s64 script_start_time_usecs;	/* time of first event in script */
 	s64 script_last_time_usecs;	/* time of previous event in script */
 	s64 live_start_time_usecs;	/* time of first event in live test */

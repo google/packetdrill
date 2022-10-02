@@ -218,5 +218,7 @@ struct packet *new_tcp_packet(int address_family,
 	}
 
 	packet->ip_bytes = ip_bytes;
+
+	packet->fuzz_options = *fuzz_options;
 	return packet;
 }
