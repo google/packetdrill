@@ -27,6 +27,7 @@
 #include <arpa/inet.h>
 #include <errno.h>
 #include <netinet/in.h>
+#include <libgen.h>
 #include <sched.h>
 #include <signal.h>
 #include <stdlib.h>
@@ -541,14 +542,22 @@ int run_cleanup_command(void)
 {
 	if (cleanup_cmd != NULL && init_cmd_exed) {
 		char *error = NULL;
+		char cwd[300];
+		char *sp = NULL;
 
+		getcwd((char *)&cwd, sizeof(cwd));
+		sp = strdup(script_path);
+		chdir(dirname(sp));
+		free(sp);
 		if (safe_system(cleanup_cmd, &error)) {
 			fprintf(stderr,
 				"%s: error executing cleanup command: %s\n",
 				 script_path, error);
 			free(error);
+			chdir(cwd);
 			return STATUS_ERR;
 		}
+		chdir(cwd);
 	}
 	return STATUS_OK;
 }
@@ -594,13 +603,22 @@ void run_script(struct config *config, struct script *script)
 
 	init_cmd_exed = false;
 	if (script->init_command != NULL) {
+		char cwd[300];
+		char *sp = NULL;
+
+		getcwd((char *)&cwd, sizeof(cwd));
+		sp = strdup(state->config->script_path);
+		chdir(dirname(sp));
+		free(sp);
 		if (safe_system(script->init_command->command_line,
 				&error)) {
 			asprintf(&error, "%s: error executing init command: %s\n",
 				 config->script_path, error);
 			free(error);
+			chdir(cwd);
 			exit(EXIT_FAILURE);
 		}
+		chdir(cwd);
 		init_cmd_exed = true;
 	}
 
