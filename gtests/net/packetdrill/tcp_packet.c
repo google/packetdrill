@@ -219,6 +219,10 @@ struct packet *new_tcp_packet(int address_family,
 
 	packet->ip_bytes = ip_bytes;
 
-	packet->fuzz_options = *fuzz_options;
+	if (fuzz_options != NULL) {
+		packet->fuzz_options = malloc(fuzz_options->size);
+		memcpy(packet->fuzz_options, fuzz_options, fuzz_options->size);
+	}
+	
 	return packet;
 }

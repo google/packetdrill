@@ -113,7 +113,7 @@ struct packet {
 	__be32 *tcp_ts_ecr;	/* location of TCP timestamp ecr, or NULL */
 	int	mss;
 
-	struct fuzz_options fuzz_options; /* specifies fuzz instructions that should be executed on this packet */
+	struct fuzz_options *fuzz_options; /* specifies fuzz instructions that should be executed on this packet */
 };
 
 /* A simple list of packets. */
