@@ -32,7 +32,8 @@ void socket_close(struct state *state, struct fd_state *fd)
 {
 	struct socket *socket = fd_to_socket(fd);
 
-	if (fd->live_fd >= 0 && !socket->fd.is_closed) {
+	if (fd->live_fd >= 0 && !socket->fd.is_closed && !fd->so_managed) { 
+		/* Let the so_instance be in charge of closing sockets it created as these sockets may not have been on linux */
 		assert(fd->script_fd >= 0);
 		DEBUGP("closing struct state socket "
 		       "live.fd:%d script.fd:%d\n",

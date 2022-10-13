@@ -52,6 +52,7 @@ struct fd_state {
 	int script_fd;		/* file descriptor in the script source */
 	int live_fd;		/* file descriptor in packetdrill runtime */
 	bool is_closed;		/* has app called close(2) ? */
+	bool so_managed;	/* so_instance was used to create this syscall. Should be in charge of closing it */
 	struct fd_state *next;	/* next fd in linked list */
 };
 
