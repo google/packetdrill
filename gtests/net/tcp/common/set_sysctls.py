@@ -6,8 +6,12 @@
 
 The arguments are of the form "<proc-file>=<val>" separated by spaces.
 The program first reads the current value of the proc-file and creates
-a shell script named "/tmp/sysctl_restore_${PPID}.sh" which restores the values
-when executed. It then sets the new values
+a shell script named "/tmp/sysctl_restore_${PACKETDRILL_PID}.sh" which
+restores the values when executed. It then sets the new values.
+
+PACKETDRILL_PID is set by packetdrill to the pid of itself, so a .pkt
+file could restore sysctls by running `/tmp/sysctl_restore_${PPID}.sh`
+at the end.
 """
 
 __author__ = ('brakmo@google.com (Lawrence Brakmo)')
@@ -16,8 +20,7 @@ import os
 import subprocess
 import sys
 
-pppid = int(os.popen("ps -p %d -oppid=" % os.getppid()).read().strip())
-filename = '/tmp/sysctl_restore_%d.sh' % pppid
+filename = '/tmp/sysctl_restore_%s.sh' % os.environ['PACKETDRILL_PID']
 
 # Open file for restoring sysctl values
 restore_file = open(filename, 'w')
