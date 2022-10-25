@@ -61,12 +61,25 @@ static void run_init_scripts(struct config *config)
 	free(scripts);
 }
 
+/* Sets "PACKETDRILL_PID" environment variable to pid of this process,
+ * so that script like set_sysctls.py could use it as an opaque id for
+ * current test.
+ */
+static void set_pid_env(void)
+{
+	char pid[64];
+
+	snprintf(pid, sizeof(pid), "%d", getpid());
+	setenv("PACKETDRILL_PID", pid, 1);
+}
+
 int main(int argc, char *argv[])
 {
 	struct config config;
 	set_default_config(&config);
 	/* Get command line options and list of test scripts. */
 	char **arg = parse_command_line_options(argc, argv, &config);
+	set_pid_env();
 
 	/* If we're running as a server, just listen for connections forever. */
 	if (config.is_wire_server) {
