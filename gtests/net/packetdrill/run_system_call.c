@@ -199,6 +199,26 @@ static int check_type(const struct expression *expression,
 }
 
 /* Sets the value from the expression argument, checking that it is a
+ * valid s8 or u8, and matches the expected type. Returns STATUS_OK on
+ * success; on failure returns STATUS_ERR and sets error message.
+ */
+static int get_s8(struct expression *expression,
+		  s8 *value, char **error)
+{
+	if (check_type(expression, EXPR_INTEGER, error))
+		return STATUS_ERR;
+	if ((expression->value.num > UCHAR_MAX) ||
+	    (expression->value.num < CHAR_MIN)) {
+		asprintf(error,
+			 "Value out of range for 8-bit integer: %lld",
+			 expression->value.num);
+		return STATUS_ERR;
+	}
+	*value = expression->value.num;
+	return STATUS_OK;
+}
+
+/* Sets the value from the expression argument, checking that it is a
  * valid s32 or u32, and matches the expected type. Returns STATUS_OK on
  * success; on failure returns STATUS_ERR and sets error message.
  */
@@ -499,11 +519,11 @@ static int new_extended_err(const struct sock_extended_err_expr *expr,
 {
 	if (get_s32(expr->ee_errno, (s32 *)&ee->ee_errno, error))
 		return STATUS_ERR;
-	if (get_s32(expr->ee_origin, (s32 *)&ee->ee_origin, error))
+	if (get_s8(expr->ee_origin, (s8 *)&ee->ee_origin, error))
 		return STATUS_ERR;
-	if (get_s32(expr->ee_type, (s32 *)&ee->ee_type, error))
+	if (get_s8(expr->ee_type, (s8 *)&ee->ee_type, error))
 		return STATUS_ERR;
-	if (get_s32(expr->ee_code, (s32 *)&ee->ee_code, error))
+	if (get_s8(expr->ee_code, (s8 *)&ee->ee_code, error))
 		return STATUS_ERR;
 	if (get_s32(expr->ee_info, (s32 *)&ee->ee_info, error))
 		return STATUS_ERR;
