@@ -44,6 +44,7 @@
 
 #include "types.h"
 
+#include <limits.h>
 #include <netinet/in.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -84,6 +85,8 @@ int word(void)
 {
 	char *word = yytext;
 	char *value = NULL;
+	char *end;
+	long intval;
 
 	/* Look in symbol table for matching user-defined symbol->value map. */
 	value = definition_get(in_config->defines, word);
@@ -94,8 +97,15 @@ int word(void)
 		} else if (value[0] == '`') {
 			yylval.string = quoted(value);		/* SYM=`val` */
 			return BACK_QUOTED;
+		}
+
+		/* SYM=val */
+		intval = strtol(value, &end, 0);
+		if (intval != LONG_MIN && intval != LONG_MAX && *end == '\0') {
+			yylval.integer = intval;
+			return INTEGER;
 		} else {
-			yylval.string = strdup(value);		/* SYM=val */
+			yylval.string = strdup(value);
 			return WORD;
 		}
 	}
