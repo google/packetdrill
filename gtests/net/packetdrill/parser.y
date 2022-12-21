@@ -103,6 +103,7 @@
 #include "script.h"
 #include "tcp.h"
 #include "tcp_options.h"
+#include "fuzz_options.h"
 
 /* This include of the bison-generated .h file must go last so that we
  * can first include all of the declarations on which it depends.
@@ -439,6 +440,35 @@ static struct tcp_option *new_tcp_fast_open_option(const char *cookie_string,
 	return option;
 }
 
+static struct fuzz_value_t* parse_hex_blob(const char *hex_blob,
+					 char **error)
+{
+	int hex_blob_len = strlen(hex_blob);
+	int hex_bytes = hex_blob_len / 2;
+	int parsed_bytes = 0;
+
+	char *parsed_hex_blob = malloc(hex_bytes);
+
+	/* Parse MD5 digest. This should be an ASCII hex string representing 16
+	 * bytes. But we allow smaller buffers, since we want to allow test
+	 * cases that supply invalid cookies.
+	 */
+	if (parse_hex_string(hex_blob,
+			     (u8 *) parsed_hex_blob,
+			     hex_bytes,
+			     &parsed_bytes)) {
+		free(parsed_hex_blob);
+		asprintf(error, "Hex blob is not a valid hex string");
+		return NULL;
+	}
+
+	struct fuzz_value_t *value = malloc(sizeof(struct fuzz_value_t));
+	value->value = parsed_hex_blob;
+	value->byte_count = parsed_bytes;
+	
+	return value;
+}
+
 static struct tcp_option *new_md5_option(const char *digest_string,
 					 char **error)
 {
@@ -523,6 +553,12 @@ static struct packet *append_gre(struct packet *packet, struct expression *expr)
 		u16 src_port;
 		u16 dst_port;
 	} port_info;
+	struct fuzz_value_t fuzz_value_t;
+	struct fuzz_options *fuzz_options;
+	struct fuzz_option *fuzz_option;
+	enum fuzz_type_t fuzz_type;
+	enum header_type_t header_type;
+	enum field_name_t field_name;
 }
 
 /* The specific type of the output for a symbol is given by the %type
@@ -546,6 +582,10 @@ static struct packet *append_gre(struct packet *packet, struct expression *expr)
 %token <reserved> NONE CHECKSUM SEQUENCE PRESENT
 %token <reserved> EE_ERRNO EE_CODE EE_DATA EE_INFO EE_ORIGIN EE_TYPE
 %token <reserved> SCM_SEC SCM_NSEC
+%token <reserved> REPLACE TRUNCATE INSERT
+%token <reserved> IP TCP
+%token <reserved> IHL SOURCE_PORT DST_PORT SEQ_NUM ACK_NUM TCP_HDR_LEN WIN_SIZE URG_POINTER VERSION_IHL;
+%token <reserved> TCP_CHECKSUM DSCP_ESN TOT_LEN IDEN FLAGS_FLAGOFF PROTOCOL IP4_CHECKSUM SRC_IP DEST_IP;
 %token <floating> FLOAT
 %token <integer> INTEGER HEX_INTEGER
 %token <string> WORD STRING BACK_QUOTED CODE IPV4_ADDR IPV6_ADDR
@@ -568,7 +608,8 @@ static struct packet *append_gre(struct packet *packet, struct expression *expr)
 %type <integer> gre_flags_list gre_flags gre_flag
 %type <integer> gre_sum gre_off gre_key gre_seq
 %type <integer> opt_icmp_echo_id
-%type <integer> flow_label
+%type <integer> flow_label 
+%type <integer> fuzz_field field_offset
 %type <string> icmp_type opt_icmp_code opt_ack_flag opt_word ack_and_ace flags
 %type <string> opt_tcp_fast_open_cookie hex_blob
 %type <string> opt_note note word_list
@@ -580,7 +621,13 @@ static struct packet *append_gre(struct packet *packet, struct expression *expr)
 %type <tcp_sequence_info> seq opt_icmp_echoed
 %type <tcp_options> opt_tcp_options tcp_option_list
 %type <tcp_option> tcp_option sack_block_list sack_block
-%type <string> function_name
+%type <fuzz_options> opt_fuzz_options fuzz_option_list
+%type <fuzz_option> fuzz_option
+%type <fuzz_type> fuzz_type
+%type <header_type> header_type
+%type <field_name> field_name
+%type <string> function_name 
+%type <fuzz_value_t> fuzz_value
 %type <expression_list> expression_list function_arguments
 %type <expression> expression binary_expression array sub_expr_list
 %type <expression> any_int decimal_integer hex_integer
@@ -784,7 +831,7 @@ packet_spec
 ;
 
 tcp_packet_spec
-: packet_prefix opt_ip_info opt_port_info flags seq opt_ack opt_window opt_urg_ptr opt_tcp_options {
+: packet_prefix opt_ip_info opt_port_info flags seq opt_ack opt_window opt_urg_ptr opt_tcp_options opt_fuzz_options {
 	char *error = NULL;
 	struct packet *outer = $1, *inner = NULL;
 	enum direction_t direction = outer->direction;
@@ -800,12 +847,15 @@ tcp_packet_spec
 			       "outbound packets");
 	}
 
+	//TODO: verify fuzz options is added to only incoming packets.
+
 	inner = new_tcp_packet(in_config->wire_protocol,
 			       direction, $2, $3.src_port, $3.dst_port, $4,
 			       $5.start_sequence, $5.payload_bytes,
-			       $6, $7, $8, $9, &error);
+			       $6, $7, $8, $9, $10, &error);
 	free($4);
 	free($9);
+	free($10);
 	if (inner == NULL) {
 		assert(error != NULL);
 		semantic_error(error);
@@ -1362,6 +1412,150 @@ sack_block
 	}
 	$$->data.sack.block[0].left = htonl($1);
 	$$->data.sack.block[0].right = htonl($3);
+}
+;
+
+opt_fuzz_options
+:								{ $$ = NULL; }
+| '{' fuzz_option_list '}'		{ $$ = $2; }
+;
+
+fuzz_option_list
+: fuzz_option {
+	$$ = fuzz_options_new();
+	if (fuzz_options_append($$, $1)) {
+		semantic_error("Error adding to fuzz option list.");
+	}
+}
+| fuzz_option_list ';' fuzz_option {
+	$$ = $1;
+	if (fuzz_options_append($$, $3)) {
+		semantic_error("Error adding to fuzz option list.");
+	}
+}
+;
+
+fuzz_option
+: fuzz_type header_type fuzz_field fuzz_value {
+	$$ = fuzz_option_new($1, $2, $3, $4);
+}
+;
+
+fuzz_type
+: REPLACE {
+	$$ = OP_REPLACE;
+}
+| TRUNCATE {
+	$$ = OP_TRUNCATE;
+}
+| INSERT {
+	$$ = OP_INSERT;
+}
+;
+
+header_type
+: IPV4 {
+	$$ = IPv4;
+}
+| IPV6 {
+	$$ = IPv6;
+}
+| TCP {
+	$$ = xTCP;
+}
+;
+
+fuzz_field 
+: field_name {
+	$$ = $1;
+}
+| field_offset {
+	$$ = $1;
+}
+
+field_name
+: SOURCE_PORT {
+	$$ = F_SOURCE_PORT;
+}
+| DST_PORT {
+	$$ = F_DST_PORT;
+}
+| SEQ_NUM {
+	$$ = F_SEQ_NUM;
+}
+| ACK_NUM {
+	$$ = F_ACK_NUM;
+}
+| TCP_HDR_LEN {
+	$$ = F_TCP_HDR_LEN;
+}
+| FLAGS {
+	$$ = F_FLAGS;
+}
+| WIN_SIZE {
+	$$ = F_WIN_SIZE;
+}
+| TCP_CHECKSUM {
+	$$ = F_TCP_CHECKSUM;
+}
+| URG_POINTER {
+	$$ = F_URG_POINTER;
+}
+| VERSION_IHL {
+	$$ = F_VERSION_IHL;
+}
+| DSCP_ESN {
+	$$ = F_DSCP_ESN;
+}
+| TOT_LEN {
+	$$ = F_TOT_LEN;
+}
+| IDEN {
+	$$ = F_IDEN;
+}
+| FLAGS_FLAGOFF {
+	$$ = F_FLAGS_FLAGOFF;
+}
+| TTL {
+	$$ = F_TTL;
+}
+| PROTOCOL {
+	$$ = F_PROTOCOL;
+}
+| IP4_CHECKSUM {
+	$$ = F_IP_CHECKSUM;
+}
+| SRC_IP {
+	$$ = F_SRC_IP;
+}
+| DEST_IP {
+	$$ = F_DEST_IP;
+}
+;
+
+field_offset
+: INTEGER {
+	char *field_offset = strdup(yytext);
+	$$ = atoi(field_offset);
+}
+;
+
+fuzz_value
+: INTEGER {
+	struct fuzz_value_t value = {strdup(yytext), 0};
+	$$ = value;
+}
+| HEX_INTEGER {
+	char *error = NULL;
+	char *hex_string = strdup(yytext);
+	hex_string += 2;  /* We remove the '0x' at the start of the hex */
+	struct fuzz_value_t *value = parse_hex_blob(hex_string, &error);
+	if (value == NULL) {
+		assert(error != NULL);
+		semantic_error(error);
+		free(error);
+	}
+	$$ = *value;
 }
 ;
 

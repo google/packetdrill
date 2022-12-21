@@ -29,6 +29,7 @@
 
 #include "packet.h"
 #include "tcp_options.h"
+#include "fuzz_options.h"
 
 /* Create and initialize a new struct packet containing a TCP segment.
  * The 'flags' are a tcpdump-style sequence of TCP header flags.
@@ -47,5 +48,6 @@ extern struct packet *new_tcp_packet(int address_family,
 				     s32 window,
 				     u16 urg_ptr,
 				     const struct tcp_options *tcp_options,
+				     const struct fuzz_options *fuzz_options,
 				     char **error);
 #endif /* __TCP_PACKET_H__ */

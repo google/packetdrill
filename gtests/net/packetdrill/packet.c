@@ -179,6 +179,7 @@ static void packet_duplicate_info(struct packet *packet,
 	packet->tcp_ts_ecr	= offset_ptr(old_base, new_base,
 					     old_packet->tcp_ts_ecr);
 	packet->echoed_header		= old_packet->echoed_header;
+	packet->fuzz_options = old_packet->fuzz_options;
 }
 
 /* Make a copy of the given old packet, but in the new copy reserve the

@@ -1,0 +1,24 @@
+// Test for blocking connect.
+
+//`../common/defaults.sh`
+
+// Establish a connection.
+    0 socket(..., SOCK_STREAM, IPPROTO_TCP) = 3
+
+  +.1...0.200 connect(3, ..., ...) = 0
+
+   +0 > S 0:0(0) <mss 1460,sackOK,TS val 100 ecr 0,nop,wscale 8>
+  +.1 < S. 0:0(0) ack 1 win 5792 <mss 1460,nop,wscale 2,nop,nop,sackOK>
+   +0 > . 1:1(0) ack 1
+
+   +0 < . 1:101(100) ack 1 win 27510
+   +0 < . 101:201(100) ack 1 win 27510
+   +0 < . 201:401(200) ack 1 win 27510
+   +0 < . 401:501(100) ack 1 win 27510
+   +0 < . 501:1001(500) ack 1 win 27510
+   +0 < . 1001:2001(1000) ack 1 win 27510
+   +0 < . 2001:5001(3000) ack 1 win 27510
+   +0 < . 1:10001(10000) ack 1 win 27510
+   +0 < . 10001:30001(20000) ack 1 win 27510
+   +0 < . 1:101(100) ack 1 win 27510
+

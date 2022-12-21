@@ -49,3 +49,19 @@ void __attribute__((noreturn)) die_perror(char *message)
 
 	exit(EXIT_FAILURE);
 }
+
+extern void __attribute__((noreturn)) die_free_so(struct state *state, char *format, ...)
+{
+    va_list ap;
+
+    if (state->so_instance)
+        so_instance_free(state->so_instance);
+
+    va_start(ap, format);
+    vfprintf(stderr, format, ap);
+    va_end(ap);
+
+    run_cleanup_command();
+
+    exit(EXIT_FAILURE);
+}

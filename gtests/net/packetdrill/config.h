@@ -159,6 +159,9 @@ struct config {
 	char *so_filename;
 	char *so_flags;
 
+	/* Fuzz mutation file for fuzzing, using an external mutation file */
+	char *fm_filename;
+
 	/* For anyip testing */
 	bool is_anyip;
 

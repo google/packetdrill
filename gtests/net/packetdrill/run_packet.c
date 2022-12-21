@@ -45,6 +45,7 @@
 #include "tcp_options_to_string.h"
 #include "tcp_packet.h"
 #include "wrap.h"
+#include "fm_testing.h"
 
 /* To avoid issues with TIME_WAIT, FIN_WAIT1, and FIN_WAIT2 we use
  * dynamically-chosen, unique 4-tuples for each test. We implement the
@@ -1407,10 +1408,10 @@ static int verify_outbound_live_packet(
 
 out:
 	add_packet_dump(error, "script", script_packet, script_usecs,
-			DUMP_SHORT);
+			DUMP_VERBOSE);
 	if (actual_packet != NULL) {
 		add_packet_dump(error, "actual", actual_packet, actual_usecs,
-				DUMP_SHORT);
+				DUMP_VERBOSE);
 		packet_free(actual_packet);
 	}
 	if (result == STATUS_ERR &&
@@ -1749,14 +1750,22 @@ out:
 }
 
 /* Checksum the packet and inject it into the kernel under test. */
-static int send_live_ip_packet(struct netdev *netdev,
+static int send_live_ip_packet(struct state *state,
 			       struct packet *packet)
 {
+
+	struct netdev *netdev = state->netdev;
+
 	assert(packet->ip_bytes > 0);
 	/* We do IPv4 and IPv6 */
 	assert(packet->ipv4 || packet->ipv6);
 	/* We only do TCP, UDP, and ICMP */
 	assert(packet->tcp || packet->udp || packet->icmpv4 || packet->icmpv6);
+
+	/* Mutate packet if enabled */
+	if (state->fm_instance) {
+		packet = handle_packet_mutation(packet, state->fm_instance);
+	}
 
 	/* Fill in layer 3 and layer 4 checksums */
 	checksum_packet(packet);
@@ -1817,7 +1826,7 @@ static int do_inbound_script_packet(
 	}
 
 	/* Inject live packet into kernel. */
-	result = send_live_ip_packet(state->netdev, live_packet);
+	result = send_live_ip_packet(state, live_packet);
 
 out:
 	packet_free(live_packet);
@@ -1919,7 +1928,7 @@ int reset_connection(struct state *state, struct socket *socket)
 
 	packet = new_tcp_packet(socket->address_family,
 				DIRECTION_INBOUND, ip_info, 0, 0,
-				"R.", seq, 0, ack_seq, window, 0, NULL,
+				"R.", seq, 0, ack_seq, window, 0, NULL, NULL,
 				&error);
 	if (packet == NULL)
 		die("%s", error);
@@ -1929,7 +1938,7 @@ int reset_connection(struct state *state, struct socket *socket)
 	set_packet_tuple(packet, &live_inbound);
 
 	/* Inject live packet into kernel. */
-	result = send_live_ip_packet(state->netdev, packet);
+	result = send_live_ip_packet(state, packet);
 
 	packet_free(packet);
 

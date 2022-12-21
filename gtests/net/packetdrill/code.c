@@ -777,7 +777,7 @@ void run_code_event(struct state *state, struct event *event,
 	return;
 
 error_out:
-	die("%s:%d: runtime error in code: %s\n",
+	die_free_so(state, "%s:%d: runtime error in code: %s\n",
 	    state->config->script_path, event->line_number, error);
 	free(error);
 }

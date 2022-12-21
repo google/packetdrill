@@ -37,10 +37,15 @@
 		fflush(stdout);			\
 	}
 
+struct state;
+
 /* Log the message to stderr and then exit with a failure status code. */
 extern void __attribute__((noreturn)) die(char *format, ...);
 
 /* Call perror() with message and then exit with a failure status code. */
 extern void __attribute__((noreturn)) die_perror(char *message);
+
+/* Call so_instance_free() to free the so instance, then log the message to stderr and exit */
+extern void __attribute__((noreturn)) die_free_so(struct state *state, char *format, ...);
 
 #endif /* __LOGGING_H__ */

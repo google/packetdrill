@@ -51,6 +51,7 @@
 #include "tcp_options.h"
 #include "parse.h"
 #include "config.h"
+#include "fuzz_options.h"
 
 /* This include of the bison-generated .h file must go last so that we
  * can first include all of the declarations on which it depends.
@@ -262,6 +263,31 @@ ect1			return ECT1;
 noecn			return NO_ECN;
 ce			return CE;
 id			return ID;
+rep         return REPLACE;
+trun        return TRUNCATE;
+ins         return INSERT;
+tcp         return TCP;
+ihl         return IHL;
+src_port 	return SOURCE_PORT;
+dst_port 	return DST_PORT;
+seq_num 	return SEQ_NUM;
+ack_num 	return ACK_NUM;
+tcp_hdr_len return TCP_HDR_LEN;
+win_size 	return WIN_SIZE;
+tcp_checksum return TCP_CHECKSUM;
+urg_pointer	return URG_POINTER;
+version_ihl return VERSION_IHL;
+dscp_esn 	return DSCP_ESN;
+tot_len 	return TOT_LEN;
+iden 		return IDEN;
+flags_fragoff return FLAGS_FLAGOFF;
+protocol 	return PROTOCOL;
+ip_checksum return IP4_CHECKSUM;
+src_ip 		return SRC_IP;
+dest_ip 	return DEST_IP;
+
+
+
 [.][.][.]		return ELLIPSIS;
 --[a-zA-Z0-9_]+		yylval.string	= option(yytext); return OPTION;
 [-]?[0-9]*[.][0-9]+	yylval.floating	= atof(yytext);   return FLOAT;

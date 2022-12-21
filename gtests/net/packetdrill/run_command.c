@@ -48,7 +48,7 @@ void run_command_event(
 	return;
 
 error_out:
-	die("%s:%d: error executing `%s` command: %s\n",
+	die_free_so(state, "%s:%d: error executing `%s` command: %s\n",
 	    state->config->script_path, event->line_number,
 	    command->command_line, error);
 	free(error);

@@ -1355,6 +1355,7 @@ static int run_syscall_socket(struct state *state, int address_family, int type,
 	socket->protocol	= protocol;
 	socket->fd.script_fd	= script_fd;
 	socket->fd.live_fd	= live_fd;
+	socket->fd.so_managed = state->so_instance != NULL;
 
 	/* Any later packets in the test script will now be mapped here. */
 	state->socket_under_test = socket;
@@ -1472,6 +1473,8 @@ static int run_syscall_accept(struct state *state,
 					     htons(port)));
 			socket->fd.script_fd	= script_accepted_fd;
 			socket->fd.live_fd	= live_accepted_fd;
+			socket->fd.so_managed = state->so_instance != NULL;
+			
 			return STATUS_OK;
 		}
 	}
@@ -3336,7 +3339,7 @@ static void invoke_system_call(
 	return;
 
 error_out:
-	die("%s:%d: runtime error in %s call: %s\n",
+	die_free_so(state, "%s:%d: runtime error in %s call: %s\n",
 	    state->config->script_path, event->line_number,
 	    syscall->name, error);
 	free(error);
@@ -3434,7 +3437,7 @@ static void enqueue_system_call(
 	return;
 
 error_out:
-	die("%s:%d: runtime error in %s call: %s\n",
+	die_free_so(state, "%s:%d: runtime error in %s call: %s\n",
 	    state->config->script_path, event->line_number,
 	    syscall->name, error);
 	free(error);
@@ -3571,7 +3574,7 @@ void syscalls_free(struct state *state, struct syscalls *syscalls)
 {
 	/* Wait a bit for the thread to go idle. */
 	if (await_idle_thread(state)) {
-		die("%s:%d: runtime error: exiting while "
+		die_free_so(state, "%s:%d: runtime error: exiting while "
 		    "a blocking system call is in progress\n",
 		    state->config->script_path,
 		    syscalls->event->line_number);
