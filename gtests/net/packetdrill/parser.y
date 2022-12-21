@@ -440,6 +440,35 @@ static struct tcp_option *new_tcp_fast_open_option(const char *cookie_string,
 	return option;
 }
 
+static struct fuzz_value_t* parse_hex_blob(const char *hex_blob,
+					 char **error)
+{
+	int hex_blob_len = strlen(hex_blob);
+	int hex_bytes = hex_blob_len / 2;
+	int parsed_bytes = 0;
+
+	char *parsed_hex_blob = malloc(hex_bytes);
+
+	/* Parse MD5 digest. This should be an ASCII hex string representing 16
+	 * bytes. But we allow smaller buffers, since we want to allow test
+	 * cases that supply invalid cookies.
+	 */
+	if (parse_hex_string(hex_blob,
+			     (u8 *) parsed_hex_blob,
+			     hex_bytes,
+			     &parsed_bytes)) {
+		free(parsed_hex_blob);
+		asprintf(error, "Hex blob is not a valid hex string");
+		return NULL;
+	}
+
+	struct fuzz_value_t *value = malloc(sizeof(struct fuzz_value_t));
+	value->value = parsed_hex_blob;
+	value->byte_count = parsed_bytes;
+	
+	return value;
+}
+
 static struct tcp_option *new_md5_option(const char *digest_string,
 					 char **error)
 {
@@ -524,14 +553,12 @@ static struct packet *append_gre(struct packet *packet, struct expression *expr)
 		u16 src_port;
 		u16 dst_port;
 	} port_info;
-	struct {
-		u8 offset;
-		u8 length;
-	} fuzz_field_t;
+	struct fuzz_value_t fuzz_value_t;
 	struct fuzz_options *fuzz_options;
 	struct fuzz_option *fuzz_option;
 	enum fuzz_type_t fuzz_type;
 	enum header_type_t header_type;
+	enum field_name_t field_name;
 }
 
 /* The specific type of the output for a symbol is given by the %type
@@ -555,9 +582,10 @@ static struct packet *append_gre(struct packet *packet, struct expression *expr)
 %token <reserved> NONE CHECKSUM SEQUENCE PRESENT
 %token <reserved> EE_ERRNO EE_CODE EE_DATA EE_INFO EE_ORIGIN EE_TYPE
 %token <reserved> SCM_SEC SCM_NSEC
-%token <reserved> MUTATE TRUNCATE INSERT
+%token <reserved> REPLACE TRUNCATE INSERT
 %token <reserved> IP TCP
-%token <reserved> IHL SOURCE_PORT
+%token <reserved> IHL SOURCE_PORT DST_PORT SEQ_NUM ACK_NUM TCP_HDR_LEN WIN_SIZE URG_POINTER VERSION_IHL;
+%token <reserved> TCP_CHECKSUM DSCP_ESN TOT_LEN IDEN FLAGS_FLAGOFF PROTOCOL IP4_CHECKSUM SRC_IP DEST_IP;
 %token <floating> FLOAT
 %token <integer> INTEGER HEX_INTEGER
 %token <string> WORD STRING BACK_QUOTED CODE IPV4_ADDR IPV6_ADDR
@@ -580,7 +608,8 @@ static struct packet *append_gre(struct packet *packet, struct expression *expr)
 %type <integer> gre_flags_list gre_flags gre_flag
 %type <integer> gre_sum gre_off gre_key gre_seq
 %type <integer> opt_icmp_echo_id
-%type <integer> flow_label
+%type <integer> flow_label 
+%type <integer> fuzz_field field_offset
 %type <string> icmp_type opt_icmp_code opt_ack_flag opt_word ack_and_ace flags
 %type <string> opt_tcp_fast_open_cookie hex_blob
 %type <string> opt_note note word_list
@@ -594,10 +623,11 @@ static struct packet *append_gre(struct packet *packet, struct expression *expr)
 %type <tcp_option> tcp_option sack_block_list sack_block
 %type <fuzz_options> opt_fuzz_options fuzz_option_list
 %type <fuzz_option> fuzz_option
-%type <fuzz_field_t> fuzz_field field_name field_pos field_offset
 %type <fuzz_type> fuzz_type
 %type <header_type> header_type
-%type <string> function_name
+%type <field_name> field_name
+%type <string> function_name 
+%type <fuzz_value_t> fuzz_value
 %type <expression_list> expression_list function_arguments
 %type <expression> expression binary_expression array sub_expr_list
 %type <expression> any_int decimal_integer hex_integer
@@ -1386,7 +1416,7 @@ sack_block
 ;
 
 opt_fuzz_options
-:								{ $$ = fuzz_options_new(); }
+:								{ $$ = NULL; }
 | '{' fuzz_option_list '}'		{ $$ = $2; }
 ;
 
@@ -1406,14 +1436,14 @@ fuzz_option_list
 ;
 
 fuzz_option
-: fuzz_type header_type fuzz_field {
-	$$ = fuzz_option_new($1, $2, $3.offset, $3.length);
+: fuzz_type header_type fuzz_field fuzz_value {
+	$$ = fuzz_option_new($1, $2, $3, $4);
 }
 ;
 
 fuzz_type
-: MUTATE {
-	$$ = OP_MUTATE;
+: REPLACE {
+	$$ = OP_REPLACE;
 }
 | TRUNCATE {
 	$$ = OP_TRUNCATE;
@@ -1435,44 +1465,97 @@ header_type
 }
 ;
 
-fuzz_field
+fuzz_field 
 : field_name {
-	$$ = $1;
-}
-| field_pos {
 	$$ = $1;
 }
 | field_offset {
 	$$ = $1;
 }
-;
 
 field_name
-: MSS {
-	$$.offset = 25;
-	$$.length = 4;
+: SOURCE_PORT {
+	$$ = F_SOURCE_PORT;
 }
-| IHL {
-	$$.offset = 2;
-	$$.length = 1;
+| DST_PORT {
+	$$ = F_DST_PORT;
 }
-| SOURCE_PORT {
-	$$.offset = 20;
-	$$.length = 2;
+| SEQ_NUM {
+	$$ = F_SEQ_NUM;
 }
-;
-
-field_pos
-: INTEGER '-' INTEGER {
-	$$.offset = $1;
-	$$.length = $3 - $1;
+| ACK_NUM {
+	$$ = F_ACK_NUM;
+}
+| TCP_HDR_LEN {
+	$$ = F_TCP_HDR_LEN;
+}
+| FLAGS {
+	$$ = F_FLAGS;
+}
+| WIN_SIZE {
+	$$ = F_WIN_SIZE;
+}
+| TCP_CHECKSUM {
+	$$ = F_TCP_CHECKSUM;
+}
+| URG_POINTER {
+	$$ = F_URG_POINTER;
+}
+| VERSION_IHL {
+	$$ = F_VERSION_IHL;
+}
+| DSCP_ESN {
+	$$ = F_DSCP_ESN;
+}
+| TOT_LEN {
+	$$ = F_TOT_LEN;
+}
+| IDEN {
+	$$ = F_IDEN;
+}
+| FLAGS_FLAGOFF {
+	$$ = F_FLAGS_FLAGOFF;
+}
+| TTL {
+	$$ = F_TTL;
+}
+| PROTOCOL {
+	$$ = F_PROTOCOL;
+}
+| IP4_CHECKSUM {
+	$$ = F_IP_CHECKSUM;
+}
+| SRC_IP {
+	$$ = F_SRC_IP;
+}
+| DEST_IP {
+	$$ = F_DEST_IP;
 }
 ;
 
 field_offset
-: INTEGER INTEGER {
-	$$.offset = $1;
-	$$.length = $2;
+: INTEGER {
+	char *field_offset = strdup(yytext);
+	$$ = atoi(field_offset);
+}
+;
+
+fuzz_value
+: INTEGER {
+	struct fuzz_value_t value = {strdup(yytext), 0};
+	$$ = value;
+}
+| HEX_INTEGER {
+	char *error = NULL;
+	char *hex_string = strdup(yytext);
+	hex_string += 2;  /* We remove the '0x' at the start of the hex */
+	struct fuzz_value_t *value = parse_hex_blob(hex_string, &error);
+	if (value == NULL) {
+		assert(error != NULL);
+		semantic_error(error);
+		free(error);
+	}
+	$$ = *value;
 }
 ;
 

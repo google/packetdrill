@@ -3574,7 +3574,7 @@ void syscalls_free(struct state *state, struct syscalls *syscalls)
 {
 	/* Wait a bit for the thread to go idle. */
 	if (await_idle_thread(state)) {
-		die("%s:%d: runtime error: exiting while "
+		die_free_so(state, "%s:%d: runtime error: exiting while "
 		    "a blocking system call is in progress\n",
 		    state->config->script_path,
 		    syscalls->event->line_number);

@@ -9,6 +9,7 @@ struct fuzz_options* fuzz_options_new(void) {
     options->options = malloc(sizeof(struct fuzz_option));
     options->capacity = sizeof(struct fuzz_option);
     options->count = 0;
+    options->size = 0;
 
     return options;
 } 
@@ -35,13 +36,14 @@ int fuzz_options_append(struct fuzz_options *fuzz_options, struct fuzz_option *o
     return STATUS_OK;
 }
 
-struct fuzz_option* fuzz_option_new(enum fuzz_type_t fuzz_type, enum header_type_t header_type, u8 fuzz_offset, u8 fuzz_length) {
+struct fuzz_option* fuzz_option_new(enum fuzz_type_t fuzz_type, enum header_type_t header_type, u8 fuzz_field, struct fuzz_value_t fuzz_value) {
     struct fuzz_option *option = calloc(1, sizeof(struct fuzz_option));
 
     option->fuzz_type = fuzz_type;
     option->header_type = header_type;
-    option->fuzz_offset = fuzz_offset;
-    option->fuzz_length = fuzz_length;
+    option->fuzz_field = fuzz_field;
+    option->fuzz_value = fuzz_value.value;
+    option->fuzz_value_byte_count = fuzz_value.byte_count;
 
     return option;
 }
