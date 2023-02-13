@@ -113,7 +113,7 @@ static void verbose_packet_dump(struct state *state, const char *type,
 	if (state->config->verbose) {
 		char *dump = NULL, *dump_error = NULL;
 
-		packet_to_string(live_packet, DUMP_SHORT,
+		packet_to_string(live_packet, DUMP_VERBOSE,
 				 &dump, &dump_error);
 
 		printf("%s packet: %9.6f %s%s%s\n",

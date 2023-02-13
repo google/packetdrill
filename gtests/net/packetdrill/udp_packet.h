@@ -28,6 +28,7 @@
 #include "types.h"
 
 #include "packet.h"
+#include "fuzz_options.h"
 
 /* Create and initialize a new struct packet containing a UDP segment.
  * The 'flags' are a tcpdump-style sequence of UDP header flags.
@@ -40,5 +41,6 @@ extern struct packet *new_udp_packet(int address_family,
 				     u16 udp_payload_bytes,
 				     u16 src_port,
 				     u16 dst_port,
+				     const struct fuzz_options *fuzz_options,
 				     char **error);
 #endif /* __UDP_PACKET_H__ */

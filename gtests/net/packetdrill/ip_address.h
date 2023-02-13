@@ -77,10 +77,6 @@ static void print_hex( char * bin_data, size_t len)
 static inline bool is_equal_ip(const struct ip_address *a,
 			       const struct ip_address *b)
 {
-	printf("Original ip address\n");
-	print_hex((char *) &a->ip.v4.s_addr, ip_address_length(a->address_family));
-	printf("Returned ip address\n");
-	print_hex((char *) &b->ip.v4.s_addr, ip_address_length(b->address_family));
 	return ((a->address_family == b->address_family) &&
 		!memcmp(&a->ip, &b->ip, ip_address_length(a->address_family)));
 }
