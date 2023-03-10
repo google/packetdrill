@@ -44,8 +44,10 @@
 #include "tcp_options_iterator.h"
 #include "tcp_options_to_string.h"
 #include "tcp_packet.h"
+#include "udp_packet.h"
 #include "wrap.h"
 #include "fm_testing.h"
+#include "fuzz_testing.h"
 
 /* To avoid issues with TIME_WAIT, FIN_WAIT1, and FIN_WAIT2 we use
  * dynamically-chosen, unique 4-tuples for each test. We implement the
@@ -113,7 +115,7 @@ static void verbose_packet_dump(struct state *state, const char *type,
 	if (state->config->verbose) {
 		char *dump = NULL, *dump_error = NULL;
 
-		packet_to_string(live_packet, DUMP_SHORT,
+		packet_to_string(live_packet, DUMP_VERBOSE,
 				 &dump, &dump_error);
 
 		printf("%s packet: %9.6f %s%s%s\n",
@@ -128,10 +130,12 @@ static void verbose_packet_dump(struct state *state, const char *type,
 
 /* See if the live packet matches the live 4-tuple of the socket (UDP/TCP)
  * or matches the src/dst IP addr for the ICMP socket
+ * 
+ * With compare_ip, we allow matching a socket with only matching ip address
  */
 static struct socket *find_socket_for_live_packet(
 	struct state *state, const struct packet *packet,
-	enum direction_t *direction)
+	enum direction_t *direction, uint8_t compare_ip)
 {
 	struct socket *socket = state->socket_under_test;	/* shortcut */
 	if (socket == NULL)
@@ -139,7 +143,7 @@ static struct socket *find_socket_for_live_packet(
 
 	struct tuple packet_tuple, live_outbound, live_inbound;
 	bool is_icmp = (socket->protocol == IPPROTO_ICMP && packet->icmpv4) ||
-		       (socket->protocol == IPPROTO_ICMPV6 && packet->icmpv6);
+		       (socket->protocol == IPPROTO_ICMPV6 && packet->icmpv6) || compare_ip;
 	get_packet_tuple(packet, &packet_tuple);
 
 	/* Is packet inbound to the socket under test? */
@@ -1460,9 +1464,9 @@ static int verify_packet_fragments(
 }
 
 /* Sniff the next outbound live packet and return it. */
-static int sniff_outbound_live_packet(
+int sniff_outbound_live_packet(
 	struct state *state, struct socket *expected_socket,
-	struct packet **packet, char **error)
+	struct packet **packet, char **error, uint8_t compare_ip)
 {
 	DEBUGP("sniff_outbound_live_packet\n");
 	struct socket *socket = NULL;
@@ -1473,7 +1477,7 @@ static int sniff_outbound_live_packet(
 			return STATUS_ERR;
 		/* See if the packet matches an existing, known socket. */
 		socket = find_socket_for_live_packet(state, *packet,
-						     &direction);
+						     &direction, compare_ip);
 		if ((socket != NULL) && (direction == DIRECTION_OUTBOUND))
 			break;
 		/* See if the packet matches a recent connect() call. */
@@ -1608,7 +1612,7 @@ static int do_outbound_script_packet(
 		 * socket.
 		 */
 		if (sniff_outbound_live_packet(state, socket, &live_packet,
-					       error))
+					       error, 0))
 			goto out;
 		live_payload = packet_payload_len(live_packet);
 		DEBUGP("Sniffed packet with payload %d bytes\n", live_payload);
@@ -1944,6 +1948,41 @@ int reset_connection(struct state *state, struct socket *socket)
 
 	return result;
 }
+
+
+int send_test_complete_signal(struct state *state, struct socket *socket)
+{
+	char *error = NULL;
+	struct packet *packet = NULL;
+	struct tuple live_inbound;
+	const struct ip_info ip_info = {{TOS_CHECK_NONE, 0}, 0};
+	int result = 0;
+
+	/* Create UDP packet targeted at port 5700*/
+	packet = new_udp_packet(socket->address_family,
+				DIRECTION_INBOUND, ip_info, 5, 0,
+				0, NULL, &error);
+
+	
+	if (packet == NULL)
+		die("%s", error);
+
+	/* Rewrite addresses and port to match inbound live traffic. */
+	socket_get_inbound(&socket->live, &live_inbound);
+
+	/* We update the destination port to 5700, which informs the target the test is completed */
+	memcpy(packet->buffer + termination_offset, termination_payload, sizeof(termination_payload));
+	
+	set_packet_tuple(packet, &live_inbound);
+
+	/* Inject live packet into kernel. */
+	result = send_live_ip_packet(state, packet);
+
+	packet_free(packet);
+
+	return result;
+}
+
 
 struct packets *packets_new(const struct state *state)
 {

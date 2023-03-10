@@ -1,0 +1,20 @@
+// Test for blocking write.
+//--tolerance_usecs=10000
+
+//`../common/defaults.sh
+//`
+
+// Establish a connection.
+    0 socket(..., SOCK_DGRAM, IPPROTO_UDP) = 3
+    +0 bind(3, ..., ...) = 0
+
+//   +0 sendto(3, ..., 20, MSG_CONFIRM, ..., ...) = 20
+
+//   +0 > udp (20)
+
+   +0 < udp (10) 
+
+   +0 recvfrom(3, ..., 1024, MSG_WAITALL, ..., ...) = 10
+
+   
+

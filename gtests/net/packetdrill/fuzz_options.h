@@ -44,7 +44,8 @@ enum field_name_t {
 enum header_type_t {
     IPv4 = 0,
     IPv6 = 1,
-    xTCP = 2
+    xTCP = 2,
+    xUDP = 3
 };
 
 struct fuzz_option {

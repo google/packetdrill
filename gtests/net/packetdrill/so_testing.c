@@ -61,7 +61,7 @@ static int so_netdev_send(struct netdev *a_netdev, struct packet *packet)
 	assert(packet->tcp || packet->udp || packet->icmpv4 || packet->icmpv6);
 
 	return netdev->ifc->netdev_send(netdev->ifc->userdata,
-					packet_start(packet),
+					packet->buffer,
 					packet->ip_bytes);
 }
 

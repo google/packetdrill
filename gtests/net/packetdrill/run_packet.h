@@ -58,4 +58,12 @@ extern int run_packet_event(struct state *state,
 extern int reset_connection(struct state *state,
 			    struct socket *socket);
 
+/* Send a custom packet to tell the target this test has ended, and wait for response from target */
+extern int send_test_complete_signal(struct state *state,
+			    struct socket *socket);
+
+extern int sniff_outbound_live_packet(
+	struct state *state, struct socket *expected_socket,
+	struct packet **packet, char **error, uint8_t compare_ip);
+
 #endif /* __RUN_PACKET_H__ */
