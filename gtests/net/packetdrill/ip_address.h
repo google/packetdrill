@@ -60,19 +60,6 @@ extern int ip_address_length(int address_family);
 /* Return the number of bytes in sockaddr of the given family. */
 extern int sockaddr_length(int address_family);
 
-static void print_hex( char * bin_data, size_t len)
-
-{
-    size_t i;
-
-    for( i = 0; i < len; ++i )
-    {
-        printf( "%.2X ", bin_data[ i ] );
-    }
-
-    printf( "\n" );
-}
-
 /* Return true iff the two addresses are the same. */
 static inline bool is_equal_ip(const struct ip_address *a,
 			       const struct ip_address *b)

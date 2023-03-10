@@ -12,9 +12,9 @@
 
 //   +0 > udp (20)
 
-   +0 < udp (0) 
+   +0 < udp (10) 
 
-   +0 recvfrom(3, ..., 1024, MSG_WAITALL, ..., ...) = 30
+   +0 recvfrom(3, ..., 1024, MSG_WAITALL, ..., ...) = 10
 
    
 
