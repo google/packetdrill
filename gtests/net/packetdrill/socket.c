@@ -29,39 +29,6 @@
 #include "run.h"
 #include "fuzz_testing.h"
 
-int perform_termination_handshake(struct state *state, struct socket *socket) {
-	int sendResult = send_test_complete_signal(state, socket);
-	
-	if (sendResult == 0) {
-		struct packet *live_packet = NULL;
-		char *error = NULL;
-		
-		while (true) {
-			int receiveResult = sniff_outbound_live_packet(state, socket, &live_packet,
-					       &error, 1);
-
-			if (receiveResult != 0) {
-				continue;
-			}
-
-			uint8_t comparisonBytes[5];
-			memcpy(comparisonBytes, packet_start(live_packet) + termination_offset, sizeof(termination_payload));            // Get destination port field
-			
-			if (memcmp(comparisonBytes, termination_payload, 5) == 0) {
-				// The extracted bytes are equal
-				break;
-			}
-
-			if (live_packet != NULL) {
-				packet_free(live_packet);
-				live_packet = NULL;
-			}
-		}
-			
-	}
-
-	return sendResult;
-}
 
 void socket_close(struct state *state, struct fd_state *fd)
 {
@@ -85,14 +52,6 @@ void socket_close(struct state *state, struct fd_state *fd)
 		die("error reseting connection\n");
 	}
 
-	// Send a signal to tell target test has completed
-	if (socket->live.local.port != 0 &&
-	    socket->live.remote.port != 0 &&
-	    !state->config->is_wire_client &&
-	    perform_termination_handshake(state, socket)) {
-		die("error terminating test\n");
-	}
-	
 
 	socket_free(socket);
 }

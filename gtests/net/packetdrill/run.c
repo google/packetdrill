@@ -50,6 +50,7 @@
 #include "tcp.h"
 #include "tcp_options.h"
 #include "fm_testing.h"
+#include "fuzz_testing.h"
 
 /* MAX_SPIN_USECS is the maximum amount of time (in microseconds) to
  * spin waiting for an event. We sleep up until this many microseconds
@@ -120,6 +121,57 @@ static void close_all_fds(struct state *state)
 	}
 }
 
+int perform_termination_handshake(struct state *state, struct socket *socket) {
+	int sendResult = send_test_complete_signal(state, socket);
+	
+	if (sendResult == 0) {
+		struct packet *live_packet = NULL;
+		char *error = NULL;
+
+		struct tuple packet_tuple, live_outbound;
+
+		while (true) {
+
+			if (netdev_receive(state->netdev, &live_packet, &error))
+				return 1;
+
+			get_packet_tuple(live_packet, &packet_tuple);
+			socket_get_outbound(&socket->live, &live_outbound);
+
+			if (!is_equal_ip(&packet_tuple.dst.ip, &live_outbound.dst.ip) ||
+				!is_equal_ip(&packet_tuple.src.ip, &live_outbound.src.ip)) {
+				
+				printf("Not expected outbound packet\n");
+				packet_free(live_packet);
+				live_packet = NULL;
+				continue;
+			}
+
+			uint8_t termination_offset = live_packet->ipv4 != NULL ? 28 : 48;
+			uint8_t termination_payload[5] = {0x11, 0x22, 0x11, 0x33, 0x44};
+		
+			uint8_t comparisonBytes[5];
+			memcpy(comparisonBytes, packet_start(live_packet) + termination_offset, sizeof(termination_payload));            // Get destination port field
+			
+			if (memcmp(comparisonBytes, termination_payload, 5) == 0) {
+				// The extracted bytes are equal
+				printf("Termination handshake successful\n");
+				break;
+			} else {
+				printf("Termination handshake failed\n");
+			}
+
+			if (live_packet != NULL) {
+				packet_free(live_packet);
+				live_packet = NULL;
+			}
+		}
+			
+	}
+
+	return sendResult;
+}
+
 void state_free(struct state *state)
 {
 	/* We have to stop the system call thread first, since it's using
@@ -127,11 +179,23 @@ void state_free(struct state *state)
 	 */
 	syscalls_free(state, state->syscalls);
 
+	/* We make a copy of the socket under test */
+	struct socket *sut = malloc(sizeof(struct socket));
+	memcpy(sut, state->socket_under_test, sizeof(struct socket));
+
 	/* Then we close the sockets and reset the connections, while
 	 * we still have a netdev for injecting reset packets to free
 	 * per-connection kernel state.
 	 */
 	close_all_fds(state);
+
+	/* We perform the termination handshake */
+	if (perform_termination_handshake(state, sut) != 0) {
+		printf("Termination handshake failed\n");
+	}
+
+	/* We free the socket under test */
+	free(sut);
 
 	netdev_free(state->netdev);
 	packets_free(state->packets);
