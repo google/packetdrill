@@ -584,8 +584,8 @@ static struct packet *append_gre(struct packet *packet, struct expression *expr)
 %token <reserved> SCM_SEC SCM_NSEC
 %token <reserved> REPLACE TRUNCATE INSERT
 %token <reserved> IP TCP
-%token <reserved> IHL SOURCE_PORT DST_PORT SEQ_NUM ACK_NUM TCP_HDR_LEN WIN_SIZE URG_POINTER VERSION_IHL;
-%token <reserved> TCP_CHECKSUM DSCP_ESN TOT_LEN IDEN FLAGS_FLAGOFF PROTOCOL IP4_CHECKSUM SRC_IP DEST_IP;
+%token <reserved> IHL SRC_PORT DST_PORT SEQ_NUM ACK_NUM DATA_OFF RESERVED WIN_SIZE URG_POINTER VERSION FRAG_OFF MF_FLAG DF_FLAG RSV_FLAG ECN DSCP FIN_FLAG SYN_FLAG RST_FLAG PSH_FLAG ACK_FLAG URG_FLAG ECE_FLAG CWR_FLAG;
+%token <reserved> DSCP_ESN TOT_LEN IDEN FLAGS_FLAGOFF PROTOCOL SRC_ADDR DST_ADDR TRF_CLASS VERSION_TRF TRF_FLOW FLOW_LABEL PYLD_LEN NEXT_HEADER HOP_LIMIT;
 %token <floating> FLOAT
 %token <integer> INTEGER HEX_INTEGER
 %token <string> WORD STRING BACK_QUOTED CODE IPV4_ADDR IPV6_ADDR
@@ -1474,8 +1474,8 @@ fuzz_field
 }
 
 field_name
-: SOURCE_PORT {
-	$$ = F_SOURCE_PORT;
+: SRC_PORT {
+	$$ = F_SRC_PORT;
 }
 | DST_PORT {
 	$$ = F_DST_PORT;
@@ -1486,26 +1486,59 @@ field_name
 | ACK_NUM {
 	$$ = F_ACK_NUM;
 }
-| TCP_HDR_LEN {
-	$$ = F_TCP_HDR_LEN;
+| DATA_OFF {
+	$$ = F_DATA_OFF;
+}
+| RESERVED {
+	$$ = F_RESERVED;
 }
 | FLAGS {
 	$$ = F_FLAGS;
 }
+| CWR_FLAG {
+	$$ = F_CWR_FLAG;
+}
+| ECE_FLAG {
+	$$ = F_ECE_FLAG;
+}
+| URG_FLAG {
+	$$ = F_URG_FLAG;
+}
+| ACK_FLAG {
+	$$ = F_ACK_FLAG;
+}
+| PSH_FLAG {
+	$$ = F_PSH_FLAG;
+}
+| RST_FLAG {
+	$$ = F_RST_FLAG;
+}
+| SYN_FLAG {
+	$$ = F_SYN_FLAG;
+}
+| FIN_FLAG {
+	$$ = F_FIN_FLAG;
+}
 | WIN_SIZE {
 	$$ = F_WIN_SIZE;
 }
-| TCP_CHECKSUM {
-	$$ = F_TCP_CHECKSUM;
+| CHECKSUM {
+	$$ = F_CHECKSUM;
 }
 | URG_POINTER {
 	$$ = F_URG_POINTER;
 }
-| VERSION_IHL {
-	$$ = F_VERSION_IHL;
+| VERSION {
+	$$ = F_VERSION;
 }
-| DSCP_ESN {
-	$$ = F_DSCP_ESN;
+| IHL {
+	$$ = F_IHL;
+}
+| DSCP {
+	$$ = F_DSCP;
+}
+| ECN {
+	$$ = F_ECN;
 }
 | TOT_LEN {
 	$$ = F_TOT_LEN;
@@ -1513,8 +1546,17 @@ field_name
 | IDEN {
 	$$ = F_IDEN;
 }
-| FLAGS_FLAGOFF {
-	$$ = F_FLAGS_FLAGOFF;
+| RSV_FLAG {
+	$$ = F_RSV_FLAG;
+}
+| DF_FLAG {
+	$$ = F_DF_FLAG;
+}
+| MF_FLAG {
+	$$ = F_MF_FLAG;
+}
+| FRAG_OFF {
+	$$ = F_FRAG_OFF;
 }
 | TTL {
 	$$ = F_TTL;
@@ -1522,14 +1564,26 @@ field_name
 | PROTOCOL {
 	$$ = F_PROTOCOL;
 }
-| IP4_CHECKSUM {
-	$$ = F_IP_CHECKSUM;
+| SRC_ADDR {
+	$$ = F_SRC_ADDR;
 }
-| SRC_IP {
-	$$ = F_SRC_IP;
+| DST_ADDR {
+	$$ = F_DST_ADDR;
 }
-| DEST_IP {
-	$$ = F_DEST_IP;
+| TRF_CLASS {
+	$$ = F_TRF_CLASS;
+}
+| FLOW_LABEL {
+	$$ = F_FLOW_LABEL;
+}
+| PYLD_LEN {
+	$$ = F_PYLD_LEN;
+}
+| NEXT_HEADER {
+	$$ = F_NEXT_HEADER;
+}
+| HOP_LIMIT {
+	$$ = F_HOP_LIMIT;
 }
 ;
 
