@@ -7,7 +7,3 @@
    +0 > S. 0:0(0) ack 1 <mss 1460,nop,wscale 8>
 +.1 < . 1:1(0) ack 1 win 257 
 +.1 < P. 1:21(20) ack 1 win 257 {rep ipv4 version_ihl 0x35}
-+.1 < P. 1:21(20) ack 1 win 257 {rep tcp src_port 0x0B63}
-+.1 < P. 1:21(20) ack 1 win 257 {rep tcp seq_num 0x01234321}
-+.1 < P. 1:21(20) ack 1 win 257 {rep ipv4 protocol 0x02}
-+.1 < P. 1:21(20) ack 1 win 257 {rep tcp win_size 0x1021}

@@ -33,6 +33,7 @@ struct packet *new_udp_packet(int address_family,
 			       u16 udp_payload_bytes,
 			       u16 src_port,
 			       u16 dst_port,
+				   const struct fuzz_options *fuzz_options,
 			       char **error)
 {
 	struct packet *packet = NULL;  /* the newly-allocated result packet */
@@ -87,5 +88,10 @@ struct packet *new_udp_packet(int address_family,
 	packet->udp->check	= 0;
 
 	packet->ip_bytes = ip_bytes;
+
+	if (fuzz_options != NULL) {
+		packet->fuzz_options = malloc(fuzz_options->size);
+		memcpy(packet->fuzz_options, fuzz_options, fuzz_options->size);
+	}
 	return packet;
 }

@@ -42,7 +42,7 @@ static void checksum_ipv4_packet(struct packet *packet)
 
 	/* Find the length of layer 4 header, options, and payload. */
 	const int l4_bytes = ntohs(ipv4->tot_len) - ipv4_header_len(ipv4);
-	//assert(l4_bytes > 0);
+	//assert(l4_bytes > 0); // When fuzzing, we can remove the l4 header
 
 	/* Fill in IPv4-based layer 4 checksum. */
 	if (packet->tcp != NULL) {
@@ -76,7 +76,7 @@ static void checksum_ipv6_packet(struct packet *packet)
 
 	/* Find the length of layer 4 header, options, and payload. */
 	const int l4_bytes = ntohs(ipv6->payload_len);
-	assert(l4_bytes > 0);
+	//assert(l4_bytes > 0);
 
 	/* Fill in IPv6-based layer 4 checksum. */
 	if (packet->tcp != NULL) {

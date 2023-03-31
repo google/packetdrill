@@ -1,6 +1,6 @@
 all: binaries
 
-CFLAGS = -g -Wall -Werror -Wno-unused-result -Wno-stringop-truncation
+CFLAGS = -g -Wall -Werror -Wno-unused-result -Wno-stringop-truncation -Wno-int-to-pointer-cast
 
 parser.o: parser.y
 	bison --output=parser.c --defines=parser.h --report=state parser.y

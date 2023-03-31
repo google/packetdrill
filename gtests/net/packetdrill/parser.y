@@ -867,7 +867,7 @@ tcp_packet_spec
 ;
 
 udp_packet_spec
-: packet_prefix opt_ip_info UDP opt_port_info '(' INTEGER ')' {
+: packet_prefix opt_ip_info UDP opt_port_info '(' INTEGER ')' opt_fuzz_options {
 	char *error = NULL;
 	struct packet *outer = $1, *inner = NULL;
 	enum direction_t direction = outer->direction;
@@ -881,12 +881,16 @@ udp_packet_spec
 	}
 
 	inner = new_udp_packet(in_config->wire_protocol, direction, $2,
-			       $6, $4.src_port, $4.dst_port, &error);
+			       $6, $4.src_port, $4.dst_port, $8, &error);
+	
+	free($8);
+
 	if (inner == NULL) {
 		assert(error != NULL);
 		semantic_error(error);
 		free(error);
 	}
+
 
 	$$ = packet_encapsulate_and_free(outer, inner);
 }
@@ -1462,6 +1466,9 @@ header_type
 }
 | TCP {
 	$$ = xTCP;
+}
+| UDP {
+	$$ = xUDP;
 }
 ;
 
