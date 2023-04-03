@@ -36,7 +36,8 @@ enum field_name_t {
     F_PROTOCOL = 15,
     F_IP_CHECKSUM = 16,
     F_SRC_IP = 17,
-    F_DEST_IP = 18
+    F_DEST_IP = 18,
+    F_NXT_HDR = 19
 };
 
 
@@ -54,7 +55,7 @@ struct fuzz_option {
     u8 fuzz_field;
     char *fuzz_value;
     u8 fuzz_value_byte_count;
-} __packed;
+};
 
 struct fuzz_value_t {
     char *value;

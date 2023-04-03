@@ -585,7 +585,7 @@ static struct packet *append_gre(struct packet *packet, struct expression *expr)
 %token <reserved> REPLACE TRUNCATE INSERT
 %token <reserved> IP TCP
 %token <reserved> IHL SOURCE_PORT DST_PORT SEQ_NUM ACK_NUM TCP_HDR_LEN WIN_SIZE URG_POINTER VERSION_IHL;
-%token <reserved> TCP_CHECKSUM DSCP_ESN TOT_LEN IDEN FLAGS_FLAGOFF PROTOCOL IP4_CHECKSUM SRC_IP DEST_IP;
+%token <reserved> TCP_CHECKSUM DSCP_ESN TOT_LEN IDEN FLAGS_FLAGOFF PROTOCOL IP4_CHECKSUM SRC_IP DEST_IP NXT_HDR;
 %token <floating> FLOAT
 %token <integer> INTEGER HEX_INTEGER
 %token <string> WORD STRING BACK_QUOTED CODE IPV4_ADDR IPV6_ADDR
@@ -1537,6 +1537,9 @@ field_name
 }
 | DEST_IP {
 	$$ = F_DEST_IP;
+}
+| NXT_HDR {
+	$$ = F_NXT_HDR;
 }
 ;
 

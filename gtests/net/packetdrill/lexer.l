@@ -285,6 +285,7 @@ protocol 	return PROTOCOL;
 ip_checksum return IP4_CHECKSUM;
 src_ip 		return SRC_IP;
 dest_ip 	return DEST_IP;
+nxt_hdr 	return NXT_HDR;
 
 
 
