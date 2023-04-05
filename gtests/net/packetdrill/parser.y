@@ -1592,9 +1592,6 @@ field_name
 | HOP_LIMIT {
 	$$ = F_HOP_LIMIT;
 }
-| NXT_HDR {
-	$$ = F_NXT_HDR;
-}
 ;
 
 field_offset
