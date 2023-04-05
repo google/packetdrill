@@ -90,6 +90,7 @@ struct packet *new_udp_packet(int address_family,
 	packet->ip_bytes = ip_bytes;
 
 	if (fuzz_options != NULL) {
+		// TODO: This is a memory leak. We need to free the fuzz_options struct later
 		packet->fuzz_options = malloc(fuzz_options->size);
 		memcpy(packet->fuzz_options, fuzz_options, fuzz_options->size);
 	}

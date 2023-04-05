@@ -72,7 +72,7 @@ struct fuzz_option {
     u8 fuzz_field;
     char *fuzz_value;
     u8 fuzz_value_byte_count;
-} __packed;
+};
 
 struct fuzz_value_t {
     char *value;
