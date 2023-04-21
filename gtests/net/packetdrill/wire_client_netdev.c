@@ -150,8 +150,9 @@ static int wire_client_netdev_send(struct netdev *a_netdev,
 	return STATUS_ERR;
 }
 
-static int wire_client_netdev_receive(struct netdev *a_netdev,
-				      struct packet **packet, char **error)
+static int wire_client_netdev_receive(struct netdev *a_netdev, s32 timeout_secs,
+				      struct packet **packet,
+				      char **error)
 {
 	DEBUGP("wire_client_netdev_receive\n");
 	assert(!"wire clients should not be receiving packets themselves!");

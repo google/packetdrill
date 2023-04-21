@@ -53,6 +53,7 @@ struct netdev_ops {
 	 * with packet_free().
 	 */
 	int (*receive)(struct netdev *netdev,
+		       s32 timeout_secs,
 		       struct packet **packet, char **error);
 };
 
@@ -75,10 +76,10 @@ static inline int netdev_send(struct netdev *netdev,
  * with packet_free().
  */
 static inline int netdev_receive(struct netdev *netdev,
-				 struct packet **packet,
+				 s32 timeout_secs, struct packet **packet,
 				 char **error)
 {
-	return netdev->ops->receive(netdev, packet, error);
+	return netdev->ops->receive(netdev, timeout_secs, packet, error);
 }
 
 
@@ -89,6 +90,7 @@ static inline int netdev_receive(struct netdev *netdev,
 extern int netdev_receive_loop(struct packet_socket *psock,
 			       enum packet_layer_t layer,
 			       enum direction_t direction,
+			       s32 timeout_secs,
 			       struct packet **packet,
 			       int *num_packets,
 			       char **error);

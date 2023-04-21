@@ -215,7 +215,7 @@ int packet_socket_writev(struct packet_socket *psock,
 }
 
 int packet_socket_receive(struct packet_socket *psock,
-			  enum direction_t direction,
+			  enum direction_t direction, s32 timeout_secs,
 			  struct packet *packet, int *in_bytes)
 {
 	int status = 0;

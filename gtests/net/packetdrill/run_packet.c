@@ -24,6 +24,7 @@
 
 #include "run_packet.h"
 
+#include "types.h"
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <stddef.h>
@@ -1518,12 +1519,28 @@ static int sniff_outbound_live_packet(
 	struct state *state, struct socket *expected_socket,
 	struct packet **packet, char **error)
 {
+	s64 expected_usecs =  state->event->time_usecs - state->script_last_time_usecs;
+	s64 expected_usecs_end =  state->event->time_usecs_end - state->script_last_time_usecs;
+	/* The number of seconds after expected arrival that we timeout. */
+	const u32 tolerance_secs = 2;
+	/* How long we wait to receive a packet. */
+	s32 timeout_secs = usecs_to_secs(max(expected_usecs,
+					 expected_usecs_end)) + tolerance_secs;
+
+	/* Disable timeout if packet can take any amount of time */
+	timeout_secs = (state->event->time_type == ANY_TIME) ? TIMEOUT_NONE : timeout_secs;
+
 	DEBUGP("sniff_outbound_live_packet\n");
 	struct socket *socket = NULL;
 	enum direction_t direction = DIRECTION_INVALID;
 	assert(*packet == NULL);
 	while (1) {
-		if (netdev_receive(state->netdev, packet, error))
+		int status = netdev_receive(state->netdev, timeout_secs,
+					    packet, error);
+
+		if (status == STATUS_TIMEOUT)
+			return STATUS_TIMEOUT;
+		if (status)
 			return STATUS_ERR;
 		/* See if the packet matches an existing, known socket. */
 		socket = find_socket_for_live_packet(state, *packet,

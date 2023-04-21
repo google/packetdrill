@@ -31,6 +31,7 @@
 #include <sys/ioctl.h>
 #include <sys/uio.h>
 #include <unistd.h>
+#include <sys/socket.h>
 
 #ifdef linux
 
@@ -223,17 +224,39 @@ int packet_socket_writev(struct packet_socket *psock,
 }
 
 int packet_socket_receive(struct packet_socket *psock,
-			  enum direction_t direction,
+			  enum direction_t direction, s32 timeout_secs,
 			  struct packet *packet, int *in_bytes)
 {
 	struct sockaddr_ll from;
 	memset(&from, 0, sizeof(from));
 	socklen_t from_len = sizeof(from);
 
+	/* Change the socket to timeout after a certain period.
+	 * We set the timeout to be the maximum of the expected_usecs
+	 * and expected_usecs_end computed in verify_time so we wait long
+	 * enough regardless of the packet time type.
+	 */
+
+	struct timeval sock_timeout = {.tv_sec = timeout_secs, .tv_usec = 0};
+
+	if (timeout_secs == TIMEOUT_NONE)
+		sock_timeout.tv_sec = 0;
+
+	setsockopt(psock->packet_fd, SOL_SOCKET, SO_RCVTIMEO,
+	   &sock_timeout, sizeof(sock_timeout));
+
 	/* Read the packet out of our kernel packet socket buffer. */
 	*in_bytes = recvfrom(psock->packet_fd,
 			     packet->buffer, packet->buffer_bytes, 0,
 			     (struct sockaddr *)&from, &from_len);
+	/* Set the socket back to its blocking state. */
+	sock_timeout.tv_sec = 0;
+	setsockopt(psock->packet_fd, SOL_SOCKET, SO_RCVTIMEO,
+		   &sock_timeout, sizeof(sock_timeout));
+	/* Return an error if we timed out */
+	if (*in_bytes == -1 && (errno == EAGAIN || errno == EWOULDBLOCK))
+		return STATUS_TIMEOUT;
+
 	assert(*in_bytes <= packet->buffer_bytes);
 	if (*in_bytes < 0) {
 		if (errno == EINTR) {

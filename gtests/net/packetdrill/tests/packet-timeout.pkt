@@ -1,0 +1,15 @@
+// Test that a packet that never arrives causes a timeout
+
+// Set up config and our tweaks.
+`../../common/defaults.sh
+ ../../tcp/common/set_sysctls.py  /proc/sys/net/ipv4/tcp_syn_retries=1`
+
+   +0 socket(..., SOCK_STREAM, IPPROTO_TCP) = 3
+   +0...30 connect(3, ..., ...) = -1 ETIMEDOUT (Connection Timed Out)
+
+   +0 > S 0:0(0) <mss 1460, sackOK, TS val 100 ecr 0, nop,wscale 8>
+   +1 > S 0:0(0) <mss 1460, sackOK, TS val 1100 ecr 0, nop,wscale 8>
+   // Failure: error handling packet: Timed out waiting for packet
+   +2 > S 0:0(0) <mss 1460, sackOK, TS val 3100 ecr 0, nop,wscale 8>
+
+`/tmp/sysctl_restore_${PPID}.sh`

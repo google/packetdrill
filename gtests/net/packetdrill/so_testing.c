@@ -65,8 +65,8 @@ static int so_netdev_send(struct netdev *a_netdev, struct packet *packet)
 					packet->ip_bytes);
 }
 
-static int so_netdev_receive(struct netdev *a_netdev, struct packet **packet,
-			     char **error)
+static int so_netdev_receive(struct netdev *a_netdev, s32 timeout_secs,
+			     struct packet **packet, char **error)
 {
 	struct so_netdev *netdev = to_so_netdev(a_netdev);
 	enum packet_parse_result_t result;

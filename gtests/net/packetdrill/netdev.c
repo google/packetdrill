@@ -439,7 +439,7 @@ static void local_netdev_read_queue(struct local_netdev *netdev,
        }
 }
 
-static int local_netdev_receive(struct netdev *a_netdev,
+static int local_netdev_receive(struct netdev *a_netdev, s32 timeout_secs,
 				struct packet **packet, char **error)
 {
 	struct local_netdev *netdev = to_local_netdev(a_netdev);
@@ -449,8 +449,10 @@ static int local_netdev_receive(struct netdev *a_netdev,
 	DEBUGP("local_netdev_receive\n");
 
 	status = netdev_receive_loop(netdev->psock, PACKET_LAYER_3_IP,
-				     DIRECTION_OUTBOUND, packet, &num_packets,
-				     error);
+				     DIRECTION_OUTBOUND, timeout_secs, packet,
+				     &num_packets, error);
+	if (status == STATUS_TIMEOUT)
+		return STATUS_TIMEOUT;
 	local_netdev_read_queue(netdev, num_packets);
 	return status;
 }
@@ -458,6 +460,7 @@ static int local_netdev_receive(struct netdev *a_netdev,
 int netdev_receive_loop(struct packet_socket *psock,
 			enum packet_layer_t layer,
 			enum direction_t direction,
+			s32 timeout_secs,
 			struct packet **packet,
 			int *num_packets,
 			char **error)
@@ -472,7 +475,15 @@ int netdev_receive_loop(struct packet_socket *psock,
 		*packet = packet_new(PACKET_READ_BYTES);
 
 		/* Sniff the next outbound packet from the kernel under test. */
-		if (packet_socket_receive(psock, direction, *packet, &in_bytes)) {
+		int rcv_status = packet_socket_receive(
+			psock, direction, timeout_secs, *packet, &in_bytes);
+
+		if (rcv_status == STATUS_TIMEOUT) {
+			/* Set an error message indicating what occurred. */
+			asprintf(error, "Timed out waiting for packet");
+			return STATUS_TIMEOUT;
+		}
+		if (rcv_status) {
 			packet_free(*packet);
 			*packet = NULL;
 			continue;
