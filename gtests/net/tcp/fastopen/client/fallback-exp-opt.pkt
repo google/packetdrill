@@ -1,0 +1,118 @@
+--tolerance_usecs=6000
+
+`../../common/defaults.sh
+ ../../common/set_sysctls.py /proc/sys/net/ipv4/tcp_timestamps=0`
+
+// Synack with multiple FO cookies, keep only the last one
+    0 socket(..., SOCK_STREAM, IPPROTO_TCP) = 4
+   +0 ...0.010 sendto(4, ..., 1000, MSG_FASTOPEN, ..., ...) = 1000
+   +0 > S 0:0(0) <mss 1460,nop,nop,sackOK,nop,wscale 8,FO,nop,nop>
+ +.01 < S. 123:123(0) ack 1 win 5840 <mss 1460,nop,nop,sackOK,nop,wscale 6>
+   +0 > P. 1:1001(1000) ack 1
+ +.01 < . 1:1(0) ack 1000 win 257
+ +.01 close(4) = 0
+   +0 > F. 1001:1001(0) ack 1
+ +.01 < F. 1:1(0) ack 1000 win 257
+
+   +0 socket(..., SOCK_STREAM, IPPROTO_TCP) = 5
+   +0...0.010 sendto(5, ..., 1000, MSG_FASTOPEN, ..., ...) = 1000
+   +0 > S 0:0(0) <mss 1460,nop,nop,sackOK,nop,wscale 8,FOEXP>
+ +.01 < S. 123:123(0) ack 1 win 5840 <mss 1460,nop,wscale 6,FOEXP 1234abcd>
+   +0 > P. 1:1001(1000) ack 1
+ +.01 < . 1:1(0) ack 1001 win 257
+ +.01 close(5) = 0
+   +0 > F. 1001:1001(0) ack 1
+ +.01 < F. 1:1(0) ack 1002 win 257
+
+   +0 socket(..., SOCK_STREAM, IPPROTO_TCP) = 6
+   +0...0.010 sendto(6, ..., 1000, MSG_FASTOPEN, ..., ...) = 1000
+   +0 > S 0:1000(1000) <mss 1460,nop,nop,sackOK,nop,wscale 8,FOEXP 1234abcd>
+// A smart? server accepts the cookie in EXP opt and also echos it in RFC7413 format. Will cache that.
+ +.01 < S. 123:123(0) ack 1001 win 5840 <mss 1460,nop,nop,sackOK,nop,wscale 6,FO abcd5678,nop,nop>
+   +0 > . 1001:1001(0) ack 1
+ +.01 close(6) = 0
+   +0 > F. 1001:1001(0) ack 1
+ +.01 < F. 1:1(0) ack 1000 win 257
+
+   +0 socket(..., SOCK_STREAM, IPPROTO_TCP) = 7
+   +0...0.010 sendto(7, ..., 1000, MSG_FASTOPEN, ..., ...) = 1000
+   +0 > S 0:1000(1000) <mss 1460,nop,nop,sackOK,nop,wscale 8,FO abcd5678,nop,nop>
+ +.01 < S. 123:123(0) ack 1000 win 5840 <mss 1460,nop,wscale 6>
+   +0 > P. 1000:1001(1) ack 1
+ +.01 < . 1:1(0) ack 1000 win 257
+ +.01 close(7) = 0
+   +0 > F. 1001:1001(0) ack 1
+ +.01 < F. 1:1(0) ack 1000 win 257
+
+// Reset the cache and re-run the test on a non-TFO server. First we should
+// use FO option, then FOEXP once, then back to FO forever.
+   +0 `ip tcp_metrics flush all > /dev/null 2>&1`
+   +0 socket(..., SOCK_STREAM, IPPROTO_TCP) = 4
+   +0 ...0.010 sendto(4, ..., 1000, MSG_FASTOPEN, ..., ...) = 1000
+   +0 > S 0:0(0) <mss 1460,nop,nop,sackOK,nop,wscale 8,FO,nop,nop>
+ +.01 < S. 123:123(0) ack 1 win 5840 <mss 1460,nop,nop,sackOK,nop,wscale 6>
+   +0 > P. 1:1001(1000) ack 1
+ +.01 < . 1:1(0) ack 1000 win 257
+ +.01 close(4) = 0
+   +0 > F. 1001:1001(0) ack 1
+ +.01 < F. 1:1(0) ack 1000 win 257
+
+
+   +0 socket(..., SOCK_STREAM, IPPROTO_TCP) = 5
+   +0...0.010 sendto(5, ..., 1000, MSG_FASTOPEN, ..., ...) = 1000
+   +0 > S 0:0(0) <mss 1460,nop,nop,sackOK,nop,wscale 8,FOEXP>
+ +.01 < S. 123:123(0) ack 1 win 5840 <mss 1460,nop,nop,sackOK,nop,wscale 6>
+   +0 > P. 1:1001(1000) ack 1
+ +.01 < . 1:1(0) ack 1000 win 257
+ +.01 close(5) = 0
+   +0 > F. 1001:1001(0) ack 1
+ +.01 < F. 1:1(0) ack 1000 win 257
+
+
+   +0 socket(..., SOCK_STREAM, IPPROTO_TCP) = 6
+   +0...0.010 sendto(6, ..., 1000, MSG_FASTOPEN, ..., ...) = 1000
+   +0 > S 0:0(0) <mss 1460,nop,nop,sackOK,nop,wscale 8,FO,nop,nop>
+ +.01 < S. 123:123(0) ack 1 win 5840 <mss 1460,nop,nop,sackOK,nop,wscale 6>
+   +0 > P. 1:1001(1000) ack 1
+ +.01 < . 1:1(0) ack 1000 win 257
+ +.01 close(6) = 0
+   +0 > F. 1001:1001(0) ack 1
+ +.01 < F. 1:1(0) ack 1000 win 257
+
+
+// ditto
+   +0 socket(..., SOCK_STREAM, IPPROTO_TCP) = 6
+   +0...0.010 sendto(6, ..., 1000, MSG_FASTOPEN, ..., ...) = 1000
+   +0 > S 0:0(0) <mss 1460,nop,nop,sackOK,nop,wscale 8,FO,nop,nop>
+ +.01 < S. 123:123(0) ack 1 win 5840 <mss 1460,nop,nop,sackOK,nop,wscale 6>
+   +0 > P. 1:1001(1000) ack 1
+ +.01 < . 1:1(0) ack 1000 win 257
+ +.01 close(6) = 0
+   +0 > F. 1001:1001(0) ack 1
+ +.01 < F. 1:1(0) ack 1000 win 257
+
+
+// ditto
+   +0 socket(..., SOCK_STREAM, IPPROTO_TCP) = 6
+   +0...0.010 sendto(6, ..., 1000, MSG_FASTOPEN, ..., ...) = 1000
+   +0 > S 0:0(0) <mss 1460,nop,nop,sackOK,nop,wscale 8,FO,nop,nop>
+ +.01 < S. 123:123(0) ack 1 win 5840 <mss 1460,nop,nop,sackOK,nop,wscale 6>
+   +0 > P. 1:1001(1000) ack 1
+ +.01 < . 1:1(0) ack 1000 win 257
+ +.01 close(6) = 0
+   +0 > F. 1001:1001(0) ack 1
+ +.01 < F. 1:1(0) ack 1000 win 257
+
+
+// ditto
+   +0 socket(..., SOCK_STREAM, IPPROTO_TCP) = 6
+   +0...0.010 sendto(6, ..., 1000, MSG_FASTOPEN, ..., ...) = 1000
+   +0 > S 0:0(0) <mss 1460,nop,nop,sackOK,nop,wscale 8,FO,nop,nop>
+ +.01 < S. 123:123(0) ack 1 win 5840 <mss 1460,nop,nop,sackOK,nop,wscale 6>
+   +0 > P. 1:1001(1000) ack 1
+ +.01 < . 1:1(0) ack 1000 win 257
+ +.01 close(6) = 0
+   +0 > F. 1001:1001(0) ack 1
+ +.01 < F. 1:1(0) ack 1000 win 257
+
+`/tmp/sysctl_restore_${PPID}.sh`

@@ -1,0 +1,9 @@
+//
+// Fast Open sendto() with AF_UNSPEC
+//
+
+`../../common/defaults.sh`
+
+    0 socket(..., SOCK_STREAM, IPPROTO_TCP) = 3
+   +0 fcntl(3, F_SETFL, O_RDWR|O_NONBLOCK) = 0
+   +0 sendto(3, ..., 0, MSG_FASTOPEN, AF_UNSPEC, ...) = -1 EOPNOTSUPP (Operation not supported)

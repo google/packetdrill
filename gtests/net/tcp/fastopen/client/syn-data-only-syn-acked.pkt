@@ -1,0 +1,75 @@
+//
+// SYN-data are not fully acknowledged
+//
+`../../common/defaults.sh
+ ../../common/set_sysctls.py /proc/sys/net/ipv4/tcp_timestamps=0 \
+                             /proc/sys/net/ipv4/tcp_min_tso_segs=2`
+
+// Cache warmup: send a Fast Open cookie request
+    0 socket(..., SOCK_STREAM, IPPROTO_TCP) = 3
+   +0 fcntl(3, F_SETFL, O_RDWR|O_NONBLOCK) = 0
+   +0 sendto(3, ..., 0, MSG_FASTOPEN, ..., ...) = -1 EINPROGRESS (Operation is now in progress)
+   +0 > S 0:0(0) <mss 1460,nop,nop,sackOK,nop,wscale 8,FO,nop,nop>
+ +.01 < S. 123:123(0) ack 1 win 5840 <mss 1460,nop,nop,sackOK,nop,wscale 6,FO 1234abcd,nop,nop>
+   +0 %{ assert tcpi_delivered == 1, tcpi_delivered }%
+   +0 > . 1:1(0) ack 1
+ +.01 close(3) = 0
+   +0 > F. 1:1(0) ack 1
+ +.01 < F. 1:1(0) ack 2 win 92
+   +0 > .  2:2(0) ack 2
+
+
+//
+// Test: the data in SYN-data are retransmitted when server acks only ISN
+//
+   +0 socket(..., SOCK_STREAM, IPPROTO_TCP) = 4
+   +0 fcntl(4, F_SETFL, O_RDWR|O_NONBLOCK) = 0
+   +0 sendto(4, ..., 700, MSG_FASTOPEN, ..., ...) = 700
+   +0 > S 0:700(700) <mss 1460,nop,nop,sackOK,nop,wscale 8,FO 1234abcd,nop,nop>
+// Server reduces MSS from 1460 to 1040
+ +.02 < S. 0:0(0) ack 1 win 5840 <mss 1040,nop,nop,sackOK,nop,wscale 6,FO 1234abcd,nop,nop>
+// Retransmits data in SYN-data on the first ACK.
+   +0 %{ assert tcpi_delivered == 1, tcpi_delivered }%
+   +0 > P. 1:701(700) ack 1
+   +0 < P. 1:1001(1000) ack 701 win 257
+   +0 %{ assert tcpi_delivered == 2, tcpi_delivered }%
+   +0 > . 701:701(0) ack 1001
+   +0 read(4, ..., 1024) = 1000
+   +0 %{ assert (tcpi_options & TCPI_OPT_SYN_DATA) == 0, tcpi_options }%
+   +0 close(4) = 0
+   +0 > F. 701:701(0) ack 1001
+ +.02 < F. 1001:1001(0) ack 702 win 257
+   +0 > . 702:702(0) ack 1002
+
+
+//
+// Test: the cookie and mss in previous SYN-ACK are cached
+//
+ +.01 socket(..., SOCK_STREAM, IPPROTO_TCP) = 5
+   +0 fcntl(5, F_SETFL, O_RDWR|O_NONBLOCK) = 0
+   +0 sendto(5, ..., 5000, MSG_FASTOPEN, ..., ...) = 1000
+   +0 > S 0:1000(1000) <mss 1460,nop,nop,sackOK,nop,wscale 8,FO 1234abcd,nop,nop>
+ +.01 < S. 0:0(0) ack 1001 win 5840 <mss 1460,nop,nop,sackOK,nop,wscale 6>
+   +0 > . 1001:1001(0) ack 1
+   +0 %{ assert (tcpi_options & TCPI_OPT_SYN_DATA) != 0, tcpi_options }%
+
+//
+// Test: retransmitting the data in SYN-data won't increment tp->retrans_out.
+//       otherwise it'll trigger a WARN_ON in tcp_fastretrans_alert() if
+//
+ +.05 socket(..., SOCK_STREAM, IPPROTO_TCP) = 4
+   +0 ... .02 sendto(4, ..., 6000, MSG_FASTOPEN, ..., ...) = 6000
+   +0 > S 0:1420(1420) <mss 1460,nop,nop,sackOK,nop,wscale 8,FO 1234abcd,nop,nop>
+ +.02 < S. 9999:9999(0) ack 1 win 65535 <mss 1460,nop,nop,sackOK,nop,wscale 6>
+   +0 > P. 1:1421(1420) ack 1
+   +0 > P. 1421:4341(2920) ack 1
+   +0 > P. 4341:6001(1660) ack 1
+   +0 %{ assert tcpi_retrans == 1, tcpi_retrans; assert tcpi_unacked == 5, tcpi_unacked }%
+ +.02 < . 1:1(0) ack 1 win 257 <sack 1421:6001,nop,nop>
+   +0 > P. 1:1421(1420) ack 1
+ +.02 < . 1:1(0) ack 6001 win 257
+   +0 %{ assert tcpi_unacked == 0, tcpi_unacked }%
+   +0 %{ assert (tcpi_options & TCPI_OPT_SYN_DATA) == 0, tcpi_options }%
+   +0 close(4) = 0
+
+`/tmp/sysctl_restore_${PPID}.sh`

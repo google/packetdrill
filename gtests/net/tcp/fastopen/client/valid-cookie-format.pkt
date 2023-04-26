@@ -1,0 +1,83 @@
+//
+// Fast Open Cookie option formats.
+//
+`../../common/defaults.sh
+ ../../common/set_sysctls.py /proc/sys/net/ipv4/tcp_timestamps=0`
+
+//
+// Test: Cookie of all 0s is valid
+//
+    0 socket(..., SOCK_STREAM, IPPROTO_TCP) = 3
+   +0 fcntl(3, F_SETFL, O_RDWR|O_NONBLOCK) = 0
+   +0 sendto(3, ..., 0, MSG_FASTOPEN, ..., ...) = -1 EINPROGRESS (Operation is now in progress)
+   +0 > S 0:0(0) <mss 1460,nop,nop,sackOK,nop,wscale 8,FO,nop,nop>
+ +.02 < S. 123:123(0) ack 1 win 5840 <mss 1460,nop,nop,sackOK,nop,wscale 6,FO 00000000,nop,nop>
+   +0 > . 1:1(0) ack 1
+
+ +.03 socket(..., SOCK_STREAM, IPPROTO_TCP) = 4
+   +0 fcntl(4, F_SETFL, O_RDWR|O_NONBLOCK) = 0
+   +0 sendto(4, ..., 1000, MSG_FASTOPEN, ..., ...) = 1000
+   +0 > S 0:1000(1000) <mss 1460,nop,nop,sackOK,nop,wscale 8,FO 00000000,nop,nop>
+//
+// Test: Cookie min length is 4 bytes. Cookie below is too short and will
+//       not cached, but the MSS will be cached.
+//
+ +.02 < S. 456789:456789(0) ack 1001 win 5840 <mss 940,nop,nop,sackOK,nop,wscale 6,FO 1122>
+   +0 %{ assert (tcpi_options & TCPI_OPT_SYN_DATA) != 0, tcpi_options }%
+
+
+ +.03 socket(..., SOCK_STREAM, IPPROTO_TCP) = 5
+   +0 fcntl(5, F_SETFL, O_RDWR|O_NONBLOCK) = 0
+   +0 sendto(5, ..., 1000, MSG_FASTOPEN, ..., ...) = 900
+// Reusing the 0 cookie from first connection because the previous SYN-ACK
+// has invalid cookie
+   +0 > S 0:900(900) <mss 1460,nop,nop,sackOK,nop,wscale 8,FO 00000000,nop,nop>
+//
+// Test: Cookie maximum length is 16 bytes. Cookie below is valid.
+//
+ +.02 < S. 999:999(0) ack 901 win 5840 <mss 1460,nop,nop,sackOK,nop,wscale 6,FO 01234567aabbccdd0123456701234567,nop,nop>
+   +0 > . 901:901(0) ack 1
+   +0 %{ assert (tcpi_options & TCPI_OPT_SYN_DATA) != 0, tcpi_options }%
+
+ +.02 socket(..., SOCK_STREAM, IPPROTO_TCP) = 6
+   +0 fcntl(6, F_SETFL, O_RDWR|O_NONBLOCK) = 0
+   +0 sendto(6, ..., 1000, MSG_FASTOPEN, ..., ...) = 1000
+   +0 > S 0:1000(1000) <mss 1460,nop,nop,sackOK,nop,wscale 8,FO 01234567aabbccdd0123456701234567,nop,nop>
+//
+// Test: Cookie below is too big and will not be cached
+//
+ +.04 < S. 333:333(0) ack 1001 win 5840 <mss 1460,nop,nop,sackOK,nop,wscale 6,FO 01234567aabbccdd0123456701234567afaf>
+   +0 > . 1001:1001(0) ack 1
+   +0 %{ assert (tcpi_options & TCPI_OPT_SYN_DATA) != 0, tcpi_options }%
+
+ +.02 socket(..., SOCK_STREAM, IPPROTO_TCP) = 7
+   +0 fcntl(7, F_SETFL, O_RDWR|O_NONBLOCK) = 0
+   +0 sendto(7, ..., 1000, 0x20000000, ..., ...) = 1000
+// Reuses the last valid cookie
+   +0 > S 0:1000(1000) <mss 1460,nop,nop,sackOK,nop,wscale 8,FO 01234567aabbccdd0123456701234567,nop,nop>
+ +.02 < S. 11111:11111(0) ack 1001 win 5840 <mss 1460,nop,nop,sackOK,nop,wscale 6>
+   +0 > . 1001:1001(0) ack 1
+//
+// Test: FO cookie in non-SYN packet is ignored
+//
+   +0 < P. 1:501(500) ack 1001 win 5840 <FO 01234567ffffffff01234567ffffffff,nop,nop>
+   +0 > . 1001:1001(0) ack 501
+   +0 %{ assert (tcpi_options & TCPI_OPT_SYN_DATA) != 0, tcpi_options }%
+
+ +.08 socket(..., SOCK_STREAM, IPPROTO_TCP) = 8
+   +0 fcntl(8, F_SETFL, O_RDWR|O_NONBLOCK) = 0
+   +0 sendto(8, ..., 1000, MSG_FASTOPEN, ..., ...) = 1000
+// Reuses the last valid cookie b/c the FO cookie in the data pkt is ignored
+   +0 > S 0:1000(1000) <mss 1460,nop,nop,sackOK,nop,wscale 8,FO 01234567aabbccdd0123456701234567,nop,nop>
+ +.02 < S. 22222:22222(0) ack 1001 win 5840 <mss 1460,nop,nop,sackOK,nop,wscale 6, FO 112233,nop,nop,nop>
+   +0 > . 1001:1001(0) ack 1
+   +0 %{ assert (tcpi_options & TCPI_OPT_SYN_DATA) != 0, tcpi_options }%
+
+ +.08 socket(..., SOCK_STREAM, IPPROTO_TCP) = 9
+   +0 sendto(9, ..., 1000, MSG_FASTOPEN|MSG_DONTWAIT, ..., ...) = 1000
+//
+// Test: odd length cookie sent in previous SYN-ACK (fd=8) is ignored
+//
+   +0 > S 0:1000(1000) <mss 1460,nop,nop,sackOK,nop,wscale 8,FO 01234567aabbccdd0123456701234567,nop,nop>
+
+`/tmp/sysctl_restore_${PPID}.sh`

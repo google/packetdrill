@@ -1,0 +1,156 @@
+//
+// Non-blocking Fast Open sendto()
+//
+`../../common/defaults.sh
+ ../../common/set_sysctls.py /proc/sys/net/ipv4/tcp_timestamps=0`
+
+// Cache warmup: send a Fast Open cookie request
+    0 socket(..., SOCK_STREAM, IPPROTO_TCP) = 3
+   +0 fcntl(3, F_SETFL, O_RDWR|O_NONBLOCK) = 0
+   +0 sendto(3, ..., 0, MSG_FASTOPEN, ..., ...) = -1 EINPROGRESS (Operation is now in progress)
+   +0 > S 0:0(0) <mss 1460,nop,nop,sackOK,nop,wscale 8,FO,nop,nop>
+ +.01 < S. 123:123(0) ack 1 win 14600 <mss 1460,nop,nop,sackOK,nop,wscale 6,FO abcd1234,nop,nop>
+   +0 > . 1:1(0) ack 1
+ +.01 close(3) = 0
+   +0 > F. 1:1(0) ack 1
+ +.01 < F. 1:1(0) ack 2 win 92
+   +0 > .  2:2(0) ack 2
+
+
+//
+// Test: non-blocking sendto() of 1000B
+//
+ +.02 socket(..., SOCK_STREAM, IPPROTO_TCP) = 4
+   +0 fcntl(4, F_SETFL, O_RDWR|O_NONBLOCK) = 0
+   +0 sendto(4, ..., 1000, MSG_FASTOPEN, ..., ...) = 1000
+   +0 > S 0:1000(1000) <mss 1460,nop,nop,sackOK,nop,wscale 8,FO abcd1234,nop,nop>
+// Server acks FO and replies a different MSS (940B)
+ +.05 < S. 1234:1234(0) ack 1001 win 14600 <mss 940,nop,nop,sackOK,nop,wscale 6,FO 12345678,nop,nop>
+   +0 > . 1001:1001(0) ack 1
+   +0 %{ assert (tcpi_options & TCPI_OPT_SYN_DATA) != 0, tcpi_options }%
+// Server sends 500B
+   +0 < P. 1:501(500) ack 1000 win 257
+   +0 > . 1001:1001(0) ack 501
+   +0 read(4, ..., 4096) = 500
+   +0 close(4) = 0
+   +0 > F. 1001:1001(0) ack 501
+ +.05 < F. 501:501(0) ack 1002 win 257
+   +0 > . 1002:1002(0) ack 502
+
+
+//
+// Test: previous server's MSS (940B) and cookie are cached
+//
+ +.05 socket(..., SOCK_STREAM, IPPROTO_TCP) = 5
+   +0 fcntl(5, F_SETFL, O_RDWR|O_NONBLOCK) = 0
+   +0 sendto(5, ..., 2000, MSG_FASTOPEN, ..., ...) = 900
+// We reserve MAX_TCP_OPTION_SPACE (40) bytes for SYN/data options, hoping that
+// SYN/data will not be dropped by middle-boxes that insert options into SYNs.
+// Therefore the data space is 940 - 40 = 900 bytes.
+   +0 > S 0:900(900) <mss 1460,nop,nop,sackOK,nop,wscale 8,FO 12345678,nop,nop>
+// Sever acknowledges the data but also sends new cookie
+ +.05 < S. 5678:5678(0) ack 901 win 14600 <mss 1460,nop,nop,sackOK,nop,wscale 6,FO 000000000000>
+   +0 > . 901:901(0) ack 1
+   +0 < P. 1:1001(1000) ack 901 win 257
+   +0 %{ assert (tcpi_options & TCPI_OPT_SYN_DATA) != 0, tcpi_options }%
+   +0 > . 901:901(0) ack 1001
+ +.05 read(5, ..., 4096) = 1000
+//
+// Test: MSG_FASTOPEN is ignored after handshake
+//
+   +0 sendto(5, ..., 2000, MSG_FASTOPEN, ..., ...) = 2000
+   +0 > P. 901:2901(2000) ack 1001
+ +.05 < . 1001:1001(0) ack 2901 win 137
+// Test: TCP_OPTI_SYN_DATA bit persists
+   +0 %{ assert (tcpi_options & TCPI_OPT_SYN_DATA) != 0, tcpi_options }%
+   +0 close(5) = 0
+   +0 > F. 2901:2901(0) ack 1001
+ +.05 < F. 1001:1001(0) ack 2902 win 257
+   +0 > . 2902:2902(0) ack 1002
+
+
+//
+// Test: regular 3 way handshake is not affected when fastopen is enabled
+//
+ +.05 socket(..., SOCK_STREAM, IPPROTO_TCP) = 6
+   +0 fcntl(6, F_SETFL, O_RDWR|O_NONBLOCK) = 0
+   +0 connect(6, ..., ...) = -1 EINPROGRESS (Operation now in progress)
+   +0 > S 0:0(0) <mss 1460,nop,nop,sackOK,nop,wscale 8>
+// TODO: update MSS in the cookie cache for regular connection
+ +.05 < S. 987654:987654(0) ack 1 win 5824 <mss 1000,nop,nop,sackOK,nop,wscale 6>
+   +0 > . 1:1(0) ack 1
+   +0 < F. 1:1(0) ack 1 win 257
+// Why delayed for 1ms? Nagle?
++.001 > . 1:1(0) ack 2
+   +0 %{ assert (tcpi_options & TCPI_OPT_SYN_DATA) == 0, tcpi_options }%
+   +0 close(6) = 0
+   +0 > F. 1:1(0) ack 2
+ +.05 < . 2:2(0) ack 2 win 257
+
+
+//////////////////////////////////////////////////////////////////////////////
+//
+// Flush cookie cache and repeat tests above but with timestamps
+//
++.001 `sysctl -q net.ipv4.tcp_timestamps=1
+       sysctl -q net.ipv4.tcp_fastopen_cookies=0 net.ipv4.tcp_fastopen_cookies=10 &> /dev/null ||\
+       ip tcp_metrics flush all &> /dev/null`
+
+// Cache warmup: send a Fast Open cookie request
++.448 socket(..., SOCK_STREAM, IPPROTO_TCP) = 3
+   +0 fcntl(3, F_SETFL, O_RDWR|O_NONBLOCK) = 0
+   +0 sendto(3, ..., 0, MSG_FASTOPEN, ..., ...) = -1 EINPROGRESS (Operation is now in progress)
+   +0 > S 0:0(0) <mss 1460,sackOK,TS val 500 ecr 0,nop,wscale 8,FO,nop,nop>
+ +.01 < S. 123:123(0) ack 1 win 14600 <mss 1460,sackOK,TS val 1 ecr 500,nop,wscale 6,FO abcd1234,nop,nop>
+   +0 > . 1:1(0) ack 1 <nop,nop,TS val 501 ecr 1>
+ +.01 close(3) = 0
+   +0 > F. 1:1(0) ack 1 <nop,nop,TS val 502 ecr 1>
+ +.01 < F. 1:1(0) ack 2 win 92 <nop,nop,TS val 2 ecr 502>
+   +0 > .  2:2(0) ack 2 <nop,nop,TS val 503 ecr 2>
+
+
+//
+// Test: non-blocking sendto() of 1000B
+//
+ +.02 socket(..., SOCK_STREAM, IPPROTO_TCP) = 4
+   +0 fcntl(4, F_SETFL, O_RDWR|O_NONBLOCK) = 0
+   +0 sendto(4, ..., 1000, MSG_FASTOPEN, ..., ...) = 1000
+   +0 > S 0:1000(1000) <mss 1460,sackOK,TS val 500 ecr 0,nop,wscale 8,FO abcd1234,nop,nop>
+// Server acks FO and replies a different MSS (940B)
+ +.05 < S. 1234:1234(0) ack 1001 win 14600 <mss 940,sackOK,TS val 1 ecr 500,nop,wscale 6,FO 12345678,nop,nop>
+   +0 > . 1001:1001(0) ack 1 <nop,nop,TS val 501 ecr 1>
+// Server sends 500B
+   +0 < P. 1:501(500) ack 1001 win 257 <nop,nop,TS val 2 ecr 500>
+   +0 > . 1001:1001(0) ack 501 <nop,nop,TS val 503 ecr 2>
+   +0 read(4, ..., 4096) = 500
+   +0 close(4) = 0
+   +0 > F. 1001:1001(0) ack 501 <nop,nop,TS val 503 ecr 2>
+ +.05 < F. 501:501(0) ack 1002 win 257 <nop,nop,TS val 3 ecr 503>
+   +0 > . 1002:1002(0) ack 502 <nop,nop,TS val 504 ecr 3>
+
+
+//
+// Test: previous server's MSS (940B) and cookie are cached
+//
+ +.05 socket(..., SOCK_STREAM, IPPROTO_TCP) = 5
+   +0 fcntl(5, F_SETFL, O_RDWR|O_NONBLOCK) = 0
+   +0 sendto(5, ..., 2000, MSG_FASTOPEN, ..., ...) = 900
+   +0 > S 0:900(900) <mss 1460,sackOK,TS val 500 ecr 0,nop,wscale 8,FO 12345678,nop,nop>
+// Sever acknowledges the data but also sends new cookie
+ +.05 < S. 5678:5678(0) ack 901 win 14600 <mss 1460,sackOK,TS val 1 ecr 500,nop,wscale 6,FO 000000000000>
+   +0 > . 901:901(0) ack 1 <nop,nop,TS val 501 ecr 1>
+   +0 < P. 1:1001(1000) ack 901 win 257 <nop,nop,TS val 2 ecr 500>
+   +0 > . 901:901(0) ack 1001 <nop,nop,TS val 501 ecr 2>
+ +.05 read(5, ..., 4096) = 1000
+//
+// Test: MSG_FASTOPEN is ignored after handshake
+//
+   +0 sendto(5, ..., 2000, MSG_FASTOPEN, ..., ...) = 2000
+   +0 > P. 901:2901(2000) ack 1001 <nop,nop,TS val 502 ecr 2>
+ +.05 < . 1001:1001(0) ack 2901 win 137 <nop,nop,TS val 3 ecr 501>
+   +0 close(5) = 0
+   +0 > F. 2901:2901(0) ack 1001 <nop,nop,TS val 503 ecr 3>
+ +.05 < F. 1001:1001(0) ack 2902 win 257 <nop,nop,TS val 4 ecr 503>
+   +0 > . 2902:2902(0) ack 1002 <nop,nop,TS val 503 ecr 4>
+
+`/tmp/sysctl_restore_${PPID}.sh`

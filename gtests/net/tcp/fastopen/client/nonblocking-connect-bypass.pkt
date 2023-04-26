@@ -1,0 +1,117 @@
+//
+// Nonblocking tests for TCP_FASTOPEN_CONNECT
+//
+`../../common/defaults.sh
+ ../../common/set_sysctls.py /proc/sys/net/ipv4/tcp_timestamps=0`
+
+// Cache warmup: send a Fast Open cookie request
+    0 socket(..., SOCK_STREAM, IPPROTO_TCP) = 3
+   +0 fcntl(3, F_SETFL, O_RDWR|O_NONBLOCK) = 0
+   +0 setsockopt(3, SOL_TCP, TCP_FASTOPEN_CONNECT, [1], 4) = 0
+   +0 connect(3, ..., ...) = -1 EINPROGRESS (Operation is now in progress)
+   +0...0.010 poll([{fd=3,
+	events=POLLIN|POLLOUT|POLLERR,
+	revents=POLLOUT}], 1, 100) = 1
+   +0 > S 0:0(0) <mss 1460,nop,nop,sackOK,nop,wscale 8,FO,nop,nop>
+ +.01 < S. 123:123(0) ack 1 win 14600 <mss 1460,nop,nop,sackOK,nop,wscale 6,FO abcd1234,nop,nop>
+   +0 > . 1:1(0) ack 1
+   +0 %{ assert (tcpi_options & TCPI_OPT_SYN_DATA) == 0, tcpi_options }%
+   +0 close(3) = 0
+   +0 > F. 1:1(0) ack 1
+   +0 < F. 1:1(0) ack 2 win 92
+   +0 > .  2:2(0) ack 2
+
+//
+// Test: Set up sockopt TCP_FASTOPEN_CONNECT and call connect(), read() and write()
+//
+   +0 socket(..., SOCK_STREAM, IPPROTO_TCP) = 4
+   +0 fcntl(4, F_SETFL, O_RDWR|O_NONBLOCK) = 0
+   +0 setsockopt(4, SOL_TCP, TCP_FASTOPEN_CONNECT, [1], 4) = 0
+ +.01 connect(4, ..., ...) = 0
+// Test epoll edge trigger behavior right after connect()
+   +0 epoll_create(1) = 5
+   +0 epoll_ctl(5, EPOLL_CTL_ADD, 4, {events=EPOLLOUT|EPOLLET, fd=4}) = 0
+   +0 epoll_wait(5, {events=EPOLLOUT, fd=4}, 1, 0) = 1
+// Test poll behavior right after connect()
+ +.01 poll([{fd=4,
+             events=POLLIN|POLLOUT|POLLERR,
+             revents=POLLOUT}], 1, 1000) = 1
+ +.01 read(4, ..., 4096) = -1 EAGAIN (Resource temporarily unavailable)
+ +.01 write(4, ..., 1000) = 1000
+   +0 > S 0:1000(1000) <mss 1460,nop,nop,sackOK,nop,wscale 8,FO abcd1234,nop,nop>
+ +.01 < S. 1234:1234(0) ack 1001 win 14600 <mss 1460,nop,nop,sackOK,nop,wscale 6,FO 12345678,nop,nop>
+   +0 > . 1001:1001(0) ack 1
+   +0 %{ assert (tcpi_options & TCPI_OPT_SYN_DATA) != 0, tcpi_options }%
+// Server sends 500B
+   +0 < P. 1:501(500) ack 1000 win 257
+   +0 > . 1001:1001(0) ack 501
+// Test epoll edge trigger behavior
+   +0 epoll_ctl(5, EPOLL_CTL_MOD, 4, {events=EPOLLIN|EPOLLET, fd=4}) = 0
+   +0 epoll_wait(5, {events=EPOLLIN, fd=4}, 5, 0) = 1
+   +0 read(4, ..., 4096) = 500
+   +0 close(4) = 0
+   +0 > F. 1001:1001(0) ack 501
+   +0 < F. 501:501(0) ack 1002 win 257
+   +0 > . 1002:1002(0) ack 502
+
+//
+// Test: Set up sockopt TCP_FASTOPEN_CONNECT and call sendto(MSG_FASTOPEN)
+//
+ +.01 socket(..., SOCK_STREAM, IPPROTO_TCP) = 6
+   +0 fcntl(6, F_SETFL, O_RDWR|O_NONBLOCK) = 0
+   +0 setsockopt(6, SOL_TCP, TCP_FASTOPEN_CONNECT, [1], 4) = 0
+ +.01 sendto(6, ..., 1000, MSG_FASTOPEN, ..., ...) = 1000
+   +0 > S 0:1000(1000) <mss 1460,nop,nop,sackOK,nop,wscale 8,FO 12345678,nop,nop>
+ +.01 < S. 1234:1234(0) ack 1001 win 14600 <mss 1460,nop,nop,sackOK,nop,wscale 6,FO 12345678,nop,nop>
+   +0 > . 1001:1001(0) ack 1
+   +0 %{ assert (tcpi_options & TCPI_OPT_SYN_DATA) != 0, tcpi_options }%
+   +0 < P. 1:501(500) ack 1000 win 257
+   +0 > . 1001:1001(0) ack 501
+   +0 read(6, ..., 4096) = 500
+   +0 close(6) = 0
+   +0 > F. 1001:1001(0) ack 501
+   +0 < F. 501:501(0) ack 1002 win 257
+   +0 > . 1002:1002(0) ack 502
+
+//
+// Test: Set up sockopt TCP_FASTOPEN_CONNECT and call connect() and sendto(MSG_FASTOPEN)
+//
+ +.01 socket(..., SOCK_STREAM, IPPROTO_TCP) = 7
+   +0 fcntl(7, F_SETFL, O_RDWR|O_NONBLOCK) = 0
+   +0 setsockopt(7, SOL_TCP, TCP_FASTOPEN_CONNECT, [1], 4) = 0
+   +0 connect(7, ..., ...) = 0
+ +.01 sendto(7, ..., 1000, MSG_FASTOPEN, ..., ...) = 1000
+   +0 > S 0:1000(1000) <mss 1460,nop,nop,sackOK,nop,wscale 8,FO 12345678,nop,nop>
+ +.01 < S. 1234:1234(0) ack 1001 win 14600 <mss 1460,nop,nop,sackOK,nop,wscale 6,FO 12345678,nop,nop>
+   +0 > . 1001:1001(0) ack 1
+   +0 %{ assert (tcpi_options & TCPI_OPT_SYN_DATA) != 0, tcpi_options }%
+   +0 < P. 1:501(500) ack 1000 win 257
+   +0 > . 1001:1001(0) ack 501
+   +0 read(7, ..., 4096) = 500
+   +0 close(7) = 0
+   +0 > F. 1001:1001(0) ack 501
+   +0 < F. 501:501(0) ack 1002 win 257
+   +0 > . 1002:1002(0) ack 502
+
+//
+// Test: Set up sockopt TCP_FASTOPEN_CONNECT and call connect() and normal sendto()
+//
+ +.01 socket(..., SOCK_STREAM, IPPROTO_TCP) = 8
+   +0 fcntl(8, F_SETFL, O_RDWR|O_NONBLOCK) = 0
+   +0 setsockopt(8, SOL_TCP, TCP_FASTOPEN_CONNECT, [1], 4) = 0
+   +0 connect(8, ..., ...) = 0
+ +.01 sendto(8, ..., 1000, 0, ..., ...) = 1000
+   +0 > S 0:1000(1000) <mss 1460,nop,nop,sackOK,nop,wscale 8,FO 12345678,nop,nop>
+ +.01 < S. 1234:1234(0) ack 1001 win 14600 <mss 1460,nop,nop,sackOK,nop,wscale 6,FO 12345678,nop,nop>
+   +0 > . 1001:1001(0) ack 1
+   +0 %{ assert (tcpi_options & TCPI_OPT_SYN_DATA) != 0, tcpi_options }%
+   +0 < P. 1:501(500) ack 1000 win 257
+   +0 > . 1001:1001(0) ack 501
+   +0 read(8, ..., 4096) = 500
+   +0 close(8) = 0
+   +0 > F. 1001:1001(0) ack 501
+   +0 < F. 501:501(0) ack 1002 win 257
+   +0 > . 1002:1002(0) ack 502
+
+// Reset sysctls
+`/tmp/sysctl_restore_${PPID}.sh`

@@ -1,0 +1,24 @@
+//
+// Send a RST to a TFO socket after it has been accepted.
+//
+// First read() will return all the data and this is consistent
+// with the non-TFO case. Second read will return -1
+--remote_ip=192.0.2.1
+--local_ip=192.168.0.1
+`../../../common/defaults.sh`
+
+    0 socket(..., SOCK_STREAM, IPPROTO_TCP) = 3
+  +.1 setsockopt(3, SOL_SOCKET, SO_REUSEADDR, [1], 4) = 0
+   +0 bind(3, ..., ...) = 0
+   +0 listen(3, 1) = 0
+   +0 setsockopt(3, SOL_TCP, TCP_FASTOPEN, [1], 4) = 0
+   +0 < S 0:10(10) win 32792 <mss 1460,sackOK,nop,nop,FO 3021b9d889017eeb,nop,nop>
+   +0 > S. 0:0(0) ack 11 <mss 1460,nop,nop,sackOK>
+  +.1 accept(3, ..., ...) = 4
+  +.1 < R. 11:11(0) win 32792
+// 0.300 < R 11:11(0) win 32792 <- this one w/o ACK bit. Either will cause
+// the same effect.
+   +0 read(4, ..., 512) = 10
+// 1st read will return the data from SYN.
+   +0 read(4, ..., 512) = -1
+  +.1 close(4) = 0

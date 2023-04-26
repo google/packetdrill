@@ -1,0 +1,168 @@
+//
+// Test non-blocking errno(s) with TCP_FASTOPEN_CONNECT sockopt
+//
+`../../common/defaults.sh
+ ../../common/set_sysctls.py /proc/sys/net/ipv4/tcp_timestamps=0\
+			     /proc/sys/net/ipv4/tcp_fastopen_blackhole_timeout_sec=0\
+`
+
+///////////////////////////////////////////////////////////////////////////////
+// Non-blocking errnos
+//
+    0 socket(..., SOCK_STREAM, IPPROTO_TCP) = 3
+   +0 fcntl(3, F_SETFL, O_RDWR|O_NONBLOCK) = 0
+   +0 `sysctl -q net.ipv4.tcp_fastopen=0`
+//
+// Test: EOPNOTSUPP if fastopen is disabled
+//
+   +0 setsockopt(3, SOL_TCP, TCP_FASTOPEN_CONNECT, [1], 4) = -1 EOPNOTSUPP (Operation not supported)
+
+ +.01 `sysctl -q net.ipv4.tcp_fastopen=1`
+//
+// Test: 0-byte connect() returns EINPROGRESS when no cookie is in cache
+//
+   +0 setsockopt(3, SOL_TCP, TCP_FASTOPEN_CONNECT, [1], 4) = 0
+   +0 connect(3, ..., ...) = -1 EINPROGRESS (Operation is now in progress)
+   +0 > S 0:0(0) <mss 1460,nop,nop,sackOK,nop,wscale 8,FO,nop,nop>
+   +0 %{ assert (tcpi_options & TCPI_OPT_SYN_DATA) == 0, tcpi_options }%
+ +.01 read(3, ..., 1000) = -1 EAGAIN (Resource temporarily unavailable)
+   +0 close(3) = 0
+
+
+
+ +.01 socket(..., SOCK_STREAM, IPPROTO_TCP) = 4
+   +0 fcntl(4, F_SETFL, O_RDWR|O_NONBLOCK) = 0
+//
+// Test: 1000-byte sendto() returns EINPROGRESS when no cookie is in cache
+//
+   +0 setsockopt(4, SOL_TCP, TCP_FASTOPEN_CONNECT, [1], 4) = 0
+   +0 connect(4, ..., ...) = -1 EINPROGRESS (Operation is now in progress)
+   +0 > S 0:0(0) <mss 1460,nop,nop,sackOK,nop,wscale 8,FO,nop,nop>
+
+//
+// Test: EALREADY on multiple sendto(MSG_FASTOPEN) in SYN-SENT
+//
+ +.01 sendto(4, ..., 1000, MSG_FASTOPEN, ..., ...) = -1 EALREADY (Operation already in progress)
+//
+// Test: EAGAIN on write()/read() in SYN-SENT
+//
+ +.01 write(4, ..., 1000) = -1 EAGAIN (Resource temporarily unavailable)
+ +.01 read(4, ..., 1000) = -1 EAGAIN (Resource temporarily unavailable)
+ +.01 < S. 0:0(0) ack 1 win 5840 <mss 1460,nop,nop,sackOK,nop,wscale 6,FO 112233445566>
+   +0 > . 1:1(0) ack 1
+   +0 %{ assert (tcpi_options & TCPI_OPT_SYN_DATA) == 0, tcpi_options }%
+ +.01 close(4) = 0
+
+
+//
+// Repeat previous tests with a valid cookie cached locally
+//
+ +.01 socket(..., SOCK_STREAM, IPPROTO_TCP) = 5
+   +0 fcntl(5, F_SETFL, O_RDWR|O_NONBLOCK) = 0
+//
+// Test: *NO* EINPROGRESS in SYN-SENT b/c data are buffered and transmitted
+//
+   +0 setsockopt(5, SOL_TCP, TCP_FASTOPEN_CONNECT, [1], 4) = 0
+   +0 connect(5, ..., ...) = 0
+ +.02 sendto(5, ..., 1000, MSG_FASTOPEN, ..., ...) = 1000
+   +0 > S 0:1000(1000) <mss 1460,nop,nop,sackOK,nop,wscale 8,FO 112233445566>
+//
+// Test: EALREADY on multiple sendto(MSG_FASTOPEN) in SYN-SENT
+//
++.005 sendto(5, ..., 1000, MSG_FASTOPEN, ..., ...) = -1 EALREADY (Operation already in progress)
+//
+// Test: EAGAIN on write() in SYN-SENT
+//
+ +.01 write(5, ..., 1000) = -1 EAGAIN (Resource temporarily unavailable)
+ +.01 < S. 506036:506036(0) ack 1001 win 5840 <mss 1460,nop,nop,sackOK,nop,wscale 6>
+   +0 > . 1001:1001(0) ack 1
+   +0 %{ assert (tcpi_options & TCPI_OPT_SYN_DATA) != 0, tcpi_options }%
+ +.01 close(5) = 0
+
+
+
+ +.03 socket(..., SOCK_STREAM, IPPROTO_TCP) = 6
+   +0 fcntl(6, F_SETFL, O_RDWR|O_NONBLOCK) = 0
+   +0 setsockopt(6, SOL_TCP, TCP_FASTOPEN_CONNECT, [1], 4) = 0
+//
+// Test: connect() and a 0-byte sendto() returns EINPROGRESS even if cookie is in the cache.
+//       since sendto() still needs to perform 3-way handshake
+//
+   +0 connect(6, ..., ...) = 0
+ +.01 sendto(6, ..., 0, 0, ..., ...) = -1 EINPROGRESS (Operation now in progress)
+   +0 > S 0:0(0) <mss 1460,nop,nop,sackOK,nop,wscale 8,FO 112233445566>
+   +0 %{ assert (tcpi_options & TCPI_OPT_SYN_DATA) == 0, tcpi_options }%
+   +0 close(6) = 0
+
+//
+// Test: ECONNREFUSED when remote resets on SYN
+//
+ +.03 socket(..., SOCK_STREAM, IPPROTO_TCP) = 7
+   +0 fcntl(7, F_SETFL, O_RDWR|O_NONBLOCK) = 0
+   +0 setsockopt(7, SOL_TCP, TCP_FASTOPEN_CONNECT, [1], 4) = 0
+   +0 connect(7, ..., ...) = 0
+ +.01 write(7, ..., 2000) = 1420
+   +0 > S 0:1420(1420) <mss 1460,nop,nop,sackOK,nop,wscale 8,FO 112233445566>
+ +.01 < R. 0:0(0) ack 1 win 0
+ +.01 write(7, ..., 2000) = -1 ECONNREFUSED (Connection Refused)
+   +0 %{ assert (tcpi_options & TCPI_OPT_SYN_DATA) == 0, tcpi_options }%
+ +.01 close(7) = 0
+
+//
+// Test: ECONNRESET if RST is received after 3-way handshake
+//
+ +.41 socket(..., SOCK_STREAM, IPPROTO_TCP) = 8
+   +0 fcntl(8, F_SETFL, O_RDWR|O_NONBLOCK) = 0
+   +0 setsockopt(8, SOL_TCP, TCP_FASTOPEN_CONNECT, [1], 4) = 0
+   +0 connect(8, ..., ...) = 0
+ +.01 write(8, ..., 2000) = 1420
+   +0 > S 0:1420(1420) <mss 1460,nop,nop,sackOK,nop,wscale 8,FO 112233445566>
+ +.01 < S. 0:0(0) ack 1421 win 5840 <mss 1460,wscale 6,nop>
+   +0 > . 1421:1421(0) ack 1
+ +.01 < R. 1:1(0) ack 1421 win 0
+ +.01 write(8, ..., 2000) = -1 ECONNRESET (Connection reset by peer)
+   +0 %{ assert (tcpi_options & TCPI_OPT_SYN_DATA) != 0, tcpi_options }%
+
+
+//
+// Test: Set up sockopt TCP_FASTOPEN_CONNECT and repeat connect()
+//
+   +1 socket(..., SOCK_STREAM, IPPROTO_TCP) = 9
+   +0 fcntl(9, F_SETFL, O_RDWR|O_NONBLOCK) = 0
+   +0 setsockopt(9, SOL_TCP, TCP_FASTOPEN_CONNECT, [1], 4) = 0
+   +0 connect(9, ..., ...) = 0
+   +1 connect(9, ..., ...) = -1 EISCONN (Transport endpoint is already connected)
+   +1 connect(9, ..., ...) = -1 EISCONN (Transport endpoint is already connected)
+
+//
+// Test: sendto(MSG_FASTOPEN) and then connect() should return EALREADY
+//
+   +1 socket(..., SOCK_STREAM, IPPROTO_TCP) = 10
+   +0 fcntl(10, F_SETFL, O_RDWR|O_NONBLOCK) = 0
+   +0 setsockopt(10, SOL_TCP, TCP_FASTOPEN_CONNECT, [1], 4) = 0
+ +.01 sendto(10, ..., 2000, MSG_FASTOPEN, ..., ...) = 1420
+   +0 connect(10, ..., ...) = -1 EALREADY (Operation already in progress)
+   +0 > S 0:1420(1420) <mss 1460,nop,nop,sackOK,nop,wscale 8,FO 112233445566>
+ +.01 < S. 0:0(0) ack 1421 win 5840 <mss 1460,wscale 6,nop>
+   +0 > . 1421:1421(0) ack 1
+
+//
+// Test: ETIMEOUT when SYN timed out
+//
+
+   +1 socket(..., SOCK_STREAM, IPPROTO_TCP) = 11
+   +0 fcntl(11, F_SETFL, O_RDWR|O_NONBLOCK) = 0
+   +0 setsockopt(11, SOL_TCP, TCP_FASTOPEN_CONNECT, [1], 4) = 0
+   +0 connect(11, ..., ...) = 0
+ +.01 write(11, ..., 2000) = 1420
+// Retry once to make this test shorter.
+   +0 setsockopt(11, IPPROTO_TCP, TCP_SYNCNT, [1], 4) = 0
+   +0 > S 0:1420(1420) <mss 1460,nop,nop,sackOK,nop,wscale 8,FO 112233445566>
+   +1 > S 0:0(0) <mss 1460,nop,nop,sackOK,nop,wscale 8>
+// Why wait 6 sec? it's a bug fixed in 4d22f7d372f5
+// https://bugzilla.redhat.com/show_bug.cgi?id=688989
+   +6 write(11, ..., 2000) = -1 ETIMEDOUT (Connection timed out)
+   +0 %{ assert (tcpi_options & TCPI_OPT_SYN_DATA) == 0, tcpi_options }%
+
+
+`/tmp/sysctl_restore_${PPID}.sh`

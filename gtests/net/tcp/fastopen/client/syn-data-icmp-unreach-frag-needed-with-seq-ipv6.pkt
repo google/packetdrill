@@ -1,0 +1,43 @@
+//
+// Test SYN-data triggers ICMPv6 packet_too_big; sender
+// retransmits pure SYN, and uses the MSS in the ICMPv6 message.
+// a related test is syn-data-icmp-unreach-frag-needed.tcptest
+//
+`../../common/defaults.sh
+ ../../common/set_sysctls.py /proc/sys/net/ipv4/tcp_timestamps=0`
+
+// Cache warmup: send a Fast Open cookie request
+    0 socket(..., SOCK_STREAM, IPPROTO_TCP) = 3
+   +0 fcntl(3, F_SETFL, O_RDWR|O_NONBLOCK) = 0
+   +0 sendto(3, ..., 0, MSG_FASTOPEN, ..., ...) = -1 EINPROGRESS (Operation is now in progress)
+   +0 > S 0:0(0) <mss 1440,nop,nop,sackOK,nop,wscale 8,FO,nop,nop>
+ +.01 < S. 123:123(0) ack 1 win 5840 <mss 1440,nop,nop,sackOK,nop,wscale 6,FO abcd1234,nop,nop>
+   +0 > . 1:1(0) ack 1
+ +.01 close(3) = 0
+   +0 > F. 1:1(0) ack 1
+ +.01 < F. 1:1(0) ack 2 win 92
+   +0 > .  2:2(0) ack 2
+
+
+//
+// Test: SYN-data triggers ICMP6 packet_too_big
+//
+ +.03 socket(..., SOCK_STREAM, IPPROTO_TCP) = 4
+   +0 fcntl(4, F_SETFL, O_RDWR|O_NONBLOCK) = 0
+   +0 sendto(4, ..., 9999, MSG_FASTOPEN, ..., ...) = 1400
+   +0 > S 0:1400(1400) <mss 1440,nop,nop,sackOK,nop,wscale 8,FO abcd1234,nop,nop>
+ +.01 < icmp packet_too_big mtu 1400 [0:1440(1440)]
+// Retransmit a regular SYN immediately (after commit c31b70c9968f "tcp: Add logic to check for SYN w/ data in tcp_simple_retransmit"
+// and after commit ed0c99dc0f49 ("tcp: ensure PMTU updates are processed during fastopen")
+   +0 > S 0:0(0)  <mss 1340,nop,nop,sackOK,nop,wscale 8>
+ +.02 < S. 0:0(0) ack 1 win 5840 <mss 1040,nop,nop,sackOK,nop,wscale 6>
+   +0 > P. 1:1401(1400) ack 1
+   +0 %{ assert (tcpi_options & TCPI_OPT_SYN_DATA) == 0, tcpi_options }%
+ +.02 < F. 1:1(0) ack 1401 win 257
+// No sure why this ack is delayed by 1ms always
++.001 > .  1401:1401(0) ack 2
+   +0 close(4) = 0
+   +0 > F. 1401:1401(0) ack 2
+ +.02 < . 2:2(0) ack 1402 win 257
+
+`/tmp/sysctl_restore_${PPID}.sh`
