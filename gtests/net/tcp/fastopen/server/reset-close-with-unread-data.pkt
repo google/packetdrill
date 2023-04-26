@@ -1,0 +1,21 @@
+//
+// Send a RST to a TFO socket after it is accepted.
+// 
+// The socket will change to TCP_CLOSE state with pending data so
+// write() will fail. Pending data can be still be read and close()
+// won't trigger RST if data is not read:
+// https://www.spinics.net/lists/netdev/msg133175.html
+//
+`../../common/defaults.sh`
+
+    0 socket(..., SOCK_STREAM, IPPROTO_TCP) = 3
+  +.1 setsockopt(3, SOL_SOCKET, SO_REUSEADDR, [1], 4) = 0
+   +0 bind(3, ..., ...) = 0
+   +0 listen(3, 1) = 0
+   +0 < S 0:10(10) win 32792 <mss 1460,sackOK,nop,nop, FOEXP TFO_COOKIE>
+   +0 > S. 0:0(0) ack 11 <mss 1460,nop,nop,sackOK>
+  +.1 accept(3, ..., ...) = 4
+   +0 %{ assert (tcpi_options & TCPI_OPT_SYN_DATA) != 0, tcpi_options }%
+  +.1 < R. 11:11(0) win 32792
+  +.1 write(4, ..., 100) = -1 ECONNRESET(Connection reset by peer)
+   +0 close(4) = 0

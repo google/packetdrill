@@ -1,0 +1,128 @@
+//
+// Test non-blocking sendto(MSG_FASTOPEN) errno(s).
+//
+`../../common/defaults.sh
+ ../../common/set_sysctls.py /proc/sys/net/ipv4/tcp_timestamps=0\
+			     /proc/sys/net/ipv4/tcp_fastopen_blackhole_timeout_sec=0\
+`
+
+///////////////////////////////////////////////////////////////////////////////
+// Non-blocking errnos
+//
+    0 socket(..., SOCK_STREAM, IPPROTO_TCP) = 3
+   +0 fcntl(3, F_SETFL, O_RDWR|O_NONBLOCK) = 0
+   +0 `sysctl -q net.ipv4.tcp_fastopen=0`
+//
+// Test: EOPNOTSUPP if fastopen is disabled
+//
+ +.01 sendto(3, ..., 1000, MSG_FASTOPEN, ..., ...) = -1 EOPNOTSUPP (Operation not supported)
++.005 `sysctl -q net.ipv4.tcp_fastopen=1`
+//
+// Test: 0-byte sendto() returns EINPROGRESS when no cookie is in cache
+//
++.005 sendto(3, ..., 0, MSG_FASTOPEN, ..., ...) = -1 EINPROGRESS (Operation now in progress)
+   +0 > S 0:0(0) <mss 1460,nop,nop,sackOK,nop,wscale 8,FO,nop,nop>
+   +0 %{ assert (tcpi_options & TCPI_OPT_SYN_DATA) == 0, tcpi_options }%
++.005 close(3) = 0
+
+
+
++.005 socket(..., SOCK_STREAM, IPPROTO_TCP) = 4
+   +0 fcntl(4, F_SETFL, O_RDWR|O_NONBLOCK) = 0
+//
+// Test: 1000-byte sendto() returns EINPROGRESS when no cookie is in cache
+//
+   +0 sendto(4, ..., 1000, MSG_FASTOPEN|MSG_DONTWAIT, ..., ...) = -1 EINPROGRESS (Operation now in progress)
+   +0 > S 0:0(0) <mss 1460,nop,nop,sackOK,nop,wscale 8,FO,nop,nop>
+//
+// Test: EALREADY on multiple sendto(MSG_FASTOPEN) in SYN-SENT
+//
+ +.01 sendto(4, ..., 1000, MSG_FASTOPEN, ..., ...) = -1 EALREADY (Operation already in progress)
+//
+// Test: EAGAIN on write() in SYN-SENT
+//
+ +.01 write(4, ..., 1000) = -1 EAGAIN (Resource temporarily unavailable)
+ +.01 < S. 0:0(0) ack 1 win 5840 <mss 1460,nop,nop,sackOK,nop,wscale 6,FO 112233445566>
+   +0 > . 1:1(0) ack 1
+   +0 %{ assert (tcpi_options & TCPI_OPT_SYN_DATA) == 0, tcpi_options }%
+   +0 close(4) = 0
+
+
+//
+// Repeat previous tests with a valid cookie cached locally
+//
+ +.02 socket(..., SOCK_STREAM, IPPROTO_TCP) = 5
+   +0 fcntl(5, F_SETFL, O_RDWR|O_NONBLOCK) = 0
+//
+// Test: *NO* EINPROGRESS in SYN-SENT b/c data are buffered and transmitted
+//
+   +0 sendto(5, ..., 1000, MSG_FASTOPEN, ..., ...) = 1000
+   +0 > S 0:1000(1000) <mss 1460,nop,nop,sackOK,nop,wscale 8,FO 112233445566>
+//
+// Test: EALREADY on multiple sendto(MSG_FASTOPEN) in SYN-SENT
+//
++.005 sendto(5, ..., 1000, MSG_FASTOPEN, ..., ...) = -1 EALREADY (Operation already in progress)
+//
+// Test: EAGAIN on write() in SYN-SENT
+//
++.005 write(5, ..., 1000) = -1 EAGAIN (Resource temporarily unavailable)
+ +.01 < S. 506036:506036(0) ack 1001 win 5840 <mss 1460,nop,nop,sackOK,nop,wscale 6>
+   +0 > . 1001:1001(0) ack 1
+   +0 %{ assert (tcpi_options & TCPI_OPT_SYN_DATA) != 0, tcpi_options }%
+   +0 close(5) = 0
+
+
+
+ +.01 socket(..., SOCK_STREAM, IPPROTO_TCP) = 6
+   +0 fcntl(6, F_SETFL, O_RDWR|O_NONBLOCK) = 0
+//
+// Test: a 0-byte sendto() returns EINPROGRESS even if cookie is in the cache.
+//       since sendto(MSG_FASTOPEN) is a connect and write combo, and a null
+//       write is a no-op, so it should behave like a normal connect()
+//
+   +0 sendto(6, ..., 0, MSG_FASTOPEN, ..., ...) = -1 EINPROGRESS (Operation now in progress)
+   +0 > S 0:0(0) <mss 1460,nop,nop,sackOK,nop,wscale 8,FO 112233445566>
+   +0 %{ assert (tcpi_options & TCPI_OPT_SYN_DATA) == 0, tcpi_options }%
+   +0 close(6) = 0
+
+//
+// Test: ECONNREFUSED when remote resets on SYN
+//
+ +.09 socket(..., SOCK_STREAM, IPPROTO_TCP) = 7
+   +0 fcntl(7, F_SETFL, O_RDWR|O_NONBLOCK) = 0
+   +0 sendto(7, ..., 2000, MSG_FASTOPEN, ..., ...) = 1420
+   +0 > S 0:1420(1420) <mss 1460,nop,nop,sackOK,nop,wscale 8,FO 112233445566>
+ +.02 < R. 0:0(0) ack 1 win 0
+   +0 write(7, ..., 2000) = -1 ECONNREFUSED (Connection Refused)
+   +0 %{ assert (tcpi_options & TCPI_OPT_SYN_DATA) == 0, tcpi_options }%
+   +0 close(7) = 0
+
+//
+// Test: ECONNRESET if RST is received after SYN
+//
+ +.43 socket(..., SOCK_STREAM, IPPROTO_TCP) = 8
++.025 fcntl(8, F_SETFL, O_RDWR|O_NONBLOCK) = 0
++.025 sendto(8, ..., 1420, MSG_FASTOPEN, ..., ...) = 1420
+   +0 > S 0:1420(1420) <mss 1460,nop,nop,sackOK,nop,wscale 8,FO 112233445566>
+ +.02 < S. 0:0(0) ack 1421 win 5840 <mss 1460,wscale 6,nop>
+   +0 > . 1421:1421(0) ack 1
+ +.08 < R. 1:1(0) ack 1421 win 0
+ +.02 write(8, ..., 2000) = -1 ECONNRESET (Connection reset by peer)
+   +0 %{ assert (tcpi_options & TCPI_OPT_SYN_DATA) != 0, tcpi_options }%
+
+
+//
+// Test: ETIMEOUT when SYN timed out
+//
+ +.18 socket(..., SOCK_STREAM, IPPROTO_TCP) = 9
+   +0 sendto(9, ..., 2000, MSG_FASTOPEN|MSG_DONTWAIT, ..., ...) = 1420
+// Retry once to make this test shorter.
+   +0 setsockopt(9, IPPROTO_TCP, TCP_SYNCNT, [1], 4) = 0
+   +0 > S 0:1420(1420) <mss 1460,nop,nop,sackOK,nop,wscale 8,FO 112233445566>
+   +1 > S 0:0(0) <mss 1460,nop,nop,sackOK,nop,wscale 8>
+// Why wait 6 sec? it's a bug fixed in 4d22f7d372f5
+// https://bugzilla.redhat.com/show_bug.cgi?id=688989
+ +6.1 write(9, ..., 2000) = -1 ETIMEDOUT (Connection timed out)
+   +0 %{ assert (tcpi_options & TCPI_OPT_SYN_DATA) == 0, tcpi_options }%
+
+`/tmp/sysctl_restore_${PPID}.sh`

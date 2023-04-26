@@ -1,0 +1,79 @@
+//
+// Test that SYN-data MSS uses the min of prior SYN-ACK's MSS
+// (excluding options), user-MSS socket option, and the path MTU.
+//
+`../../common/defaults.sh`
+
+// Cache warmup: send a Fast Open cookie request
+    0 socket(..., SOCK_STREAM, IPPROTO_TCP) = 3
+   +0 fcntl(3, F_SETFL, O_RDWR|O_NONBLOCK) = 0
+   +0 sendto(3, ..., 0, MSG_FASTOPEN, ..., ...) = -1
+   +0 > S 0:0(0) <mss 1460,sackOK,TS val 1000 ecr 0,nop,wscale 8,FO,nop,nop>
+ +.01 < S. 123:123(0) ack 1 win 14600 <mss 940,TS val 2000 ecr 1000,sackOK,nop,wscale 6, FO abcd1234,nop,nop>
+   +0 > . 1:1(0) ack 1 <nop,nop,TS val 1001 ecr 2000>
+ +.01 close(3) = 0
+   +0 > F. 1:1(0) ack 1 <nop,nop,TS val 1002 ecr 2000>
+ +.01 < F. 1:1(0) ack 2 win 92 <nop,nop,TS val 2001 ecr 1002>
+   +0 > .  2:2(0) ack 2 <nop,nop,TS val 1003 ecr 2001>
+
+
+//
+// Test: using the correct MSS 940B from a TS-enabled connection
+//
+ +.07 `sysctl -q net.ipv4.tcp_timestamps=0`
+  +.1 socket(..., SOCK_STREAM, IPPROTO_TCP) = 5
+   +0 fcntl(5, F_SETFL, O_RDWR|O_NONBLOCK) = 0
+   +0 sendto(5, ..., 2000, MSG_FASTOPEN, ..., ...) = 900
+   +0 > S 0:900(900) <mss 1460,nop,nop,sackOK,nop,wscale 8,FO abcd1234,nop,nop>
+// Sever acknowledges the data but also sends new cookie
+ +.05 < S. 5678:5678(0) ack 901 win 14600 <mss 1460,nop,nop,sackOK,nop,wscale 6>
+   +0 > . 901:901(0) ack 1
+   +0 < P. 1:1001(1000) ack 901 win 257
+   +0 > . 901:901(0) ack 1001
+ +.05 read(5, ..., 4096) = 1000
+   +0 close(5) = 0
+
+
+//
+// Test: TCP_MAXSEG is applied to SYN-data
+//
+   +0 socket(..., SOCK_STREAM, IPPROTO_TCP) = 6
+   +0 setsockopt(6, SOL_TCP, TCP_MAXSEG, [1040], 4) = 0
+   +0 sendto(6, ..., 2000, MSG_FASTOPEN|MSG_DONTWAIT, ..., ...) = 1000
+// It will affect SYN-data and advmss
+   +0 > S 0:1000(1000) <mss 1040,nop,nop,sackOK,nop,wscale 8,FO abcd1234,nop,nop>
+ +.05 < S. 5678:5678(0) ack 1001 win 14600 <mss 1340,nop,nop,sackOK,nop,wscale 6>
+   +0 > . 1001:1001(0) ack 1
+   +0 < P. 1:1001(1000) ack 1001 win 257
+   +0 > . 1001:1001(0) ack 1001
+ +.05 read(6, ..., 4096) = 1000
+   +0 close(6) = 0
+
+//
+// Test: using the correct MSS 1340B from a previous connection
+//
+  +.1 socket(..., SOCK_STREAM, IPPROTO_TCP) = 7
+   +0 fcntl(7, F_SETFL, O_RDWR|O_NONBLOCK) = 0
+   +0 sendto(7, ..., 2000, MSG_FASTOPEN|MSG_DONTWAIT, ..., ...) = 1300
+   +0 > S 0:1300(1300) <mss 1460,nop,nop,sackOK,nop,wscale 8,FO abcd1234,nop,nop>
+// Prepare for next test: SYNACK has unreasonably large MSS
+ +.05 < S. 5678:5678(0) ack 1301 win 65535 <mss 10000>
+   +0 > . 1301:1301(0) ack 1
+   +0 < P. 1:1001(1000) ack 1301 win 257
+   +0 > . 1301:1301(0) ack 1001
+ +.05 read(7, ..., 4096) = 1000
+   +0 close(7) = 0
+
+//
+// Test: SYN-data = min(MSS_cached=10KB, PMTU/hdrs=1460)
+//
+  +.1 socket(..., SOCK_STREAM, IPPROTO_TCP) = 8
+   +0 fcntl(8, F_SETFL, O_RDWR|O_NONBLOCK) = 0
+   +0 sendto(8, ..., 2000, MSG_FASTOPEN|MSG_DONTWAIT, ..., ...) = 1420
+   +0 > S 0:1420(1420) <mss 1460,nop,nop,sackOK,nop,wscale 8,FO abcd1234,nop,nop>
+ +.05 < S. 5678:5678(0) ack 1421 win 65535 <mss 1460>
+   +0 > . 1421:1421(0) ack 1
+   +0 < P. 1:1001(1000) ack 1421 win 257
+   +0 > . 1421:1421(0) ack 1001
+ +.05 read(8, ..., 4096) = 1000
+   +0 close(8) = 0

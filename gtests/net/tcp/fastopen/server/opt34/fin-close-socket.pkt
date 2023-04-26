@@ -1,0 +1,25 @@
+//
+// Send a FIN pkt with the ACK bit to a TFO socket.
+// The socket will go to TCP_CLOSE_WAIT state and data can be
+// read until the socket is closed, at which time a FIN will be sent.
+//
+--remote_ip=192.0.2.1
+--local_ip=192.168.0.1
+`../../../common/defaults.sh`
+
+    0 socket(..., SOCK_STREAM, IPPROTO_TCP) = 3
+  +.1 setsockopt(3, SOL_SOCKET, SO_REUSEADDR, [1], 4) = 0
+   +0 bind(3, ..., ...) = 0
+   +0 listen(3, 1) = 0
+   +0 setsockopt(3, SOL_TCP, TCP_FASTOPEN, [2], 4) = 0
+   +0 < S 0:10(10) win 32792 <mss 1460,sackOK,nop,nop,FO 3021b9d889017eeb,nop,nop>
+   +0 > S. 0:0(0) ack 11 <mss 1460,nop,nop,sackOK>
+  +.1 < F. 11:11(0) ack 1 win 32792
+   +0 > . 1:1(0) ack 12
+// FIN is acked and the socket goes to TCP_CLOSE_WAIT state.
+  +.1 accept(3, ..., ...) = 4
+   +0 %{ assert (tcpi_options & TCPI_OPT_SYN_DATA) != 0, tcpi_options }%
+  +.1 read(4, ..., 512) = 10
+  +.1 close(4) = 0
+   +0 > F. 1:1(0) ack 12
+* > F. 1:1(0) ack 12

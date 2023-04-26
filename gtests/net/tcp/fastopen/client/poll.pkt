@@ -1,0 +1,73 @@
+//
+// Test poll will not return until handshake has completed and return
+// the right events.
+//
+`../../common/defaults.sh
+ ../../common/set_sysctls.py /proc/sys/net/ipv4/tcp_timestamps=0`
+
+// Cache warmup: send a Fast Open cookie request
+    0 socket(..., SOCK_STREAM, IPPROTO_TCP) = 3
+   +0 fcntl(3, F_SETFL, O_RDWR|O_NONBLOCK) = 0
+   +0 sendto(3, ..., 0, MSG_FASTOPEN, ..., ...) = -1 EINPROGRESS (Operation is now in progress)
+   +0 > S 0:0(0) <mss 1460,nop,nop,sackOK,nop,wscale 8,FO,nop,nop>
+//
+// Test: poll does not return until receiving SYN-ACK for FO cookie request
+//
+   +0...0.010 poll([{fd=3,
+                     events=POLLIN|POLLOUT|POLLERR,
+                     revents=POLLOUT}], 1, 100) = 1
+ +.01 < S. 123:123(0) ack 1 win 5840 <mss 1040,nop,nop,sackOK,nop,wscale 6,FO abcd1234,nop,nop>
+   +0 > . 1:1(0) ack 1
+   +0 %{ assert (tcpi_options & TCPI_OPT_SYN_DATA) == 0, tcpi_options }%
+ +.01 close(3) = 0
+   +0 > F. 1:1(0) ack 1
+ +.01 < F. 1:1(0) ack 2 win 92
+   +0 > .  2:2(0) ack 2
+
+
+ +.17 socket(..., SOCK_STREAM, IPPROTO_TCP) = 4
+   +0 fcntl(4, F_SETFL, O_NONBLOCK) = 0
+   +0 sendto(4, ..., 2000, MSG_FASTOPEN, ..., ...) = 1000
+   +0 > S 0:1000(1000) <mss 1460,nop,nop,sackOK,nop,wscale 8,FO abcd1234,nop,nop>
+//
+// Test: poll does not return until receiving SYN-ACK in Fast Open
+//
+ +.01...0.020 poll([{fd=4,
+                     events=POLLIN|POLLOUT|POLLERR,
+                     revents=POLLOUT}], 1, 100) = 1
+ +.01 < S. 1111:1111(0) ack 1001 win 60000 <mss 1040,nop,nop,sackOK>
+   +0 > . 1001:1001(0) ack 1
+   +0 %{ assert (tcpi_options & TCPI_OPT_SYN_DATA) != 0, tcpi_options }%
+ +.03 close(4) = 0
+
+ +.05 socket(..., SOCK_STREAM, IPPROTO_TCP) = 4
+   +0 fcntl(4, F_SETFL, O_NONBLOCK) = 0
+   +0 sendto(4, ..., 2000, MSG_FASTOPEN, ..., ...) = 1000
+   +0 > S 0:1000(1000) <mss 1460,nop,nop,sackOK,nop,wscale 8,FO abcd1234,nop,nop>
+//
+// Test: poll returns POLLERR|POLLHUP on RST in SYN-SENT
+//
+ +.01...0.020 poll([{fd=4,
+                     events=POLLIN|POLLOUT|POLLERR|POLLHUP,
+                     revents=POLLIN|POLLOUT|POLLERR|POLLHUP}], 1, 100) = 1
+ +.01 < R. 0:0(0) ack 1 win 0
+   +0 %{ assert (tcpi_options & TCPI_OPT_SYN_DATA) == 0, tcpi_options }%
+ +.03 close(4) = 0
+
+
+ +.05 socket(..., SOCK_STREAM, IPPROTO_TCP) = 5
+   +0 fcntl(5, F_SETFL, O_NONBLOCK) = 0
+   +0 connect(5, ..., ...) = -1 EINPROGRESS (Operation is now in progress)
+   +0 > S 0:0(0) <mss 1460,nop,nop,sackOK,nop,wscale 8>
+//
+// Test: poll returns POLLERR|POLLHUP on RST for regular connect when sysctl
+//       fast open is on.
+//
+ +.01...0.020 poll([{fd=5,
+                     events=POLLIN|POLLOUT|POLLERR|POLLHUP,
+                     revents=POLLIN|POLLOUT|POLLERR|POLLHUP}], 1, 100) = 1
+ +.01 < R. 0:0(0) ack 1 win 0
+   +0 %{ assert (tcpi_options & TCPI_OPT_SYN_DATA) == 0, tcpi_options }%
+ +.03 close(5) = 0
+
+`/tmp/sysctl_restore_${PPID}.sh`

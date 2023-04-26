@@ -1,0 +1,46 @@
+//
+// SYN with Fast Open Cookie Request or server SYN-ACK is lost
+//
+`../../common/defaults.sh
+ ../../common/set_sysctls.py /proc/sys/net/ipv4/tcp_timestamps=0`
+
+//
+// Test: SYN retransmit should not include Fast Open Cookie Request
+//
+    0 socket(..., SOCK_STREAM, IPPROTO_TCP) = 3
+   +0 fcntl(3, F_SETFL, O_RDWR|O_NONBLOCK) = 0
+   +0 sendto(3, ..., 0, MSG_FASTOPEN, ..., ...) = -1 EINPROGRESS (Operation is now in progress)
+   +0 > S 0:0(0) <mss 1460,nop,nop,sackOK,nop,wscale 8,FO,nop,nop>
+   +1 > S 0:0(0) <mss 1460,nop,nop,sackOK,nop,wscale 8>
+ +.01 < S. 123:123(0) ack 1 win 5840 <mss 1460,nop,wscale 6>
+   +0 > . 1:1(0) ack 1
+   +0 %{ assert (tcpi_options & TCPI_OPT_SYN_DATA) == 0, tcpi_options }%
+ +.01 close(3) = 0
+   +0 > F. 1:1(0) ack 1
+ +.01 < F. 1:1(0) ack 2 win 92
+   +0 > .  2:2(0) ack 2
+
+//
+// Test: SYN-ACK with cookie is cached even after SYN timeout. This is
+//       because the timeout may be spurious.
+//
+ +.07 socket(..., SOCK_STREAM, IPPROTO_TCP) = 4
+   +0 fcntl(4, F_SETFL, O_RDWR|O_NONBLOCK) = 0
+   +0 sendto(4, ..., 0, MSG_FASTOPEN, ..., ...) = -1 EINPROGRESS (Operation is now in progress)
+   +0 > S 0:0(0) <mss 1460,nop,nop,sackOK,nop,wscale 8,FO,nop,nop>
+// SYN retransmit should not include Fast Open Cookie Request
+   +1 > S 0:0(0) <mss 1460,nop,nop,sackOK,nop,wscale 8>
+ +.01 < S. 123:123(0) ack 1 win 60000 <mss 1240,FO aaaabbbbcccc>
+   +0 > . 1:1(0) ack 1
+   +0 %{ assert (tcpi_options & TCPI_OPT_SYN_DATA) == 0, tcpi_options }%
+ +.01 close(4) = 0
+   +0 > F. 1:1(0) ack 1
+ +.01 < F. 1:1(0) ack 2 win 92
+   +0 > .  2:2(0) ack 2
+
+ +.07 socket(..., SOCK_STREAM, IPPROTO_TCP) = 5
+   +0 fcntl(5, F_SETFL, O_RDWR|O_NONBLOCK) = 0
+   +0 sendto(5, ..., 10000, MSG_FASTOPEN, ..., ...) = 1200
+   +0 > S 0:1200(1200) <mss 1460,nop,nop,sackOK,nop,wscale 8,FO aaaabbbbcccc>
+
+`/tmp/sysctl_restore_${PPID}.sh`

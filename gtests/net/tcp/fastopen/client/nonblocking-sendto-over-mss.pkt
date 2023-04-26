@@ -1,0 +1,66 @@
+//
+// Non-blocking Fast Open with large data (> mss)
+//
+`../../common/defaults.sh
+ ../../common/set_sysctls.py /proc/sys/net/ipv4/tcp_timestamps=0`
+
+// Cache warmup: send a Fast Open cookie request
+    0 socket(..., SOCK_STREAM, IPPROTO_TCP) = 3
+   +0 fcntl(3, F_SETFL, O_RDWR|O_NONBLOCK) = 0
+   +0 sendto(3, ..., 0, MSG_FASTOPEN, ..., ...) = -1 EINPROGRESS (Operation is now in progress)
+   +0 > S 0:0(0) <mss 1460,nop,nop,sackOK,nop,wscale 8,FO,nop,nop>
+ +.01 < S. 123:123(0) ack 1 win 14600 <mss 1460,nop,nop,sackOK,nop,wscale 6,FO 000000000000>
+   +0 > . 1:1(0) ack 1
+   +0 %{ assert (tcpi_options & TCPI_OPT_SYN_DATA) == 0, tcpi_options }%
+ +.01 close(3) = 0
+   +0 > F. 1:1(0) ack 1
+ +.01 < F. 1:1(0) ack 2 win 92
+   +0 > .  2:2(0) ack 2
+
+
+//
+// Test: non-blocking of sendto(5000B) and server accepts SYN-data
+//
+ +.03 socket(..., SOCK_STREAM, IPPROTO_TCP) = 7
+   +0 fcntl(7, F_SETFL, O_RDWR|O_NONBLOCK) = 0
+// Immediately returns bytes buffered (and sent)
+   +0 sendto(7, ..., 5000, MSG_FASTOPEN, ..., ...) = 1420
+   +0 > S 0:1420(1420) <mss 1460,nop,nop,sackOK,nop,wscale 8,FO 000000000000>
+ +.01 < S. 0:0(0) ack 1421 win 60000 <mss 1460,nop,nop,sackOK,nop,wscale 6>
+   +0 > . 1421:1421(0) ack 1
+   +0 %{ assert (tcpi_options & TCPI_OPT_SYN_DATA) != 0, tcpi_options }%
+// Wrote the remain bytes
+   +0 write(7, ..., 3580) = 3580
+   +0 > P. 1421:5001(3580) ack 1
+ +.01 < P. 1:1001(1000) ack 5001 win 1024
+   +0 > . 5001:5001(0) ack 1001
+   +0 read(7, ..., 1024) = 1000
+   +0 close(7) = 0
+   +0 > F. 5001:5001(0) ack 1001
+ +.02 < F. 1001:1001(0) ack 5001 win 1024
+   +0 > . 5002:5002(0) ack 1002
+
+
+//
+// Test: non-blocking of sendto(5000B) but server rejects SYN-data
+//
+   +0 socket(..., SOCK_STREAM, IPPROTO_TCP) = 3
+   +0 fcntl(3, F_SETFL, O_RDWR|O_NONBLOCK) = 0
+   +0 sendto(3, ..., 5000, MSG_FASTOPEN, ..., ...) = 1420
+   +0 > S 0:1420(1420) <mss 1460,nop,nop,sackOK,nop,wscale 8,FO 000000000000>
+// Server only acks SYN sequence with a new cookie
+ +.05 < S. 0:0(0) ack 1 win 14600 <mss 1460,nop,nop,sackOK,nop,wscale 6,FO aaaabbbbccccdddd,nop,nop>
+// Client retransmits data (originally sent in SYN)
+   +0 > P. 1:1421(1420) ack 1
+   +0 %{ assert (tcpi_options & TCPI_OPT_SYN_DATA) == 0, tcpi_options }%
+   +0 sendto(3, ..., 3580, 0x0, ..., ...) = 3580
+   +0 > P. 1421:5001(3580) ack 1
+ +.05 < P. 1:1001(1000) ack 5001 win 257
+   +0 > . 5001:5001(0) ack 1001
+   +0 read(3, ..., 1024) = 1000
+   +0 close(3) = 0
+   +0 > F. 5001:5001(0) ack 1001
+ +.05 < F. 1001:1001(0) ack 5002 win 257
+   +0 > . 5002:5002(0) ack 1002
+
+`/tmp/sysctl_restore_${PPID}.sh`

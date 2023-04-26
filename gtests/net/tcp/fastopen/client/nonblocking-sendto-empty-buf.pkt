@@ -1,0 +1,42 @@
+//
+// Non-blocking Fast Open with an empty buffer
+//
+`../../common/defaults.sh
+ ../../common/set_sysctls.py /proc/sys/net/ipv4/tcp_timestamps=0`
+
+    0 socket(..., SOCK_STREAM, IPPROTO_TCP) = 3
+   +0 fcntl(3, F_SETFL, O_RDWR|O_NONBLOCK) = 0
+   +0 sendto(3, ..., 0, MSG_FASTOPEN, ..., ...) = -1 EINPROGRESS (Operation is now in progress)
+   +0 > S 0:0(0) <mss 1460,nop,nop,sackOK,nop,wscale 8,FO,nop,nop>
+ +.01 < S. 123:123(0) ack 1 win 14600 <mss 1460,nop,nop,sackOK,nop,wscale 6,FO abcd1234,nop,nop>
+   +0 > . 1:1(0) ack 1
+ +.01 close(3) = 0
+   +0 > F. 1:1(0) ack 1
+ +.01 < F. 1:1(0) ack 2 win 92
+   +0 > .  2:2(0) ack 2
+
+//
+// Test: non-blocking sendto() of 0B
+//
+ +.02 socket(..., SOCK_STREAM, IPPROTO_TCP) = 4
+   +0 fcntl(4, F_SETFL, O_RDWR|O_NONBLOCK) = 0
+   +0 sendto(4, ..., 0, MSG_FASTOPEN, ..., ...) = -1 EINPROGRESS (Operation is now in progress)
+   +0 > S 0:0(0) <mss 1460,nop,nop,sackOK,nop,wscale 8,FO abcd1234,nop,nop>
+// Server acks FO and replies a different MSS (940B)
+ +.02 < S. 1234:1234(0) ack 1 win 14600 <mss 940,nop,nop,sackOK,nop,wscale 6,FO 12345678,nop,nop>
+   +0 > . 1:1(0) ack 1
+   +0 %{ assert (tcpi_options & TCPI_OPT_SYN_DATA) == 0, tcpi_options }%
+
+//
+// Test: previous server's MSS (940B) and cookie are still cached
+//
+ +.03 socket(..., SOCK_STREAM, IPPROTO_TCP) = 5
+   +0 fcntl(5, F_SETFL, O_RDWR|O_NONBLOCK) = 0
+   +0 sendto(5, ..., 2000, MSG_FASTOPEN, ..., ...) = 900
+   +0 > S 0:900(900) <mss 1460,nop,nop,sackOK,nop,wscale 8,FO 12345678,nop,nop>
+// Sever acknowledges the data but also sends new cookie
+ +.05 < S. 5678:5678(0) ack 901 win 14600 <mss 1460,nop,nop,sackOK,nop,wscale 6,FO 000000000000>
+   +0 > . 901:901(0) ack 1
+   +0 %{ assert (tcpi_options & TCPI_OPT_SYN_DATA) != 0, tcpi_options }%
+
+`/tmp/sysctl_restore_${PPID}.sh`

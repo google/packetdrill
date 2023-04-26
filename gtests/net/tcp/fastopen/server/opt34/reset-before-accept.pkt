@@ -1,0 +1,24 @@
+//
+// Send a RST to a TFO socket before it is accepted.
+//
+// The socket won't go away and after it's accepted the data
+// in the SYN pkt can still be read. But that's about all that
+// the acceptor can do with the socket.
+//
+--remote_ip=192.0.2.1
+--local_ip=192.168.0.1
+`../../../common/defaults.sh`
+
+    0 socket(..., SOCK_STREAM, IPPROTO_TCP) = 3
+  +.1 setsockopt(3, SOL_SOCKET, SO_REUSEADDR, [1], 4) = 0
+   +0 bind(3, ..., ...) = 0
+   +0 listen(3, 1) = 0
+   +0 setsockopt(3, SOL_TCP, TCP_FASTOPEN, [2], 4) = 0
+   +0 < S 0:10(10) win 32792 <mss 1460,sackOK,nop,nop,nop,wscale 7,FO 3021b9d889017eeb,nop,nop>
+   +0 > S. 0:0(0) ack 11 <mss 1460,nop,nop,sackOK,nop,wscale 8>
+  +.1 < R. 11:11(0) win 257
+// 0.200 < R 11:11(0) win 257 <- this one w/o ACK bit.
+  +.1 accept(3, ..., ...) = 4
+   +0 %{ assert (tcpi_options & TCPI_OPT_SYN_DATA) != 0, tcpi_options }%
+   +0 read(4, ..., 512) = 10
+   +0 read(4, ..., 512) = -1 ECONNRESET (Connection reset by peer)

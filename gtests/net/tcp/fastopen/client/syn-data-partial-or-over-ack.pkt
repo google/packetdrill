@@ -1,0 +1,90 @@
+//
+// SYN-data is partially acked or "over"-acked
+//
+`../../common/defaults.sh
+ ../../common/set_sysctls.py /proc/sys/net/ipv4/tcp_timestamps=0 \
+                             /proc/sys/net/ipv4/tcp_min_tso_segs=2`
+
+// Cache warmup: send a Fast Open cookie request
+    0 socket(..., SOCK_STREAM, IPPROTO_TCP) = 3
+   +0 fcntl(3, F_SETFL, O_RDWR|O_NONBLOCK) = 0
+   +0 sendto(3, ..., 0, MSG_FASTOPEN, ..., ...) = -1 EINPROGRESS (Operation is now in progress)
+   +0 > S 0:0(0) <mss 1460,nop,nop,sackOK,nop,wscale 8,FO,nop,nop>
+ +.01 < S. 123:123(0) ack 1 win 14600 <mss 1460,nop,nop,sackOK,nop,wscale 6,FO abcd1234,nop,nop>
+   +0 > . 1:1(0) ack 1
+ +.01 close(3) = 0
+   +0 > F. 1:1(0) ack 1
+ +.01 < F. 1:1(0) ack 2 win 92
+   +0 > .  2:2(0) ack 2
+
+//
+// Test: SYN-ACK partially acks the data in SYN with a smaller MSS. The
+//       client should retransmit the remaining data in SYN-ACK immediately
+//
+   +0 socket(..., SOCK_STREAM, IPPROTO_TCP) = 4
+   +0 fcntl(4, F_SETFL, O_RDWR|O_NONBLOCK) = 0
+   +0 sendto(4, ..., 4000, MSG_FASTOPEN, ..., ...) = 1420
+   +0 > S 0:1420(1420) <mss 1460,nop,nop,sackOK,nop,wscale 8,FO abcd1234,nop,nop>
+ +.01 < S. 9999:9999(0) ack 101 win 65535 <mss 1000,nop,nop,sackOK,nop,wscale 6>
+   // The next two packets sent will be dropped (note this is TSO with 2 segs)
+   +0 > P. 101:1421(1320) ack 1
+   +0 %{ assert tcpi_unacked == 2, tcpi_unacked }%
+   +0 write(4, ..., 4000) = 4000
+   +0 > P. 1421:3421(2000) ack 1
+   +0 > P. 3421:5421(2000) ack 1
+   +0 %{ assert tcpi_retrans == 2, tcpi_retrans }%
+ +.01 < . 1:1(0) ack 101 win 257 <sack 1101:5421,nop,nop>
+   // Fast retransmit
+   +0 > . 101:1101(1000) ack 1
+ +.01 < . 1:1(0) ack 5421 win 257
+   +0 %{ assert tcpi_retrans == 0, tcpi_retrans; assert tcpi_unacked == 0, tcpi_unacked }%
+   +0 close(4) = 0
+
+//
+// Test: SYN-ACK acks partially SYN-data. Partial SYN-ACK implies the network
+//       does not drop SYN-data but the server does not support Fast Open.
+//
+ +.02 socket(..., SOCK_STREAM, IPPROTO_TCP) = 4
+   +0 fcntl(4, F_SETFL, O_RDWR|O_NONBLOCK) = 0
+   +0 sendto(4, ..., 18, MSG_FASTOPEN, ..., ...) = 18
+   +0 > S 0:18(18) <mss 1460,nop,nop,sackOK,nop,wscale 8,FO abcd1234,nop,nop>
+// Only 9 out of 18 bytes are acknowledged
++.005 < S. 9999:9999(0) ack 10 win 5840 <mss 1460,nop,nop,sackOK,nop,wscale 6>
+   +0 > P. 10:19(9) ack 1
+// TCPI_OPT_SYN_DATA is set only if entire data is acked
+   +0 %{ assert (tcpi_options & TCPI_OPT_SYN_DATA) == 0, tcpi_options }%
+   +0 close(4) = 0
+   +0 > F. 19:19(0) ack 1
++.005 < F. 1:1(0) ack 20 win 257
+   +0 > . 20:20(0) ack 2
+// Ensure the cache entry is not deleted by checking the next SYN
+ +.01 socket(..., SOCK_STREAM, IPPROTO_TCP) = 5
+   +0 fcntl(5, F_SETFL, O_RDWR|O_NONBLOCK) = 0
+   +0 sendto(5, ..., 1460, MSG_FASTOPEN, ..., ...) = 1420
+   +0 > S 0:1420(1420) <mss 1460,nop,nop,sackOK,nop,wscale 8,FO abcd1234,nop,nop>
+ +.01 < S. 123:123(0) ack 1421 win 14600 <mss 840,FO 12345678ffff>
+   +0 > . 1421:1421(0) ack 1
+ +.01 close(5) = 0
+
+
+//
+// Test: SYN-ack incorrectly "over" acks the SYN-data by 100000. E.g., late or
+//       mis-routed SYN-ACK of previous Fast Open? RFC793 mandates a RST
+//       because the SYN-ACK is out-of-window
+//
+   +0 socket(..., SOCK_STREAM, IPPROTO_TCP) = 6
+   +0 fcntl(6, F_SETFL, O_RDWR|O_NONBLOCK) = 0
+   +0 sendto(6, ..., 100, MSG_FASTOPEN, ..., ...) = 100
+   +0 > S 0:100(100) <mss 1460,nop,nop,sackOK,nop,wscale 8,FO 12345678ffff>
+// SYN-ACK over-acks by 100000 byte
+ +.02 < S. 0:0(0) ack 100101 win 5840 <mss 1040,nop,nop,sackOK,nop,wscale 6,FO badc00ce,nop,nop>
+   +0 %{ assert (tcpi_options & TCPI_OPT_SYN_DATA) == 0, tcpi_options }%
++.001 > R 100101:100101(0) win 0
+
+// Test the cache is intact by checking next SYN uses old cookie and mss
++.019 socket(..., SOCK_STREAM, IPPROTO_TCP) = 7
+   +0 fcntl(7, F_SETFL, O_RDWR|O_NONBLOCK) = 0
+   +0 sendto(7, ..., 2000, MSG_FASTOPEN, ..., ...) = 800
+   +0 > S 0:800(800) <mss 1460,nop,nop,sackOK,nop,wscale 8,FO 12345678ffff>
+
+`/tmp/sysctl_restore_${PPID}.sh`

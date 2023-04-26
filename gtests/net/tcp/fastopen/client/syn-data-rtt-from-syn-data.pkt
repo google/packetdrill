@@ -1,0 +1,39 @@
+//
+// Test RTT sample taken from ACK of SYN or ACK of SYN+data.
+//
+`../../common/defaults.sh
+ ../../common/set_sysctls.py /proc/sys/net/ipv4/tcp_timestamps=0`
+
+// Cache warmup: send a Fast Open cookie request
+    0 socket(..., SOCK_STREAM, IPPROTO_TCP) = 3
+   +0 fcntl(3, F_SETFL, O_RDWR|O_NONBLOCK) = 0
+   +0 sendto(3, ..., 0, MSG_FASTOPEN, ..., ...) = -1 EINPROGRESS (Operation is now in progress)
+   +0 > S 0:0(0) <mss 1460,nop,nop,sackOK,nop,wscale 8,FO,nop,nop>
+   +0 < S. 123:123(0) ack 1 win 5840 <mss 1460,nop,nop,sackOK,nop,wscale 6,FO 1234abcd,nop,nop>
+   +0 > . 1:1(0) ack 1
+   +0 close(3) = 0
+   +0 > F. 1:1(0) ack 1
+   +0 < F. 1:1(0) ack 2 win 92
+   +0 > .  2:2(0) ack 2
+
+//
+// Test: RTT sampling from ACK of SYN+data.
+//
+   +0 socket(..., SOCK_STREAM, IPPROTO_TCP) = 4
+   +0 fcntl(4, F_SETFL, O_RDWR|O_NONBLOCK) = 0
+   +0 sendto(4, ..., 700, MSG_FASTOPEN, ..., ...) = 700
+   +0 > S 0:700(700) <mss 1460,nop,nop,sackOK,nop,wscale 8,FO 1234abcd,nop,nop>
+ +.02 < S. 0:0(0) ack 700 win 5840 <mss 1460,nop,nop,sackOK,nop,wscale 6,FO 1234abcd,nop,nop>
+   +0 %{ assert 15000 <= tcpi_rtt <= 25000, 'rtt=%d' % tcpi_rtt }%  // RTT~=20ms
+
+//
+// Test: RTT sampling from ACK of SYN only.
+//
+   +0 socket(..., SOCK_STREAM, IPPROTO_TCP) = 5
+   +0 fcntl(5, F_SETFL, O_RDWR|O_NONBLOCK) = 0
+   +0 sendto(5, ..., 700, MSG_FASTOPEN, ..., ...) = 700
+   +0 > S 0:700(700) <mss 1460,nop,nop,sackOK,nop,wscale 8,FO 1234abcd,nop,nop>
+ +.03 < S. 0:0(0) ack 1 win 5840 <mss 1460,nop,nop,sackOK,nop,wscale 6,FO 1234abcd,nop,nop>
+   +0 %{ assert 25000 <= tcpi_rtt <= 36000, 'rtt=%d' % tcpi_rtt }%  // RTT~=30ms
+
+`/tmp/sysctl_restore_${PPID}.sh`

@@ -1,0 +1,17 @@
+//
+// Close a listener socket with pending TFO child.
+// This will trigger RST pkt to go out.
+//
+--remote_ip=192.0.2.1
+--local_ip=192.168.0.1
+`../../../common/defaults.sh`
+
+    0 socket(..., SOCK_STREAM, IPPROTO_TCP) = 3
+  +.1 setsockopt(3, SOL_SOCKET, SO_REUSEADDR, [1], 4) = 0
+   +0 bind(3, ..., ...) = 0
+   +0 listen(3, 1) = 0
+   +0 < S 0:10(10) win 32792 <mss 1460,sackOK,nop,nop,FO 3021b9d889017eeb,nop,nop>
+   +0 > S. 0:0(0) ack 11 <mss 1460,nop,nop,sackOK>
+  +.1 close(3) = 0
+// RST pkt is generated for each not-yet-accepted TFO child.
+   +0 > R. 1:1(0) ack 11

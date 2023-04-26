@@ -1,0 +1,129 @@
+//
+// Test server sending SYNACK with data
+//
+--tcp_ts_ecr_scaled // used in TEST 5
+
+`../../common/defaults.sh
+ ../../common/set_sysctls.py /proc/sys/net/ipv4/tcp_timestamps=0`
+
+// Cache warmup: send a Fast Open cookie request
+    0 socket(..., SOCK_STREAM, IPPROTO_TCP) = 3
+   +0 fcntl(3, F_SETFL, O_RDWR|O_NONBLOCK) = 0
+   +0 sendto(3, ..., 0, MSG_FASTOPEN, ..., ...) = -1 EINPROGRESS (Operation is now in progress)
+   +0 > S 0:0(0) <mss 1460,nop,nop,sackOK,nop,wscale 8,FO,nop,nop>
+ +.01 < S. 123:123(0) ack 1 win 5840 <mss 1040,nop,nop,sackOK,nop,wscale 6,FO abcd1234,nop,nop>
+   +0 > . 1:1(0) ack 1
+   +0 close(3) = 0
+   +0 > F. 1:1(0) ack 1
+ +.01 < F. 1:1(0) ack 2 win 92
+   +0 > .  2:2(0) ack 2
+
+
+//
+// TEST1: Servers sends SYN-ACK with data and another two data packets
+//
+   +0 socket(..., SOCK_STREAM, IPPROTO_TCP) = 4
+   +0 fcntl(4, F_SETFL, O_RDWR|O_NONBLOCK) = 0
+   +0 sendto(4, ..., 1000, MSG_FASTOPEN, ..., ...) = 1000
+   +0 > S 0:1000(1000) <mss 1460,nop,nop,sackOK,nop,wscale 8,FO abcd1234,nop,nop>
+ +.01 < S. 1000000:1001400(1400) ack 1001 win 5840 <mss 1040,nop,nop,sackOK,nop,wscale 6>
+   +0 < . 1401:2801(1400) ack 1001 win 257
+   +0 < P. 2801:3001(200) ack 1001 win 257
+   +0 > . 1001:1001(0) ack 1401
+   +0 > . 1001:1001(0) ack 2801
+   +0 > . 1001:1001(0) ack 3001
+
+   +0 read(4, ..., 100000) = 3000
+   +0 close(4) = 0
+   +0 > F. 1001:1001(0) ack 3001
+ +.01 < F. 3001:3001(0) ack 1002 win 257
+   +0 > . 1002:1002(0) ack 3002
+
+//
+// TEST2: SYN-ACK-DATA-FIN is accepted. state SYN_SENT -> CLOSE_WAIT.
+//        poll() functions correctly.
+//
+   +0 socket(..., SOCK_STREAM, IPPROTO_TCP) = 4
+   +0 fcntl(4, F_SETFL, O_RDWR|O_NONBLOCK) = 0
+   +0 sendto(4, ..., 1000, MSG_FASTOPEN, ..., ...) = 1000
+   +0...0.010 poll([{fd=4,
+                     events=POLLIN|POLLOUT|POLLERR|POLLRDHUP,
+                     revents=POLLIN|POLLOUT|POLLRDHUP}], 1, 100) = 1
+   +0 > S 0:1000(1000) <mss 1460,nop,nop,sackOK,nop,wscale 8,FO abcd1234,nop,nop>
+ +.01 < SF. 1000000:1001400(1400) ack 1001 win 5840 <mss 1040,nop,nop,sackOK,nop,wscale 6>
+   +0 %{ assert tcpi_state == TCP_CLOSE_WAIT, tcpi_state }%
+   +0 read(4, ..., 100000) = 1400
+   +0 read(4, ..., 100000) = 0
+   +0 > . 1001:1001(0) ack 1402
+   +0 close(4) = 0
+   +0 > F. 1001:1001(0) ack 1402
+ +.01 < . 1402:1402(0) ack 1002 win 257
+
+//
+// TEST3: Servers sends SYN-ACK with data and another two data packets. SYN-ACK
+//        is lost and the two data packets are ignored. Client timed out and
+//        retransmitted SYN.
+//
+   +0 socket(..., SOCK_STREAM, IPPROTO_TCP) = 4
+   +0 fcntl(4, F_SETFL, O_RDWR|O_NONBLOCK) = 0
+   +0 sendto(4, ..., 1000, MSG_FASTOPEN, ..., ...) = 1000
+   +0 > S 0:1000(1000) <mss 1460,nop,nop,sackOK,nop,wscale 8,FO abcd1234,nop,nop>
+ +.01 < . 1401:2801(1400) ack 1001 win 257
+   +0 < P. 2801:3001(200) ack 1001 win 257
+
+// SYN timeout
+ +.99~+1.1 > S 0:0(0) <mss 1460,nop,nop,sackOK,nop,wscale 8>
+ +.01 < S. 1000000:1001400(1400) ack 1001 win 5840 <mss 1040,nop,nop,sackOK,nop,wscale 6>
+   +0 > . 1001:1001(0) ack 1401
+ +.01 < . 1401:2801(1400) ack 1001 win 257
+   +0 > . 1001:1001(0) ack 2801
+   +0 < P. 2801:3001(200) ack 1001 win 257
+   +0 > . 1001:1001(0) ack 3001
+   +0 read(4, ..., 100000) = 3000
+   +0 close(4) = 0
+   +0 > F. 1001:1001(0) ack 3001
+  +.1 < F. 3001:3001(0) ack 1002 win 257
+   +0 > . 1002:1002(0) ack 3002
+
+//
+// TEST4: SYN-ACK-DATA with TS opt. Also test poll()
+//
+   +0 `sysctl -q net.ipv4.tcp_timestamps=1`
+
+   +0 socket(..., SOCK_STREAM, IPPROTO_TCP) = 4
+   +0 fcntl(4, F_SETFL, O_RDWR|O_NONBLOCK) = 0
+   +0 sendto(4, ..., 1000, MSG_FASTOPEN, ..., ...) = 1000
+   +0...0.010 poll([{fd=4,
+                     events=POLLIN|POLLOUT|POLLERR,
+                     revents=POLLIN|POLLOUT}], 1, 100) = 1
+   +0 > S 0:1000(1000) <mss 1460,sackOK,TS val 1 ecr 0,nop,wscale 8,FO abcd1234,nop,nop>
+ +.01 < S. 1000000:1001400(1400) ack 1001 win 5840 <mss 1040,TS val 1000000 ecr 1,sackOK,nop,wscale 6>
+   +0 > . 1001:1001(0) ack 1401 <nop,nop,TS val 101 ecr 1000000>
+   +0 < . 1401:2801(1400) ack 1001 win 257 <nop,nop,TS val 1000000 ecr 1>
+   +0 > . 1001:1001(0) ack 2801 <nop,nop,TS val 101 ecr 1000000>
+   +0 < P. 2801:3001(200) ack 1001 win 257 <nop,nop,TS val 1000000 ecr 1>
+   +0 > . 1001:1001(0) ack 3001 <nop,nop,TS val 101 ecr 1000000>
+
+   +0 read(4, ..., 100000) = 3000
+   +0 close(4) = 0
+   +0 > F. 1001:1001(0) ack 3001 <nop,nop,TS val 301 ecr 1000000>
+ +.01 < F. 3001:3001(0) ack 1002 win 257 <nop,nop,TS val 1000300 ecr 301>
+   +0 > . 1002:1002(0) ack 3002 <nop,nop,TS val 401 ecr 1000300>
+
+//
+// TEST5: SYN-ACK-DATA with bad TS opt is repelled with an RST.
+//
+   +0 socket(..., SOCK_STREAM, IPPROTO_TCP) = 4
+   +0 fcntl(4, F_SETFL, O_RDWR|O_NONBLOCK) = 0
+   +0 sendto(4, ..., 1000, MSG_FASTOPEN, ..., ...) = 1000
+   +0 > S 0:1000(1000) <mss 1460,sackOK,TS val 1 ecr 0,nop,wscale 8,FO abcd1234,nop,nop>
+// bad ECR value is rejected
+ +.01 < S. 1000000:1001400(1400) ack 1001 win 5840 <mss 1040,TS val 1000000 ecr 9999,sackOK,nop,wscale 6>
+   +0 > R 1001:1001(0)
+// A later valid SYN establishes the connection
+ +.01 < S. 1000000:1000100(100) ack 1001 win 5840 <mss 1040,TS val 1000000 ecr 1,sackOK,nop,wscale 6>
+   +0 > . 1001:1001(0) ack 101 <nop,nop,TS val 21 ecr 1000000>
+   +0 read(4, ..., 100000) = 100
+   +0 %{ assert tcpi_state == TCP_ESTABLISHED, tcpi_state }%
+
+`/tmp/sysctl_restore_${PPID}.sh`
