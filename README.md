@@ -22,7 +22,7 @@ packetdrill. If you are on a Linux system based on Debian/Ubuntu then you can
 use a command like:
 
 ```
-sudo apt install git gcc make bison flex python
+sudo apt install git gcc make bison flex python net-tools
 ```
 
 To check out and build packetdrill:
