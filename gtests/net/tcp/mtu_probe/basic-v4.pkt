@@ -14,7 +14,7 @@
  ../common/set_sysctls.py \
 	/proc/sys/net/ipv4/tcp_mtu_probing=2 \
 	/proc/sys/net/ipv4/tcp_base_mss=512
- ip route change 192.0.2.1 via 192.168.0.2 dev tun0 advmss 600 mtu lock 640 initcwnd 11
+ ip route add 192.0.2.1 via 192.168.0.2 dev tun0 advmss 600 mtu lock 640 initcwnd 11
  ethtool -K tun0 gso off tso off
 `
 

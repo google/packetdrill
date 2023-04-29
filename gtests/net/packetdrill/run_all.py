@@ -64,7 +64,7 @@ class TestSet(object):
          '--local_ip=192.168.0.2 '
          '--gateway_ip=192.168.0.1 '
          '--netmask_ip=255.255.0.0 '
-         '--remote_ip=192.0.2.1 '
+         '--remote_ip=192.0.2.1/24 '
          '-D TFO_COOKIE=de4f234f0f433a55 '
          '-D CMSG_LEVEL_IP=SOL_IP '
          '-D CMSG_TYPE_RECVERR=IP_RECVERR')
@@ -77,7 +77,7 @@ class TestSet(object):
         ('--ip_version=ipv6 --mtu=1520 '
          '--local_ip=fd3d:fa7b:d17d::0 '
          '--gateway_ip=fd3d:fa7b:d17d:8888::0 '
-         '--remote_ip=2001:DB8::1 '
+         '--remote_ip=2001:DB8::1/32 '
          '-D TFO_COOKIE=6aa6ae70c288023b '
          '-D CMSG_LEVEL_IP=SOL_IPV6 '
          '-D CMSG_TYPE_RECVERR=IPV6_RECVERR')
@@ -91,7 +91,7 @@ class TestSet(object):
          '--local_ip=192.168.0.2 '
          '--gateway_ip=192.168.0.1 '
          '--netmask_ip=255.255.0.0 '
-         '--remote_ip=192.0.2.1 '
+         '--remote_ip=192.0.2.1/24 '
          '-D TFO_COOKIE=de4f234f0f433a55 '
          '-D CMSG_LEVEL_IP=SOL_IPV6 '
          '-D CMSG_TYPE_RECVERR=IPV6_RECVERR')
