@@ -285,6 +285,7 @@ fin_flag 	return FIN_FLAG;
 win_size 	return WIN_SIZE;
 checksum 	return CHECKSUM;
 urg_pointer	return URG_POINTER;
+udp_len 	return UDP_LEN;
 version 	return VERSION;
 dscp	 	return DSCP;
 ecn			return ECN;
