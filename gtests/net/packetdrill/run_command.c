@@ -36,6 +36,14 @@
 void run_command_event(
 	struct state *state, struct event *event, struct command_spec *command)
 {
+	char *script_path = NULL;
+	char cwd[300];
+
+	getcwd((char *)&cwd, sizeof(cwd));
+	script_path = strdup(state->config->script_path);
+	chdir(dirname(script_path));
+	free(script_path);
+
 	DEBUGP("%d: command: `%s`\n", event->line_number,
 	       command->command_line);
 
@@ -45,9 +53,11 @@ void run_command_event(
 	char *error = NULL;
 	if (safe_system(command->command_line, &error))
 		goto error_out;
+	chdir(cwd);
 	return;
 
 error_out:
+	chdir(cwd);
 	die("%s:%d: error executing `%s` command: %s\n",
 	    state->config->script_path, event->line_number,
 	    command->command_line, error);
