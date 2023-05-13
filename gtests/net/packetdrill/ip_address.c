@@ -26,9 +26,12 @@
 
 #include <ifaddrs.h>
 #include <net/if.h>
+#include <netdb.h>
 #include <stdlib.h>
 #include <string.h>
 #include <fcntl.h>
+#include <sys/types.h>
+#include <sys/socket.h>
 #include <unistd.h>
 
 #include "logging.h"
@@ -145,6 +148,32 @@ const char *ip_to_string(const struct ip_address *ip, char *buffer)
 		die_perror("inet_ntop");
 
 	return buffer;
+}
+
+extern int string_to_ip(const char *host, struct ip_address *ip, char **error)
+{
+	int status;
+	u16 port = 0;
+	struct addrinfo *results = NULL, *result = NULL;
+
+	status = getaddrinfo(host, NULL, NULL, &results);
+	if (status) {
+		asprintf(error, "getaddrinfo: %s\n", gai_strerror(status));
+		return STATUS_ERR;
+	}
+
+	status = STATUS_ERR;
+	for (result = results; result != NULL; result = result->ai_next) {
+		if (result->ai_family == AF_INET ||
+		    result->ai_family == AF_INET6) {
+			ip_from_sockaddr(result->ai_addr,
+					 result->ai_addrlen, ip, &port);
+			status = STATUS_OK;
+			break;
+		}
+	}
+	freeaddrinfo(results);
+	return status;
 }
 
 struct ip_address ipv6_map_from_ipv4(const struct ip_address ipv4)

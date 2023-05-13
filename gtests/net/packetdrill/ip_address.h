@@ -90,6 +90,14 @@ extern int ip_parse(const char *ip_string, struct ip_address *ip);
  */
 extern const char *ip_to_string(const struct ip_address *ip, char *buffer);
 
+/* Convert a string containing a human-readable DNS name or IPv/IPv6 address
+ * into an IP address struct. Return STATUS_OK on success. Upon failure (i.e.,
+ * the input host string was not actually a valid DNS name, IPv4 address, or
+ * IPv6 address) returns STATUS_ERR and fills in *error with a malloc-allocated
+ * error message.
+ */
+extern int string_to_ip(const char *host, struct ip_address *ip, char **error);
+
 /* Create an IPv4-mapped IPv6 address. */
 extern struct ip_address ipv6_map_from_ipv4(const struct ip_address ipv4);
 
