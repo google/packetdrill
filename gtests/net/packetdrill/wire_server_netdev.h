@@ -35,7 +35,7 @@
 struct wire_server_netdev;
 
 /* Do any one-time start-up initialization a wire server netdev needs. */
-extern void wire_server_netdev_init(const char *netdev_name);
+extern void wire_server_netdev_init(void);
 
 /* Allocate and return a new wire server netdev. */
 extern struct netdev *wire_server_netdev_new(

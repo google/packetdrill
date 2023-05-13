@@ -515,7 +515,7 @@ void run_wire_server(const struct config *config)
 {
 	struct wire_conn *listen_conn = NULL;
 
-	wire_server_netdev_init(config->wire_server_device);
+	wire_server_netdev_init();
 
 	listen_conn = wire_conn_new();
 

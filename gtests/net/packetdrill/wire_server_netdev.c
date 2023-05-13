@@ -57,7 +57,7 @@ static inline struct wire_server_netdev *to_server_netdev(
 	return (struct wire_server_netdev *)netdev;
 }
 
-void wire_server_netdev_init(const char *netdev_name)
+void wire_server_netdev_init(void)
 {
 #ifdef linux
 	char *command = NULL;
@@ -84,17 +84,99 @@ void wire_server_netdev_init(const char *netdev_name)
 	 */
 	system(command);
 	free(command);
+#endif
+}
 
-	/* Block outgoing IPv6 "destination unreachable" messages, to
-	 * block the "destination unreachable, unreachable route"
-	 * messages we would otherwise send the kernel under test.
-	 * That would cause the kernel under test to delete the TCP
-	 * socket under test and send a RST.
-	 */
+static char *iptables(const struct config *config)
+{
+	return ((config->ip_version == IP_VERSION_6) ?
+		"ip6tables" : "iptables");
+}
+
+/* If debugging, dump current firewall rules. */
+static void wire_server_netdev_dump_firewall_rules(const struct config *config)
+{
+#ifdef linux
+	char *command = NULL;
+
+	if (!DEBUG_LOGGING)
+		return;
+
+	asprintf(&command, "%s -L -n", iptables(config));
+	system(command);
+	free(command);
+#endif
+}
+
+/* Drop incoming test traffic packets from the kernel under test, before they
+ * are seen by the TCP/UDP/etc layers of the wire server machine. In some cases
+ * (e.g., if a network does not allow spoofing) the packetdrill test traffic
+ * may use the "real" IP addresses of the client and server machine NICs. In
+ * such cases we don't want the kernel of the wire server machine to process
+ * and respond to the test traffic (e.g., because we don't want the wire server
+ * machine's kernel to send RST packets in response to the connections under
+ * test).
+ */
+static void wire_server_netdev_drop_test_traffic(const struct config *config)
+{
+#ifdef linux
+	char *command = NULL;
+
 	asprintf(&command,
-		 "ip6tables -F OUTPUT; "
-		 "ip6tables -A OUTPUT -p icmpv6 --icmpv6-type 1 -j DROP");
-	/* For now, intentionally ignoring. TODO: clean up. */
+		 "("
+		 /* drop TCP to connect port: */
+		 "%s -I INPUT -s %s -p tcp -m tcp --dport %u -j DROP; "
+		 /* drop TCP from bind port: */
+		 "%s -I INPUT -s %s -p tcp -m tcp --sport %u -j DROP; "
+		 /* drop UDP to connect port: */
+		 "%s -I INPUT -s %s -p udp -m udp --dport %u -j DROP; "
+		 /* drop UDP from bind port: */
+		 "%s -I INPUT -s %s -p udp -m udp --sport %u -j DROP; "
+		 ") > /dev/null 2>&1",
+		 /* TCP: */
+		 iptables(config),
+		 config->live_local_ip_string, config->live_connect_port,
+		 iptables(config),
+		 config->live_local_ip_string, config->live_bind_port,
+		 /* UDP: */
+		 iptables(config),
+		 config->live_local_ip_string, config->live_connect_port,
+		 iptables(config),
+		 config->live_local_ip_string, config->live_bind_port);
+	/* For now, intentionally ignoring errors. TODO: clean up. */
+	system(command);
+	free(command);
+#endif
+}
+
+/* Clean up firewall rules from wire_server_netdev_drop_test_traffic(). */
+static void wire_server_netdev_permit_test_traffic(const struct config *config)
+{
+#ifdef linux
+	char *command = NULL;
+
+	asprintf(&command,
+		 "("
+		 /* TCP to connect port: */
+		 "%s -D INPUT -s %s -p tcp -m tcp --dport %u -j DROP; "
+		 /* TCP from bind port: */
+		 "%s -D INPUT -s %s -p tcp -m tcp --sport %u -j DROP; "
+		 /* UDP to connect port: */
+		 "%s -D INPUT -s %s -p udp -m udp --dport %u -j DROP; "
+		 /* UDP from bind port: */
+		 "%s -D INPUT -s %s -p udp -m udp --sport %u -j DROP; "
+		 ") > /dev/null 2>&1",
+		 /* TCP: */
+		 iptables(config),
+		 config->live_local_ip_string, config->live_connect_port,
+		 iptables(config),
+		 config->live_local_ip_string, config->live_bind_port,
+		 /* UDP: */
+		 iptables(config),
+		 config->live_local_ip_string, config->live_connect_port,
+		 iptables(config),
+		 config->live_local_ip_string, config->live_bind_port);
+	/* For now, intentionally ignoring errors. TODO: clean up. */
 	system(command);
 	free(command);
 #endif
@@ -135,6 +217,21 @@ struct netdev *wire_server_netdev_new(
 				 client_ether_addr,
 				 &config->live_local_ip);  /* client IP */
 
+	/* We use filter rules to ensure the local wire server kernel doesn't
+	 * see packets from the machine under test, so it doesn't send TCP RST
+	 * or ICMP responses.
+	 */
+
+	/* First, clean up any old firewall rules that might be around if a
+	 * user hit ctrl-C in the middle of a test previously, so adding the
+	 * rules below doesn't create duplicates:
+	 */
+	wire_server_netdev_permit_test_traffic(config);
+	/* Then add the filter rules we want to have in place: */
+	wire_server_netdev_drop_test_traffic(config);
+	/* Dump the rules if --debug command line argument was passed: */
+	wire_server_netdev_dump_firewall_rules(config);
+
 	return (struct netdev *)netdev;
 }
 
@@ -143,6 +240,11 @@ static void wire_server_netdev_free(struct netdev *a_netdev)
 	struct wire_server_netdev *netdev = to_server_netdev(a_netdev);
 
 	DEBUGP("wire_server_netdev_free\n");
+
+	/* Remove the filter rules we put in place before the test started: */
+	wire_server_netdev_permit_test_traffic(netdev->config);
+	/* Dump the rules if --debug command line argument was passed: */
+	wire_server_netdev_dump_firewall_rules(netdev->config);
 
 	net_del_dev_address(netdev->name,
 			    &netdev->config->live_gateway_ip,
