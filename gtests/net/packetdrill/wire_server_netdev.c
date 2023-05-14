@@ -46,6 +46,7 @@ struct wire_server_netdev {
 	struct ether_addr server_ether_addr;
 
 	struct packet_socket *psock;	/* for sniffing packets (owned) */
+	bool create_gateway_ip;		/* create gateway IP on server? */
 };
 
 struct netdev_ops wire_server_netdev_ops;
@@ -199,16 +200,22 @@ struct netdev *wire_server_netdev_new(
 	ether_copy(&netdev->client_ether_addr, client_ether_addr);
 	ether_copy(&netdev->server_ether_addr, server_ether_addr);
 
-	/* Add the gateway IP to our NIC, so it answers ARP or
+	/* If the configured gateway IP address is different than the
+	 * IP address of our wire server machine, then we
+	 * add the gateway IP to our NIC, so it answers ARP or
 	 * neighbor discovery requests, so we can receive packets from
 	 * the client. TODO(ncardwell): support multiple concurrent
 	 * tests, by perhaps ref-counting the gateway IPs we need to
 	 * be using. TODO(ncardwell): make sure we don't delete our
 	 * primary host IP (the one matching our hostname).
 	 */
-	net_setup_dev_address(netdev->name,
-			      &config->live_gateway_ip,
-			      config->live_prefix_len);
+	netdev->create_gateway_ip =
+		!is_ip_local(&netdev->config->live_gateway_ip);
+	if (netdev->create_gateway_ip) {
+		net_setup_dev_address(netdev->name,
+				      &config->live_gateway_ip,
+				      config->live_prefix_len);
+	}
 
 	netdev->psock = packet_socket_new(netdev->name);
 
@@ -247,9 +254,12 @@ static void wire_server_netdev_free(struct netdev *a_netdev)
 	/* Dump the rules if --debug command line argument was passed: */
 	wire_server_netdev_dump_firewall_rules(netdev->config);
 
-	net_del_dev_address(netdev->name,
-			    &netdev->config->live_gateway_ip,
-			    netdev->config->live_prefix_len);
+	/* Clean up any gateway IP we added: remove it from our NIC. */
+	if (netdev->create_gateway_ip) {
+		net_del_dev_address(netdev->name,
+				    &netdev->config->live_gateway_ip,
+				    netdev->config->live_prefix_len);
+	}
 
 	free(netdev->name);
 	if (netdev->psock)
