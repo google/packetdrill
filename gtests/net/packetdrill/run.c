@@ -596,9 +596,9 @@ void run_script(struct config *config, struct script *script)
 	if (script->init_command != NULL) {
 		if (safe_system(script->init_command->command_line,
 				&error)) {
-			asprintf(&error, "%s: error executing init command: %s\n",
+			fprintf(stderr,
+				"%s: error executing init command: %s\n",
 				 config->script_path, error);
-			free(error);
 			exit(EXIT_FAILURE);
 		}
 		init_cmd_exed = true;
