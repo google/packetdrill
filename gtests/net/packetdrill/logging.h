@@ -27,15 +27,19 @@
 
 #include "types.h"
 
-/* Enable this to get debug logging. */
-#define DEBUG_LOGGING 0
+/*
+ * Throughout the code, DEBUG_LOGGING enables blocks of debugging code
+ * that require more than DEBUGP()
+ */
+#define DEBUG_LOGGING opt_debug
+extern int opt_debug;
 
-/* Use a gcc variadic macro to conditionally compile debug printing. */
-#define DEBUGP(...)				\
-	if (DEBUG_LOGGING) {			\
-		fprintf(stdout,  __VA_ARGS__);	\
-		fflush(stdout);			\
-	}
+#define DEBUGP(fmt, ...) do {					\
+	if (DEBUG_LOGGING) {					\
+		fprintf(stdout, "%s %d] " fmt,			\
+			__FILE__, __LINE__, ##__VA_ARGS__);	\
+		fflush(stdout);					\
+	} } while (0)
 
 /* Log the message to stderr and then exit with a failure status code. */
 extern void __attribute__((noreturn)) die(char *format, ...);

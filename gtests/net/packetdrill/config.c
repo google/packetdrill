@@ -31,6 +31,8 @@
 #include "logging.h"
 #include "ip_prefix.h"
 
+int opt_debug;
+
 /* For the sake of clarity, we require long option names, e.g. --foo,
  * for all options except -v.
  */
@@ -66,6 +68,7 @@ enum option_codes {
 	OPT_DRY_RUN,
 	OPT_IS_ANYIP,
 	OPT_SEND_OMIT_FREE,
+	OPT_DEBUG,
 	OPT_DEFINE = 'D',	/* a '-D' single-letter option */
 	OPT_VERBOSE = 'v',	/* a '-v' single-letter option */
 };
@@ -103,6 +106,7 @@ struct option options[] = {
 	{ "dry_run",		.has_arg = false, NULL, OPT_DRY_RUN },
 	{ "is_anyip",		.has_arg = false, NULL, OPT_IS_ANYIP },
 	{ "send_omit_free",	.has_arg = false, NULL, OPT_SEND_OMIT_FREE },
+	{ "debug",		.has_arg = false, NULL, OPT_DEBUG },
 	{ "define",		.has_arg = true,  NULL, OPT_DEFINE },
 	{ "verbose",		.has_arg = false, NULL, OPT_VERBOSE },
 	{ NULL },
@@ -142,6 +146,7 @@ void show_usage(void)
 		"\t[--dry_run]\n"
 		"\t[--is_anyip]\n"
 		"\t[--send_omit_free]\n"
+		"\t[--debug]\n"
 		"\t[--define symbol1=val1 --define symbol2=val2 ...]\n"
 		"\t[--verbose|-v]\n"
 		"\tscript_path ...\n");
@@ -518,6 +523,9 @@ static void process_option(int opt, char *optarg, struct config *config,
 		break;
 	case OPT_SEND_OMIT_FREE:
 		config->send_omit_free = true;
+		break;
+	case OPT_DEBUG:
+		opt_debug++;
 		break;
 	case OPT_DEFINE:
 		equals = strstr(optarg, "=");
