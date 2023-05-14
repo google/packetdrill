@@ -127,10 +127,10 @@ static void packet_socket_setup(struct packet_socket *psock)
 
 /* Add a filter so we only sniff packets we want. */
 void packet_socket_set_filter(struct packet_socket *psock,
-			      const struct ether_addr *client_ether_addr,
-			      const struct ip_address *client_live_ip)
+			      const struct ip_address *client_live_ip,
+			      u16 src_port,
+			      u16 dst_port)
 {
-	const u8 *client_ether = client_ether_addr->ether_addr_octet;
 	struct bpf_program bpf_code;
 	char *filter_str = NULL;
 	char client_live_ip_string[ADDR_STR_LEN];
@@ -138,15 +138,12 @@ void packet_socket_set_filter(struct packet_socket *psock,
 	ip_to_string(client_live_ip, client_live_ip_string);
 
 	asprintf(&filter_str,
-		 "ether src %02x:%02x:%02x:%02x:%02x:%02x and %s src %s",
-		 client_ether[0],
-		 client_ether[1],
-		 client_ether[2],
-		 client_ether[3],
-		 client_ether[4],
-		 client_ether[5],
+		 "%s src %s and (src port %u or dst port %u or %s)",
 		 client_live_ip->address_family == AF_INET6 ? "ip6" : "ip",
-		 client_live_ip_string);
+		 client_live_ip_string,
+		 src_port,
+		 dst_port,
+		 client_live_ip->address_family == AF_INET6 ? "icmp6" : "icmp");
 
 	DEBUGP("setting BPF filter: %s\n", filter_str);
 

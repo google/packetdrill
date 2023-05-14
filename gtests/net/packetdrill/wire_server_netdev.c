@@ -214,8 +214,9 @@ struct netdev *wire_server_netdev_new(
 
 	/* Make sure we only see packets from the machine under test. */
 	packet_socket_set_filter(netdev->psock,
-				 client_ether_addr,
-				 &config->live_local_ip);  /* client IP */
+				 &config->live_local_ip,     /* client IP */
+				 config->live_bind_port,     /* src port */
+				 config->live_connect_port); /* dst port */
 
 	/* We use filter rules to ensure the local wire server kernel doesn't
 	 * see packets from the machine under test, so it doesn't send TCP RST

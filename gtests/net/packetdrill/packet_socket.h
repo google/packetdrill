@@ -46,8 +46,9 @@ extern void packet_socket_free(struct packet_socket *packet_socket);
 /* Add a filter so we only sniff packets we want. */
 extern void packet_socket_set_filter(
 	struct packet_socket *psock,
-	const struct ether_addr *client_ether_addr,
-	const struct ip_address *client_live_ip);
+	const struct ip_address *client_live_ip,
+	u16 src_port,
+	u16 dst_port);
 
 /* Send the given packet using writev. Return STATUS_OK on success,
  * or STATUS_ERR if writev returns an error.
