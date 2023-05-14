@@ -179,7 +179,11 @@ void packet_socket_set_filter(struct packet_socket *psock,
 		int i;
 		DEBUGP("filter constants:\n");
 		for (i = 0; i < bpfcode.len; ++i)
-			DEBUGP("0x%x\n", bpfcode.filter[i].k);
+			DEBUGP("{ 0x%02x, %3d, %3d, 0x%08x },\n",
+			       bpfcode.filter[i].code,
+			       bpfcode.filter[i].jt,
+			       bpfcode.filter[i].jf,
+			       bpfcode.filter[i].k);
 	}
 
 	/* Attach the filter. */
