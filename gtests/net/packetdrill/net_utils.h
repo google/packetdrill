@@ -53,4 +53,24 @@ extern void net_setup_dev_address(const char *dev_name,
 				  const struct ip_address *ip,
 				  int prefix_len);
 
+/* Look up the name of the local machine and return a malloc-allocated
+ * string with the name of that device.
+ */
+extern char *get_hostname(void);
+
+/* Try to infer the primary IP address of the local machine: the IP
+ * address to which the machine's hostname resolves via DNS.  If
+ * successful, fill in the IP address and return STATUS_OK.  Otherwise
+ * (if unable to determine the answer) return STATUS_ERR and fill in
+ * the error with a malloc-allocated error message.
+ */
+extern int get_primary_ip(struct ip_address *ip, char **error);
+
+/* Try to infer what the primary networking device on the local
+ * machine is: the device holding the primary IP of the machine. If
+ * successful, return a malloc-allocated string with the name of that
+ * device. Otherwise (if unable to determine the answer) return NULL.
+ */
+extern char *get_primary_nic(void);
+
 #endif /* __NET_UTILS_H__ */

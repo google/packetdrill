@@ -124,6 +124,9 @@ struct ip_info {
 
 /* Flavors of IP versions we support. */
 enum ip_version_t {
+	/*IP version is uninitialized, unknown, or not known yet: */
+	IP_VERSION_UNKNOWN	= -1,
+
 	/* Native IPv4, with AF_INET sockets and IPv4 addresses. */
 	IP_VERSION_4		= 0,
 

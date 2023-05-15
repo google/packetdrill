@@ -29,6 +29,7 @@
 
 #include "config.h"
 #include "logging.h"
+#include "net_utils.h"
 #include "ip_prefix.h"
 
 int opt_debug;
@@ -229,7 +230,7 @@ void set_default_config(struct config *config)
 	config->code_command_line	= "python3";
 	config->code_format		= "python";
 	config->code_sockopt		= "";		/* auto-detect */
-	config->ip_version		= IP_VERSION_4;
+	config->ip_version		= IP_VERSION_UNKNOWN;
 	config->live_bind_port		= 8080;
 	config->live_connect_port	= 8080;
 
@@ -263,8 +264,8 @@ void set_default_config(struct config *config)
 	config->init_scripts = NULL;
 
 	config->wire_server_port	= 8081;
-	config->wire_client_device	= "eth0";
-	config->wire_server_device	= "eth0";
+	config->wire_client_device	= NULL;
+	config->wire_server_device	= NULL;
 }
 
 static void set_remote_ip_and_prefix(struct config *config)
@@ -349,6 +350,29 @@ static void finalize_ipv6_config(struct config *config)
 
 void finalize_config(struct config *config)
 {
+	char *error = NULL;
+	struct ip_address ip;
+
+	if (config->ip_version == IP_VERSION_UNKNOWN) {
+		if (get_primary_ip(&ip, &error) == STATUS_OK)
+			config->ip_version =
+				(ip.address_family == AF_INET6) ?
+				IP_VERSION_6 : IP_VERSION_4;
+		else
+			config->ip_version = IP_VERSION_4;
+		free(error);
+	}
+	if (config->is_wire_client && config->wire_client_device == NULL) {
+		config->wire_client_device = get_primary_nic();
+		if (config->wire_client_device == NULL)
+			die("please specify --wire_client_dev=<eth_dev_name>");
+	}
+	if (config->is_wire_server && config->wire_server_device == NULL) {
+		config->wire_server_device = get_primary_nic();
+		if (config->wire_server_device == NULL)
+			die("please specify --wire_server_dev=<eth_dev_name>");
+	}
+
 	assert(config->ip_version >= IP_VERSION_4);
 	assert(config->ip_version <= IP_VERSION_6);
 	switch (config->ip_version) {
@@ -360,6 +384,9 @@ void finalize_config(struct config *config)
 		break;
 	case IP_VERSION_6:
 		finalize_ipv6_config(config);
+		break;
+	case IP_VERSION_UNKNOWN:
+		die("--ip_version unknown");
 		break;
 		/* omitting default so compiler will catch missing cases */
 	}

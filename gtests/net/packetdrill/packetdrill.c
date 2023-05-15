@@ -91,6 +91,7 @@ int main(int argc, char *argv[])
 			exit(EXIT_FAILURE);
 		}
 
+		finalize_config(&config);
 		run_wire_server(&config);
 		return 0;
 	}

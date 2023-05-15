@@ -26,6 +26,7 @@
 
 #include <stdlib.h>
 #include <net/if.h>
+#include <sys/param.h>
 #include <unistd.h>
 
 #include "logging.h"
@@ -169,4 +170,57 @@ void net_setup_dev_address(const char *dev_name,
 	if (found)
 		net_del_dev_address(cur_dev_name, ip, prefix_len);
 	net_add_dev_address(dev_name, ip, prefix_len);
+}
+
+char *get_hostname(void)
+{
+	char host[MAXHOSTNAMELEN];
+	int status = 0;
+
+	status = gethostname(host, sizeof(host));
+	if (status)
+		die_perror("gethostname");
+
+	/* POSIX.1 says truncation doesn't guarantee terminating null byte: */
+	host[sizeof(host) - 1] = '\0';
+	return strdup(host);
+}
+
+int get_primary_ip(struct ip_address *ip, char **error)
+{
+	char *host = NULL;
+	int status = STATUS_ERR;
+
+	/* Find hostname of this machine. */
+	host = get_hostname();
+
+	/* Convert our hostname to a primary IP. */
+	status = string_to_ip(host, ip, error);
+	free(host);
+	return status;
+}
+
+char *get_primary_nic(void)
+{
+	char dev_name[IFNAMSIZ];
+	int status = STATUS_ERR;
+	bool found = false;
+	struct ip_address ip;
+	char *error = NULL;
+
+	/* Convert our hostname to a primary IP. */
+	status = get_primary_ip(&ip, &error);
+	/* Some machines don't have hostname=>IP mappings, and that's OK: */
+	free(error);
+
+	if (status == STATUS_OK) {
+		/* Find the local device that has the primary IP. */
+		found = get_ip_device(&ip, dev_name);
+		if (found) {
+			DEBUGP("using primary device: %s\n", dev_name);
+			return strdup(dev_name);
+		}
+	}
+
+	return NULL;
 }
