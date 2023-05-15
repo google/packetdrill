@@ -111,6 +111,7 @@ int main(int argc, char *argv[])
 		struct script script;
 		const char *script_path = *arg;
 
+		set_default_config(&config);
 		if (parse_script_and_set_config(argc, argv, &config, &script,
 						script_path, NULL))
 			exit(EXIT_FAILURE);

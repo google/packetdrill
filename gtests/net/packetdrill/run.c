@@ -694,7 +694,6 @@ int parse_script_and_set_config(int argc, char *argv[],
 
 	init_script(script);
 
-	set_default_config(config);
 	config->script_path = strdup(script_path);
 
 	if (script_buffer != NULL)
