@@ -30,6 +30,7 @@
 #include "config.h"
 #include "logging.h"
 #include "net_utils.h"
+#include "ip_address.h"
 #include "ip_prefix.h"
 
 int opt_debug;
@@ -226,6 +227,46 @@ static void set_ipv6_defaults(struct config *config)
 		       DEFAULT_V6_LIVE_GATEWAY_IP_STRING);
 }
 
+/* For wire client tests, set any as-yet-unspecified attributes using
+ * useful defaults: the IP addresses used for the test are the IP address
+ * of the client and server machines. Specifically:
+ *  - for --local_ip= use this machine's primary IP address
+ *        (get the local hostname, resolve the local hostname to the
+ *        first IP address it returns)
+ *  - for --gateway_ip= and --remote_ip= use the IP address of the wire server
+ */
+static void set_wire_client_defaults(struct config *config)
+{
+	int status = STATUS_ERR;
+	struct ip_address ip;
+	char *error = NULL;
+
+	if (!config->is_wire_client)
+		return;
+
+	if (config->wire_server_ip_string == NULL)
+		die("when using --wire_client, must specify "
+		    "--wire_server_at or --wire_server_ip");
+
+	if (strlen(config->live_local_ip_string) == 0) {
+		status = get_primary_ip(&ip, &error);
+		free(error);
+		if (status == STATUS_OK) {
+			ip_to_string(&ip, config->live_local_ip_string);
+			DEBUGP("defaulting live_local_ip_string to: %s\n",
+			       config->live_local_ip_string);
+		}
+	}
+
+	if (strlen(config->live_gateway_ip_string) == 0)
+		ip_to_string(&config->wire_server_ip,
+			     config->live_gateway_ip_string);
+
+	if (strlen(config->live_remote_ip_string) == 0)
+		ip_to_string(&config->wire_server_ip,
+			     config->live_remote_ip_string);
+}
+
 /* Set default configuration before we begin parsing. */
 void set_default_config(struct config *config)
 {
@@ -375,6 +416,8 @@ void finalize_config(struct config *config)
 		if (config->wire_server_device == NULL)
 			die("please specify --wire_server_dev=<eth_dev_name>");
 	}
+
+	set_wire_client_defaults(config);
 
 	assert(config->ip_version >= IP_VERSION_4);
 	assert(config->ip_version <= IP_VERSION_6);
