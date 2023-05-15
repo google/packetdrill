@@ -270,6 +270,8 @@ static void set_wire_client_defaults(struct config *config)
 /* Set default configuration before we begin parsing. */
 void set_default_config(struct config *config)
 {
+	DEBUGP("set_default_config\n");
+
 	memset(config, 0, sizeof(*config));
 	config->code_command_line	= "python3";
 	config->code_format		= "python";
@@ -419,6 +421,9 @@ void finalize_config(struct config *config)
 
 	set_wire_client_defaults(config);
 
+	DEBUGP("finalize_config: config->live_local_ip_string: [%s]\n",
+	       config->live_local_ip_string);
+
 	assert(config->ip_version >= IP_VERSION_4);
 	assert(config->ip_version <= IP_VERSION_6);
 	switch (config->ip_version) {
@@ -509,6 +514,8 @@ static void process_option(int opt, char *optarg, struct config *config,
 		break;
 	case OPT_LOCAL_IP:
 		strncpy(config->live_local_ip_string, optarg, ADDR_STR_LEN-1);
+		DEBUGP("process_option setting live_local_ip_string to: %s\n",
+		       config->live_local_ip_string);
 		break;
 	case OPT_GATEWAY_IP:
 		strncpy(config->live_gateway_ip_string, optarg, ADDR_STR_LEN-1);

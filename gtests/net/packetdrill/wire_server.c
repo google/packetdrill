@@ -495,6 +495,9 @@ static void *wire_server_thread(void *arg)
 						wire_server->script_buffer))
 		goto error_done;
 
+	DEBUGP("wire_server_thread: live_local_ip_string: [%s]\n",
+	       wire_server->config.live_local_ip_string);
+
 	set_scheduling_priority();
 	lock_memory();
 
