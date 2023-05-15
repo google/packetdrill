@@ -139,6 +139,18 @@ static void wire_client_send_hw_address(struct wire_client *wire_client,
 				"error sending WIRE_HARDWARE_ADDR");
 }
 
+/* Send the IP address to which the server should send packets. */
+static void wire_client_send_ip_address(struct wire_client *wire_client,
+					const struct config *config)
+{
+	if (wire_conn_write(wire_client->wire_conn,
+			    WIRE_IP_ADDR,
+			    config->live_local_ip_string,
+			    strlen(config->live_local_ip_string)))
+		wire_client_die(wire_client,
+				"error sending WIRE_IP_ADDR");
+}
+
 /* Receive server's message that the server is ready to execute the script. */
 static void wire_client_receive_server_ready(struct wire_client *wire_client)
 {
@@ -264,6 +276,8 @@ int wire_client_init(struct wire_client *wire_client,
 	wire_client_send_script(wire_client, script);
 
 	wire_client_send_hw_address(wire_client, config);
+
+	wire_client_send_ip_address(wire_client, config);
 
 	wire_client_receive_server_ready(wire_client);
 
