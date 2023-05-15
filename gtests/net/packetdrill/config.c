@@ -530,6 +530,7 @@ static void process_option(int opt, char *optarg, struct config *config,
 				 &config->wire_server_ip, &error))
 			die("bad wire_server_ip: %s: %s\n",
 			    config->wire_server_ip_string, error);
+		config->is_wire_client = true;
 		break;
 	case OPT_WIRE_SERVER_PORT:
 		port = atoi(optarg);
