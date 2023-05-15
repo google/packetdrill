@@ -1490,8 +1490,10 @@ static int run_syscall_accept(struct state *state,
 			char remote_string[ADDR_STR_LEN];
 			DEBUGP("socket state=%d script addr: %s:%d\n",
 			       socket->state,
-			       ip_to_string(&socket->script.remote.ip,
-					    remote_string),
+			       (socket->script.remote.ip.address_family ?
+				ip_to_string(&socket->script.remote.ip,
+					     remote_string) :
+				"UNKNOWN-IP"),
 			       socket->script.remote.port);
 		}
 
