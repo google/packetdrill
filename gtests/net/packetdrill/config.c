@@ -57,6 +57,7 @@ enum option_codes {
 	OPT_WIRE_CLIENT,
 	OPT_WIRE_SERVER,
 	OPT_WIRE_SERVER_IP,
+	OPT_WIRE_SERVER_AT,
 	OPT_WIRE_SERVER_PORT,
 	OPT_WIRE_CLIENT_DEV,
 	OPT_WIRE_SERVER_DEV,
@@ -95,6 +96,7 @@ struct option options[] = {
 	{ "wire_client",	.has_arg = false, NULL, OPT_WIRE_CLIENT },
 	{ "wire_server",	.has_arg = false, NULL, OPT_WIRE_SERVER },
 	{ "wire_server_ip",	.has_arg = true,  NULL, OPT_WIRE_SERVER_IP },
+	{ "wire_server_at",	.has_arg = true,  NULL, OPT_WIRE_SERVER_AT },
 	{ "wire_server_port",	.has_arg = true,  NULL, OPT_WIRE_SERVER_PORT },
 	{ "wire_client_dev",	.has_arg = true,  NULL, OPT_WIRE_CLIENT_DEV },
 	{ "wire_server_dev",	.has_arg = true,  NULL, OPT_WIRE_SERVER_DEV },
@@ -139,6 +141,7 @@ void show_usage(void)
 		"\t[--wire_client]\n"
 		"\t[--wire_server]\n"
 		"\t[--wire_server_ip=<server_name_or_ip_address>]\n"
+		"\t[--wire_server_at=<server_name_or_ip_address>]\n"
 		"\t[--wire_server_port=<server_port>]\n"
 		"\t[--wire_client_dev=<eth_dev_name>]\n"
 		"\t[--wire_server_dev=<eth_dev_name>]\n"
@@ -521,6 +524,7 @@ static void process_option(int opt, char *optarg, struct config *config,
 		config->is_wire_server = true;
 		break;
 	case OPT_WIRE_SERVER_IP:
+	case OPT_WIRE_SERVER_AT:
 		config->wire_server_ip_string = strdup(optarg);
 		if (string_to_ip(config->wire_server_ip_string,
 				 &config->wire_server_ip, &error))
