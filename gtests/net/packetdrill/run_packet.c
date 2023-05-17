@@ -335,6 +335,7 @@ static struct socket *create_socket_for_nontcp_script_packet(
 	/* On a wire server and we have no socket info yet. Create a socket for
 	 * this packet. Any further packets in the test script are mapped here.
 	 */
+	DEBUGP("create_socket_for_nontcp_script_packet: creating socket\n");
 	socket = socket_new(state);
 	state->socket_under_test = socket;
 	/* Set state so that find_connect_for_live_packet() will know that
@@ -395,18 +396,30 @@ static struct socket *find_connect_for_live_packet(
 	if (!socket)
 		return NULL;
 
+	DEBUGP("find_connect_for_live_packet:\n");
+	DEBUGP("socket->protocol: %d socket->state %d\n",
+	       socket->protocol, socket->state);
 	bool is_udp_match =
 		(packet->udp &&
 		 (socket->protocol == IPPROTO_UDP) &&
 		 (socket->state == SOCKET_ACTIVE_CONNECTING));
+	DEBUGP("packet->udp: %p is_udp_match: %u\n",
+	       packet->udp, is_udp_match);
 	bool is_icmp_match =
 		(((packet->icmpv4 && socket->protocol == IPPROTO_ICMP) ||
 		  (packet->icmpv6 && socket->protocol == IPPROTO_ICMPV6)) &&
 		 (socket->state == SOCKET_ACTIVE_CONNECTING));
+	DEBUGP("packet->icmpv4: %p packet->icmpv6: %p is_icmp_match: %u\n",
+	       packet->icmpv4, packet->icmpv6, is_icmp_match);
 	bool is_tcp_match =
 		(packet->tcp && packet->tcp->syn && !packet->tcp->ack &&
 		 (socket->protocol == IPPROTO_TCP) &&
 		 (socket->state == SOCKET_ACTIVE_SYN_SENT));
+	DEBUGP("packet->tcp: %p syn: %u ack: %u is_tcp_match: %u\n",
+	       packet->tcp,
+	       packet->tcp ? packet->tcp->syn : 0,
+	       packet->tcp ? packet->tcp->ack : 0,
+	       is_tcp_match);
 	if (!is_udp_match && !is_tcp_match && !is_icmp_match)
 		return NULL;
 
@@ -1606,20 +1619,24 @@ static int sniff_outbound_live_packet(
 		int status = netdev_receive(state->netdev, timeout_secs,
 					    packet, error);
 
+		DEBUGP("sniff_outbound_live_packet: received packet\n");
 		if (status == STATUS_TIMEOUT)
 			return STATUS_TIMEOUT;
 		if (status)
 			return STATUS_ERR;
 		/* See if the packet matches an existing, known socket. */
+		DEBUGP("sniff_outbound_live_packet: checking known sockets\n");
 		socket = find_socket_for_live_packet(state, *packet,
 						     &direction);
 		if ((socket != NULL) && (direction == DIRECTION_OUTBOUND))
 			break;
 		/* See if the packet matches a recent connect() call. */
+		DEBUGP("sniff_outbound_live_packet: checking new sockets\n");
 		socket = find_connect_for_live_packet(state, *packet,
 						      &direction);
 		if ((socket != NULL) && (direction == DIRECTION_OUTBOUND))
 			break;
+		DEBUGP("sniff_outbound_live_packet: freeing packet\n");
 		packet_free(*packet);
 		*packet = NULL;
 	}
@@ -1627,6 +1644,7 @@ static int sniff_outbound_live_packet(
 	assert(*packet != NULL);
 	assert(socket != NULL);
 	assert(direction == DIRECTION_OUTBOUND);
+	DEBUGP("sniff_outbound_live_packet: sniffed packet and found socket\n");
 
 	if (socket != expected_socket) {
 		asprintf(error, "packet is not for expected socket");
