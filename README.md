@@ -34,6 +34,8 @@ cd packetdrill/gtests/net/packetdrill
 make
 ```
 
+# How To Run All Local Tests for Linux
+
 If you are on a machine with a recent Linux kernel you can su to root and
 run all of the TCP stack tests included in the packetdrill distribution
 in the tcp/ directory:
@@ -42,6 +44,90 @@ in the tcp/ directory:
 cd ..
 ./packetdrill/run_all.py -S -v -L -l tcp/
 ```
+
+# packetdrill's Design
+
+## Execution Model
+
+packetdrill parses an entire test script, and then executes each timestamped
+line in real time -- at the pace described by the timestamps -- to replay and
+verify the scenario. The packetdrill interpreter has one thread for the main
+flow of events and another for executing any system calls that the script
+expects to block (e.g., poll()).
+
+For convenience, scripts use an abstracted notation for packets. Internally,
+packetdrill models aspects of TCP and UDP behavior; to do this, packetdrill
+maintains mappings to translate between the values in the script and those in
+the live packet. The translation includes IP, UDP, and TCP header fields,
+including TCP options such as SACK and timestamps. Thus packetdrill tracks each
+socket and its IP addresses, port numbers, TCP sequence numbers, and TCP
+timestamps.
+
+## Local and Remote Testing
+
+packetdrill enables two modes of testing: local mode, using a TUN
+virtual network device, or remote mode, using a physical NIC.
+
+In local mode, packetdrill uses a single machine and a TUN virtual network
+device as a source and sink for packets. This tests the system call, sockets,
+TCP, and IP layers, and is easier to use because there is less timing
+variation, and users need not coordinate access to multiple machines.
+
+In remote mode, users run two packetdrill processes, one of which is on a
+remote machine and speaks to the system under test over a LAN. This approach
+tests the full networking system: system calls, sockets, TCP, IP, software and
+hardware offload mechanisms, the NIC driver, NIC hardware, wire, and switch;
+however, due to the inherent variability in the many components under test,
+remote mode can result in larger timing variations, which can cause spurious
+test failures.
+
+The packet plumbing is, naturally, a bit different in local and remote
+modes. To capture outgoing packets packetdrill uses a packet socket (on Linux)
+or libpcap (on BSD-derived OSes). To inject packets locally packetdrill uses a
+TUN device; to inject packets over the physical network in remote mode
+packetdrill again uses a packet socket or libpcap. To consume test packets in
+local mode packetdrill uses a TUN device; remotely, packets go over the
+physical network and packetdrill sets up filtering rules to drop the packets
+before layer 4 (UDP or TCP) processing in the remote kernel sees them.
+
+## Local Mode
+
+Local mode is the default, so to use it you need no special command line flags; you only need to provide the path of the script to
+execute:
+
+```
+./packetdrill foo.pkt
+```
+
+## Remote Mode
+
+To use remote mode, on the machine under test (the "client" machine), specify
+the --wire_server_at option to specify the DNS name or IP address of the remote
+server machine to which the client packetdrill instance will connect. Only the
+client instance takes a packetdrill script argument, which can be the path of
+any ordinary packetdrill test script:
+
+```
+client# ./packetdrill --wire_server_at=<server_name_or_ip> foo.pkt
+```
+
+On the remote machine, , run the following to have a packetdrill process act as a "wire server" daemon to inject and sniff
+packets remotely on the wire:
+
+```
+server# ./packetdrill --wire_server
+```
+
+How does this work? First, the client instance connects to the server (using
+TCP), and sends the command line options and the contents of the script file to
+the server instance. Then the client and server packetdrill instances work in
+concert to execute the script and test the client machine's network stack.
+
+Note that before 2023, packetdrill client and server processes needed to be on
+the same layer 2 broadcast domain (e.g., same Ethernet switch). However, since
+May 20 2023 the client and server can be anywhere in the same layer-3 routable
+domain. It is highly recommended to only use packetrill in internal RFC 1918 IP
+address spaces, for "lab" testing, rather than in the public Internet.
 
 # How To Submit a Patch for packetdrill
 
