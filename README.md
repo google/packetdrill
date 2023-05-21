@@ -111,23 +111,42 @@ any ordinary packetdrill test script:
 client# ./packetdrill --wire_server_at=<server_name_or_ip> foo.pkt
 ```
 
-On the remote machine, , run the following to have a packetdrill process act as a "wire server" daemon to inject and sniff
-packets remotely on the wire:
+On the remote machine, run the following to have a packetdrill process act as a
+"wire server" daemon to inject and sniff packets remotely on the wire:
 
 ```
 server# ./packetdrill --wire_server
 ```
 
-How does this work? First, the client instance connects to the server (using
-TCP), and sends the command line options and the contents of the script file to
-the server instance. Then the client and server packetdrill instances work in
-concert to execute the script and test the client machine's network stack.
+How does this work? First, the client packetdrill instance connects to the
+server packetdrill instance (using TCP), and sends the command line options and
+the contents of the script file to the server instance. Then the client and
+server packetdrill instances work in concert to execute the script and test the
+client machine's network stack.
 
-Note that before 2023, packetdrill client and server processes needed to be on
-the same layer 2 broadcast domain (e.g., same Ethernet switch). However, since
-May 20 2023 the client and server can be anywhere in the same layer-3 routable
-domain. It is highly recommended to only use packetrill in internal RFC 1918 IP
-address spaces, for "lab" testing, rather than in the public Internet.
+## IP Addresses for packetdrill Tests
+
+Remote or local mode tests may optionally specify arbitrary IP addresses to use
+for the test traffic, using the following command line arguments:
+
+```
+--local_ip=<local_ip_addr>     # test traffic address for machine under test
+--netmask_ip=<netmask_ip>      # test traffic netmask (if testing IPv4)
+--gateway_ip=<gateway_ip_addr> # test traffic address for gateway
+--remote_ip=<remote_ip_addr>   # test traffic address for remote endpoint
+```
+
+By default, remote mode tests use the "primary" IP address of the client and
+server machines for the test traffic (where the "primary" address is the IP
+address to which the hostname resolves). With this configuration, the client
+and server can be anywhere in the same layer-3 routable domain (though it is
+highly recommended to only use packetrill in an internal RFC 1918 IP address
+space, for "lab" testing, rather than in the public Internet).
+
+When a remote mode test uses arbitrary IP addresses, the packetdrill client and
+server processes must be on the same layer 2 broadcast domain (e.g., on the
+same Ethernet switch), so that the server machine may act as a gateway to reach
+the remote IP address configured via the --remote_ip command line argument.
 
 # How To Submit a Patch for packetdrill
 
