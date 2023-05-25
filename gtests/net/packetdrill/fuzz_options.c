@@ -27,7 +27,7 @@ int fuzz_options_append(struct fuzz_options *fuzz_options, struct fuzz_option *o
         fuzz_options_grow(fuzz_options, fuzz_options->capacity * 2);
     }
 
-    memcpy(fuzz_options->options + fuzz_options->size, option, fuzz_option_size);
+    memcpy(fuzz_options->options + fuzz_options->count, option, fuzz_option_size);
     fuzz_options->size += fuzz_option_size;
     fuzz_options->count += 1;
 

@@ -1970,6 +1970,9 @@ int send_test_complete_signal(struct state *state, struct socket *socket)
 	/* Rewrite addresses and port to match inbound live traffic. */
 	socket_get_inbound(&socket->live, &live_inbound);
 
+	uint8_t termination_offset = packet->ipv4 != NULL ? 28 : 48;
+	uint8_t termination_payload[5] = {0x11, 0x22, 0x11, 0x33, 0x44};
+
 	/* We update the destination port to 5700, which informs the target the test is completed */
 	memcpy(packet->buffer + termination_offset, termination_payload, sizeof(termination_payload));
 	
