@@ -1,0 +1,111 @@
+// Test CUBIC in the following scenario:
+// RTO, then slow start, then congestion avoidance.
+// Verify that during congestion avoidance after slow start,
+// sender increments cwnd by 1 per 20 packets ACKed.
+// Receiver is ACKing every packet, to make the math easy to follow.
+//
+
+// Set up config.
+`../common/defaults.sh`
+
+    0 socket(..., SOCK_STREAM, IPPROTO_TCP) = 3
+   +0 setsockopt(3, SOL_SOCKET, SO_REUSEADDR, [1], 4) = 0
+   +0 bind(3, ..., ...) = 0
+   +0 listen(3, 1) = 0
+
+   +0 < S 0:0(0) win 32792 <mss 1000,sackOK,nop,nop,nop,wscale 7>
+   +0 > S. 0:0(0) ack 1 <mss 1460,nop,nop,sackOK,nop,wscale 8>
+  +.1 < . 1:1(0) ack 1 win 257
+   +0 accept(3, ..., ...) = 4
+   +0 setsockopt(4, SOL_SOCKET, SO_SNDBUF, [200000], 4) = 0
+
+// Send out a data segment and wait for the ACK, so we get an RTT sample
+// in addition to the three-way-handshake RTT sample.
+   +0 write(4, ..., 1000) = 1000
+   +0 > P. 1:1001(1000) ack 1
+  +.1 < . 1:1(0) ack 1001 win 257
+   +0 %{ assert tcpi_snd_cwnd == 10, tcpi_snd_cwnd }%  // not cwnd-limited...
+
+// Send out a second packet.
+   +0 write(4, ..., 1000) = 1000
+   +0 > P. 1001:2001(1000) ack 1
+
+// RTO is shorter, so TLP scheduled in its place.
+  +.3~+.303 > P. 1001:2001(1000) ack 1
+
+// RTO at srtt + rttvar ~= 100 + 2*100.
+// See tcp_input.c comment: "make sure rto = 3*rtt".
+  +.3~+.303 > P. 1001:2001(1000) ack 1
+
+// ACK for retransmission.
+  +.1 < . 1:1(0) ack 2001 win 257
+   +0 %{
+assert tcpi_snd_cwnd == 2, tcpi_snd_cwnd
+assert tcpi_snd_ssthresh == 7, tcpi_snd_ssthresh
+}%
+
+// Now we're in slow start and will grow cwnd exponentially until it
+// passes the ssthresh of 7.
+
+   +0 write(4, ..., 200000) = 200000
+   +0 > . 2001:4001(2000) ack 1
+   +0 %{ assert tcpi_snd_cwnd == 2,tcpi_snd_cwnd }%
+
+  +.1 < . 1:1(0) ack 3001 win 257
+   +0 > . 4001:6001(2000) ack 1
+   +0 %{ assert tcpi_snd_cwnd == 3,tcpi_snd_cwnd }%
+
++.002 < . 1:1(0) ack 4001 win 257
+   +0 > P. 6001:8001(2000) ack 1
+   +0 %{ assert tcpi_snd_cwnd == 4,tcpi_snd_cwnd }%
+
++.098 < . 1:1(0) ack 5001 win 257
+   +0 > P. 8001:10001(2000) ack 1
+   +0 %{ assert tcpi_snd_cwnd == 5,tcpi_snd_cwnd }%
+
++.002 < . 1:1(0) ack 6001 win 257
+   +0 > P. 10001:12001(2000) ack 1
+   +0 %{ assert tcpi_snd_cwnd == 6,tcpi_snd_cwnd }%
+
++.002 < . 1:1(0) ack 7001 win 257
+   +0 > P. 12001:14001(2000) ack 1
+   +0 %{ assert tcpi_snd_cwnd == 7,tcpi_snd_cwnd }%
+
+// Now we're in congestion avoidance and we'll increase
+// cwnd until we plateau at the cwnd value at which we
+// experienced the loss (Wmax of 10 packets).
++.002 < . 1:1(0) ack 8001 win 257
+   +0 > . 14001:15001(1000) ack 1
++.098 < . 1:1(0) ack 9001 win 257
+   +0 > . 15001:16001(1000) ack 1
++.002 < . 1:1(0) ack 10001 win 257
+   +0 > . 16001:17001(1000) ack 1
++.002 < . 1:1(0) ack 11001 win 257
+   +0 > . 17001:18001(1000) ack 1
++.002 < . 1:1(0) ack 12001 win 257
+   +0 > . 18001:19001(1000) ack 1
++.002 < . 1:1(0) ack 13001 win 257
+   +0 > P. 19001:20001(1000) ack 1
++.002 < . 1:1(0) ack 14001 win 257
+   +0 > . 20001:21001(1000) ack 1
++.002 < . 1:1(0) ack 15001 win 257
+   +0 > . 21001:22001(1000) ack 1
++.098 < . 1:1(0) ack 16001 win 257
+   +0 > . 22001:23001(1000) ack 1
++.001 %{ assert tcpi_snd_cwnd ==  7,tcpi_snd_cwnd }%
+
++.002 < . 1:1(0) ack 17001 win 257
+   +0 > . 23001:24001(1000) ack 1
++.002 < . 1:1(0) ack 18001 win 257
+   +0 > . 24001:25001(1000) ack 1
++.002 < . 1:1(0) ack 19001 win 257
+   +0 > . 25001:26001(1000) ack 1
++.002 < . 1:1(0) ack 20001 win 257
+   +0 > . 26001:27001(1000) ack 1
++.002 < . 1:1(0) ack 21001 win 257
+   +0 > . 27001:28001(1000) ack 1
++.002 < . 1:1(0) ack 22001 win 257
+   +0 > . 28001:29001(1000) ack 1
++.098 < . 1:1(0) ack 23001 win 257
+   +0 > P. 29001:31001(2000) ack 1
+   +0 %{ assert tcpi_snd_cwnd ==  8,tcpi_snd_cwnd }%

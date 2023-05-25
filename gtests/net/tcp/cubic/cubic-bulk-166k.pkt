@@ -1,0 +1,287 @@
+// Test bulk CUBIC flow at 166 kbit/sec (2 1000-byte payloads each 100ms
+// means 2 * 1040 * 8 / .1 = 166400 bits/sec).
+// Verifies that CUBIC increases its cwnd by at most 1 packet
+// for every 2 packets ACKed.
+// Also tests the CUBIC Hystart algorithm for exiting slow start.
+
+// For this test We mostly just care about cwnd values, not exact timing.
+// So to reduce flakes allow ~20ms of timing variation:
+--tolerance_usecs=20000
+
+`../../common/defaults.sh
+tc qdisc replace dev tun0 root fq
+sysctl -q net.ipv4.tcp_congestion_control=cubic
+sysctl -q net.ipv4.tcp_min_tso_segs=4
+# Disable TLP to avoid flakes from spurious retransmits:
+sysctl -q net.ipv4.tcp_early_retrans=0`
+
+// Initialize connection
+    0 socket(..., SOCK_STREAM, IPPROTO_TCP) = 3
+   +0 setsockopt(3, SOL_SOCKET, SO_REUSEADDR, [1], 4) = 0
+   +0 bind(3, ..., ...) = 0
+   +0 listen(3, 1) = 0
+
+   +0 < S 0:0(0) win 32792 <mss 1000,sackOK,nop,nop,nop,wscale 10>
+   +0 > S. 0:0(0) ack 1 <mss 1460,nop,nop,sackOK,nop,wscale 8>
+  +.1 < . 1:1(0) ack 1 win 514
+
+   +0 accept(3, ..., ...) = 4
+
+// SO_SNDBUF is doubled, so we can write the full amount below:
+   +0 setsockopt(4, SOL_SOCKET, SO_SNDBUF, [200000], 4) = 0
+   +0 %{ assert tcpi_snd_cwnd == 10, tcpi_snd_cwnd }%
+   +0 write(4, ..., 400000) = 400000
+
+  +.1 < .  1:1(0) ack 2001 win 514
+  +.1 < .  1:1(0) ack 4001 win 514
+  +.1 < .  1:1(0) ack 6001 win 514
+  +.1 < .  1:1(0) ack 8001 win 514
+  +.1 < .  1:1(0) ack 10001 win 514
+   +0 %{ print(tcpi_snd_cwnd); assert tcpi_snd_cwnd == 20, tcpi_snd_cwnd }%
+  +.1 < .  1:1(0) ack 12001 win 514
+  +.1 < .  1:1(0) ack 14001 win 514
+  +.1 < .  1:1(0) ack 16001 win 514
+  +.1 < .  1:1(0) ack 18001 win 514
+  +.1 < .  1:1(0) ack 20001 win 514
+   +0 %{ print(tcpi_snd_cwnd); assert tcpi_snd_cwnd == 30, tcpi_snd_cwnd }%
+
+  +.1 < .  1:1(0) ack 22001 win 514
+  +.1 < .  1:1(0) ack 24001 win 514
+  +.1 < .  1:1(0) ack 26001 win 514
+  +.1 < .  1:1(0) ack 28001 win 514
+  +.1 < .  1:1(0) ack 30001 win 514
+   +0 %{ print(tcpi_snd_cwnd); assert tcpi_snd_cwnd == 40, tcpi_snd_cwnd }%
+  +.1 < .  1:1(0) ack 32001 win 514
+  +.1 < .  1:1(0) ack 34001 win 514
+  +.1 < .  1:1(0) ack 36001 win 514
+  +.1 < .  1:1(0) ack 38001 win 514
+// Hystart exits slow start here at a cwnd of 48:
+   +0 %{ print(tcpi_snd_cwnd); assert tcpi_snd_cwnd == 48, tcpi_snd_cwnd }%
+
+  +.1 < .  1:1(0) ack 40001 win 514
+  +.1 < .  1:1(0) ack 42001 win 514
+  +.1 < .  1:1(0) ack 44001 win 514
+  +.1 < .  1:1(0) ack 46001 win 514
+  +.1 < .  1:1(0) ack 48001 win 514
+  +.1 < .  1:1(0) ack 50001 win 514
+  +.1 < .  1:1(0) ack 52001 win 514
+  +.1 < .  1:1(0) ack 54001 win 514
+  +.1 < .  1:1(0) ack 56001 win 514
+  +.1 < .  1:1(0) ack 58001 win 514
+  +.1 < .  1:1(0) ack 60001 win 514
+   +0 %{ print(tcpi_snd_cwnd); assert tcpi_snd_cwnd == 49, tcpi_snd_cwnd }%
+
+  +.1 < .  1:1(0) ack 62001 win 514
+  +.1 < .  1:1(0) ack 64001 win 514
+  +.1 < .  1:1(0) ack 66001 win 514
+  +.1 < .  1:1(0) ack 68001 win 514
+  +.1 < .  1:1(0) ack 70001 win 514
+  +.1 < .  1:1(0) ack 72001 win 514
+  +.1 < .  1:1(0) ack 74001 win 514
+  +.1 < .  1:1(0) ack 76001 win 514
+  +.1 < .  1:1(0) ack 78001 win 514
+  +.1 < .  1:1(0) ack 80001 win 514
+   +0 %{ print(tcpi_snd_cwnd); assert tcpi_snd_cwnd == 50, tcpi_snd_cwnd }%
+
+  +.1 < .  1:1(0) ack 82001 win 514
+  +.1 < .  1:1(0) ack 84001 win 514
+  +.1 < .  1:1(0) ack 86001 win 514
+  +.1 < .  1:1(0) ack 88001 win 514
+  +.1 < .  1:1(0) ack 90001 win 514
+  +.1 < .  1:1(0) ack 92001 win 514
+  +.1 < .  1:1(0) ack 94001 win 514
+  +.1 < .  1:1(0) ack 96001 win 514
+  +.1 < .  1:1(0) ack 98001 win 514
+  +.1 < .  1:1(0) ack 100001 win 514
+   +0 %{ print(tcpi_snd_cwnd); assert tcpi_snd_cwnd == 52, tcpi_snd_cwnd }%
+
+  +.1 < .  1:1(0) ack 102001 win 514
+  +.1 < .  1:1(0) ack 104001 win 514
+  +.1 < .  1:1(0) ack 106001 win 514
+  +.1 < .  1:1(0) ack 108001 win 514
+  +.1 < .  1:1(0) ack 110001 win 514
+  +.1 < .  1:1(0) ack 112001 win 514
+  +.1 < .  1:1(0) ack 114001 win 514
+  +.1 < .  1:1(0) ack 116001 win 514
+  +.1 < .  1:1(0) ack 118001 win 514
+  +.1 < .  1:1(0) ack 120001 win 514
+   +0 %{ print(tcpi_snd_cwnd); cwnd = 58; assert tcpi_snd_cwnd == cwnd, tcpi_snd_cwnd }%
+
+// From this point onward, we verify that for every 2 packets ACKed,
+// CUBIC increases its cwnd by 1 packet.
+  +.1 < .  1:1(0) ack 122001 win 514
+   +0 %{ print(tcpi_snd_cwnd); cwnd += 1; assert tcpi_snd_cwnd == cwnd, tcpi_snd_cwnd }%
+  +.1 < .  1:1(0) ack 124001 win 514
+   +0 %{ print(tcpi_snd_cwnd); cwnd += 1; assert tcpi_snd_cwnd == cwnd, tcpi_snd_cwnd }%
+  +.1 < .  1:1(0) ack 126001 win 514
+   +0 %{ print(tcpi_snd_cwnd); cwnd += 1; assert tcpi_snd_cwnd == cwnd, tcpi_snd_cwnd }%
+  +.1 < .  1:1(0) ack 128001 win 514
+   +0 %{ print(tcpi_snd_cwnd); cwnd += 1; assert tcpi_snd_cwnd == cwnd, tcpi_snd_cwnd }%
+  +.1 < .  1:1(0) ack 130001 win 514
+   +0 %{ print(tcpi_snd_cwnd); cwnd += 1; assert tcpi_snd_cwnd == cwnd, tcpi_snd_cwnd }%
+  +.1 < .  1:1(0) ack 132001 win 514
+   +0 %{ print(tcpi_snd_cwnd); cwnd += 1; assert tcpi_snd_cwnd == cwnd, tcpi_snd_cwnd }%
+  +.1 < .  1:1(0) ack 134001 win 514
+   +0 %{ print(tcpi_snd_cwnd); cwnd += 1; assert tcpi_snd_cwnd == cwnd, tcpi_snd_cwnd }%
+  +.1 < .  1:1(0) ack 136001 win 514
+   +0 %{ print(tcpi_snd_cwnd); cwnd += 1; assert tcpi_snd_cwnd == cwnd, tcpi_snd_cwnd }%
+  +.1 < .  1:1(0) ack 138001 win 514
+   +0 %{ print(tcpi_snd_cwnd); cwnd += 1; assert tcpi_snd_cwnd == cwnd, tcpi_snd_cwnd }%
+  +.1 < .  1:1(0) ack 140001 win 514
+   +0 %{ print(tcpi_snd_cwnd); cwnd += 1; assert tcpi_snd_cwnd == cwnd, tcpi_snd_cwnd }%
+
+  +.1 < .  1:1(0) ack 142001 win 514
+  +.1 < .  1:1(0) ack 144001 win 514
+  +.1 < .  1:1(0) ack 146001 win 514
+  +.1 < .  1:1(0) ack 148001 win 514
+  +.1 < .  1:1(0) ack 150001 win 514
+  +.1 < .  1:1(0) ack 152001 win 514
+  +.1 < .  1:1(0) ack 154001 win 514
+  +.1 < .  1:1(0) ack 156001 win 514
+  +.1 < .  1:1(0) ack 158001 win 514
+  +.1 < .  1:1(0) ack 160001 win 514
+   +0 %{ print(tcpi_snd_cwnd); cwnd += 10; assert tcpi_snd_cwnd == cwnd, tcpi_snd_cwnd }%
+
+  +.1 < .  1:1(0) ack 162001 win 514
+  +.1 < .  1:1(0) ack 164001 win 514
+  +.1 < .  1:1(0) ack 166001 win 514
+  +.1 < .  1:1(0) ack 168001 win 514
+  +.1 < .  1:1(0) ack 170001 win 514
+  +.1 < .  1:1(0) ack 172001 win 514
+  +.1 < .  1:1(0) ack 174001 win 514
+  +.1 < .  1:1(0) ack 176001 win 514
+  +.1 < .  1:1(0) ack 178001 win 514
+  +.1 < .  1:1(0) ack 180001 win 514
+   +0 %{ print(tcpi_snd_cwnd); cwnd += 10; assert tcpi_snd_cwnd == cwnd, tcpi_snd_cwnd }%
+
+  +.1 < .  1:1(0) ack 182001 win 514
+  +.1 < .  1:1(0) ack 184001 win 514
+  +.1 < .  1:1(0) ack 186001 win 514
+  +.1 < .  1:1(0) ack 188001 win 514
+  +.1 < .  1:1(0) ack 190001 win 514
+  +.1 < .  1:1(0) ack 192001 win 514
+  +.1 < .  1:1(0) ack 194001 win 514
+  +.1 < .  1:1(0) ack 196001 win 514
+  +.1 < .  1:1(0) ack 198001 win 514
+  +.1 < .  1:1(0) ack 200001 win 514
+   +0 %{ print(tcpi_snd_cwnd); cwnd += 10; assert tcpi_snd_cwnd == cwnd, tcpi_snd_cwnd }%
+
+  +.1 < .  1:1(0) ack 202001 win 514
+  +.1 < .  1:1(0) ack 204001 win 514
+  +.1 < .  1:1(0) ack 206001 win 514
+  +.1 < .  1:1(0) ack 208001 win 514
+  +.1 < .  1:1(0) ack 210001 win 514
+  +.1 < .  1:1(0) ack 212001 win 514
+  +.1 < .  1:1(0) ack 214001 win 514
+  +.1 < .  1:1(0) ack 216001 win 514
+  +.1 < .  1:1(0) ack 218001 win 514
+  +.1 < .  1:1(0) ack 220001 win 514
+   +0 %{ print(tcpi_snd_cwnd); cwnd += 10; assert tcpi_snd_cwnd == cwnd, tcpi_snd_cwnd }%
+
+  +.1 < .  1:1(0) ack 222001 win 514
+  +.1 < .  1:1(0) ack 224001 win 514
+  +.1 < .  1:1(0) ack 226001 win 514
+  +.1 < .  1:1(0) ack 228001 win 514
+  +.1 < .  1:1(0) ack 230001 win 514
+  +.1 < .  1:1(0) ack 232001 win 514
+  +.1 < .  1:1(0) ack 234001 win 514
+  +.1 < .  1:1(0) ack 236001 win 514
+  +.1 < .  1:1(0) ack 238001 win 514
+  +.1 < .  1:1(0) ack 240001 win 514
+   +0 %{ print(tcpi_snd_cwnd); cwnd += 10; assert tcpi_snd_cwnd == cwnd, tcpi_snd_cwnd }%
+
+  +.1 < .  1:1(0) ack 242001 win 514
+  +.1 < .  1:1(0) ack 244001 win 514
+  +.1 < .  1:1(0) ack 246001 win 514
+  +.1 < .  1:1(0) ack 248001 win 514
+  +.1 < .  1:1(0) ack 250001 win 514
+  +.1 < .  1:1(0) ack 252001 win 514
+  +.1 < .  1:1(0) ack 254001 win 514
+  +.1 < .  1:1(0) ack 256001 win 514
+  +.1 < .  1:1(0) ack 258001 win 514
+  +.1 < .  1:1(0) ack 260001 win 514
+   +0 %{ print(tcpi_snd_cwnd); cwnd += 10; assert tcpi_snd_cwnd == cwnd, tcpi_snd_cwnd }%
+
+  +.1 < .  1:1(0) ack 262001 win 514
+  +.1 < .  1:1(0) ack 264001 win 514
+  +.1 < .  1:1(0) ack 266001 win 514
+  +.1 < .  1:1(0) ack 268001 win 514
+  +.1 < .  1:1(0) ack 270001 win 514
+  +.1 < .  1:1(0) ack 272001 win 514
+  +.1 < .  1:1(0) ack 274001 win 514
+  +.1 < .  1:1(0) ack 276001 win 514
+  +.1 < .  1:1(0) ack 278001 win 514
+  +.1 < .  1:1(0) ack 280001 win 514
+   +0 %{ print(tcpi_snd_cwnd); cwnd += 10; assert tcpi_snd_cwnd == cwnd, tcpi_snd_cwnd }%
+
+  +.1 < .  1:1(0) ack 282001 win 514
+  +.1 < .  1:1(0) ack 284001 win 514
+  +.1 < .  1:1(0) ack 286001 win 514
+  +.1 < .  1:1(0) ack 288001 win 514
+  +.1 < .  1:1(0) ack 290001 win 514
+  +.1 < .  1:1(0) ack 292001 win 514
+  +.1 < .  1:1(0) ack 294001 win 514
+  +.1 < .  1:1(0) ack 296001 win 514
+  +.1 < .  1:1(0) ack 298001 win 514
+  +.1 < .  1:1(0) ack 300001 win 514
+   +0 %{ print(tcpi_snd_cwnd); cwnd += 10; assert tcpi_snd_cwnd == cwnd, tcpi_snd_cwnd }%
+
+  +.1 < .  1:1(0) ack 302001 win 514
+  +.1 < .  1:1(0) ack 304001 win 514
+  +.1 < .  1:1(0) ack 306001 win 514
+  +.1 < .  1:1(0) ack 308001 win 514
+  +.1 < .  1:1(0) ack 310001 win 514
+  +.1 < .  1:1(0) ack 312001 win 514
+  +.1 < .  1:1(0) ack 314001 win 514
+  +.1 < .  1:1(0) ack 316001 win 514
+  +.1 < .  1:1(0) ack 318001 win 514
+  +.1 < .  1:1(0) ack 320001 win 514
+   +0 %{ print(tcpi_snd_cwnd); cwnd += 10; assert tcpi_snd_cwnd == cwnd, tcpi_snd_cwnd }%
+
+  +.1 < .  1:1(0) ack 322001 win 514
+  +.1 < .  1:1(0) ack 324001 win 514
+  +.1 < .  1:1(0) ack 326001 win 514
+  +.1 < .  1:1(0) ack 328001 win 514
+  +.1 < .  1:1(0) ack 330001 win 514
+  +.1 < .  1:1(0) ack 332001 win 514
+  +.1 < .  1:1(0) ack 334001 win 514
+  +.1 < .  1:1(0) ack 336001 win 514
+  +.1 < .  1:1(0) ack 338001 win 514
+  +.1 < .  1:1(0) ack 340001 win 514
+   +0 %{ print(tcpi_snd_cwnd); cwnd += 10; assert tcpi_snd_cwnd == cwnd, tcpi_snd_cwnd }%
+
+  +.1 < .  1:1(0) ack 342001 win 514
+  +.1 < .  1:1(0) ack 344001 win 514
+  +.1 < .  1:1(0) ack 346001 win 514
+  +.1 < .  1:1(0) ack 348001 win 514
+  +.1 < .  1:1(0) ack 350001 win 514
+  +.1 < .  1:1(0) ack 352001 win 514
+  +.1 < .  1:1(0) ack 354001 win 514
+  +.1 < .  1:1(0) ack 356001 win 514
+  +.1 < .  1:1(0) ack 358001 win 514
+  +.1 < .  1:1(0) ack 360001 win 514
+   +0 %{ print(tcpi_snd_cwnd); cwnd += 10; assert tcpi_snd_cwnd == cwnd, tcpi_snd_cwnd }%
+
+  +.1 < .  1:1(0) ack 362001 win 514
+  +.1 < .  1:1(0) ack 364001 win 514
+  +.1 < .  1:1(0) ack 366001 win 514
+  +.1 < .  1:1(0) ack 368001 win 514
+  +.1 < .  1:1(0) ack 370001 win 514
+  +.1 < .  1:1(0) ack 372001 win 514
+  +.1 < .  1:1(0) ack 374001 win 514
+  +.1 < .  1:1(0) ack 376001 win 514
+  +.1 < .  1:1(0) ack 378001 win 514
+  +.1 < .  1:1(0) ack 380001 win 514
+   +0 %{ print(tcpi_snd_cwnd); cwnd += 10; assert tcpi_snd_cwnd == cwnd, tcpi_snd_cwnd }%
+
+  +.1 < .  1:1(0) ack 382001 win 514
+  +.1 < .  1:1(0) ack 384001 win 514
+  +.1 < .  1:1(0) ack 386001 win 514
+  +.1 < .  1:1(0) ack 388001 win 514
+  +.1 < .  1:1(0) ack 390001 win 514
+  +.1 < .  1:1(0) ack 392001 win 514
+  +.1 < .  1:1(0) ack 394001 win 514
+  +.1 < .  1:1(0) ack 396001 win 514
+  +.1 < .  1:1(0) ack 398001 win 514
+  +.1 < .  1:1(0) ack 400001 win 514
+   +0 %{ print(tcpi_snd_cwnd); cwnd += 10; assert tcpi_snd_cwnd == cwnd, tcpi_snd_cwnd }%

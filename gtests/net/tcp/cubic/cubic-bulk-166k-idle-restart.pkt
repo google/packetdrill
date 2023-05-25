@@ -1,0 +1,111 @@
+// Test bulk CUBIC flow at 166 kbit/sec (2 1000-byte payloads each 100ms
+// means 2 * 1040 * 8 / .1 = 166400 bits/sec).
+// This variant checks to see if CUBIC grows its cwnd unreasonably
+// due to crediting itself for time accumulated in an idle state.
+
+// For this test We mostly just care about cwnd values, not exact timing.
+// So to reduce flakes allow ~20ms of timing variation:
+--tolerance_usecs=20000
+
+`../../common/defaults.sh
+tc qdisc replace dev tun0 root fq
+sysctl -q net.ipv4.tcp_congestion_control=cubic
+sysctl -q net.ipv4.tcp_min_tso_segs=4
+# Disable TLP to avoid flakes from spurious retransmits:
+sysctl -q net.ipv4.tcp_early_retrans=0`
+
+// Initialize connection
+    0 socket(..., SOCK_STREAM, IPPROTO_TCP) = 3
+   +0 setsockopt(3, SOL_SOCKET, SO_REUSEADDR, [1], 4) = 0
+   +0 bind(3, ..., ...) = 0
+   +0 listen(3, 1) = 0
+
+   +0 < S 0:0(0) win 32792 <mss 1000,sackOK,nop,nop,nop,wscale 10>
+   +0 > S. 0:0(0) ack 1 <mss 1460,nop,nop,sackOK,nop,wscale 8>
+  +.1 < . 1:1(0) ack 1 win 514
+
+   +0 accept(3, ..., ...) = 4
+
+   +0 setsockopt(4, SOL_SOCKET, SO_SNDBUF, [2000000], 4) = 0
+   +0 %{ assert tcpi_snd_cwnd == 10, tcpi_snd_cwnd }%
+   +0 write(4, ..., 40000) = 40000
+
+  +.1 < .  1:1(0) ack 2001 win 514
+  +.1 < .  1:1(0) ack 4001 win 514
+  +.1 < .  1:1(0) ack 6001 win 514
+  +.1 < .  1:1(0) ack 8001 win 514
+  +.1 < .  1:1(0) ack 10001 win 514
+   +0 %{ print(tcpi_snd_cwnd); assert tcpi_snd_cwnd == 20, tcpi_snd_cwnd }%
+  +.1 < .  1:1(0) ack 12001 win 514
+  +.1 < .  1:1(0) ack 14001 win 514
+  +.1 < .  1:1(0) ack 16001 win 514
+  +.1 < .  1:1(0) ack 18001 win 514
+  +.1 < .  1:1(0) ack 20001 win 514
+   +0 %{ print(tcpi_snd_cwnd); assert tcpi_snd_cwnd == 30, tcpi_snd_cwnd }%
+
+  +.1 < .  1:1(0) ack 22001 win 514
+  +.1 < .  1:1(0) ack 24001 win 514
+  +.1 < .  1:1(0) ack 26001 win 514
+  +.1 < .  1:1(0) ack 28001 win 514
+  +.1 < .  1:1(0) ack 30001 win 514
+   +0 %{ print(tcpi_snd_cwnd); assert tcpi_snd_cwnd == 40, tcpi_snd_cwnd }%
+  +.1 < .  1:1(0) ack 32001 win 514
+  +.1 < .  1:1(0) ack 34001 win 514
+  +.1 < .  1:1(0) ack 36001 win 514
+  +.1 < .  1:1(0) ack 38001 win 514
+// Hystart exits slow start here at a cwnd of 48:
+   +0 %{ print(tcpi_snd_cwnd); assert tcpi_snd_cwnd == 48, tcpi_snd_cwnd }%
+  +.1 < .  1:1(0) ack 40001 win 514
+
+// Go idle for a while in order to verify that this doesn't let us
+// accumulate "credit" toward increasing cwnd quickly when we go
+// cwnd-limited again.
+   +4 write(4, ..., 160000) = 160000
+
+  +.1 < .  1:1(0) ack 42001 win 514
+  +.1 < .  1:1(0) ack 44001 win 514
+  +.1 < .  1:1(0) ack 46001 win 514
+  +.1 < .  1:1(0) ack 48001 win 514
+  +.1 < .  1:1(0) ack 50001 win 514
+  +.1 < .  1:1(0) ack 52001 win 514
+  +.1 < .  1:1(0) ack 54001 win 514
+  +.1 < .  1:1(0) ack 56001 win 514
+  +.1 < .  1:1(0) ack 58001 win 514
+  +.1 < .  1:1(0) ack 60001 win 514
+   +0 %{ print(tcpi_snd_cwnd);  assert tcpi_snd_cwnd == 48, tcpi_snd_cwnd }%
+
+  +.1 < .  1:1(0) ack 62001 win 514
+  +.1 < .  1:1(0) ack 64001 win 514
+  +.1 < .  1:1(0) ack 66001 win 514
+  +.1 < .  1:1(0) ack 68001 win 514
+  +.1 < .  1:1(0) ack 70001 win 514
+  +.1 < .  1:1(0) ack 72001 win 514
+  +.1 < .  1:1(0) ack 74001 win 514
+  +.1 < .  1:1(0) ack 76001 win 514
+  +.1 < .  1:1(0) ack 78001 win 514
+  +.1 < .  1:1(0) ack 80001 win 514
+   +0 %{ print(tcpi_snd_cwnd);  assert tcpi_snd_cwnd == 49, tcpi_snd_cwnd }%
+
+  +.1 < .  1:1(0) ack 82001 win 514
+  +.1 < .  1:1(0) ack 84001 win 514
+  +.1 < .  1:1(0) ack 86001 win 514
+  +.1 < .  1:1(0) ack 88001 win 514
+  +.1 < .  1:1(0) ack 90001 win 514
+  +.1 < .  1:1(0) ack 92001 win 514
+  +.1 < .  1:1(0) ack 94001 win 514
+  +.1 < .  1:1(0) ack 96001 win 514
+  +.1 < .  1:1(0) ack 98001 win 514
+  +.1 < .  1:1(0) ack 100001 win 514
+   +0 %{ print(tcpi_snd_cwnd);  assert tcpi_snd_cwnd == 52, tcpi_snd_cwnd }%
+
+  +.1 < .  1:1(0) ack 102001 win 514
+  +.1 < .  1:1(0) ack 104001 win 514
+  +.1 < .  1:1(0) ack 106001 win 514
+  +.1 < .  1:1(0) ack 108001 win 514
+  +.1 < .  1:1(0) ack 110001 win 514
+  +.1 < .  1:1(0) ack 112001 win 514
+  +.1 < .  1:1(0) ack 114001 win 514
+  +.1 < .  1:1(0) ack 116001 win 514
+  +.1 < .  1:1(0) ack 118001 win 514
+  +.1 < .  1:1(0) ack 120001 win 514
+   +0 %{ print(tcpi_snd_cwnd);  assert tcpi_snd_cwnd == 58, tcpi_snd_cwnd }%

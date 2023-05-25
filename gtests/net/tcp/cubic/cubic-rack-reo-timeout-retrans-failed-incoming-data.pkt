@@ -1,0 +1,51 @@
+// Check behavior in an edge case: RACK reorder timeout, retransmit fails,
+// then incoming data arrives.
+// Based on bbr-rack-reo-timeout-retrans-failed-incoming-data.pkt
+
+`../../common/defaults.sh`
+
+    0 socket(..., SOCK_STREAM, IPPROTO_TCP) = 3
+   +0 setsockopt(3, SOL_SOCKET, SO_REUSEADDR, [1], 4) = 0
+   +0 bind(3, ..., ...) = 0
+   +0 listen(3, 1) = 0
+
+   +0 < S 0:0(0) win 32792 <mss 1000,sackOK,nop,nop,nop,wscale 7>
+   +0 > S. 0:0(0) ack 1 <...>
++.020 < . 1:1(0) ack 1 win 320
+   +0 accept(3, ..., ...) = 4
+
+   +0 write(4, ..., 10000) = 10000
+   +0 > P. 1:10001(10000) ack 1
+// Short-time-scale reordering causes some SACKs:
++.020 < . 1:1(0) ack 1 win 320 <sack 9001:10001,nop,nop>
+   +0 < . 1:1(0) ack 1 win 320 <sack 3001:4001 9001:10001,nop,nop>
+   +0  %{ assert tcpi_sacked == 2, tcpi_sacked}%
+   +0 < . 1:1(0) ack 10001 win 320
+   +0 %{ assert tcpi_sacked == 0, tcpi_sacked}%
++.010 %{ assert tcpi_reordering == 10, tcpi_reordering }%
+   +0 %{ assert tcpi_reord_seen == 2 }%   // 2 cases of reordering
++.010 %{ assert tcpi_snd_cwnd == 19, tcpi_snd_cwnd }%
+
++.005 write(4, ..., 2000) = 2000
++.000 > P. 10001:12001(2000) ack 1
+
+// Emulate qdisc congestion: no packets can get out now.
++0 `tc qdisc replace dev tun0 root pfifo limit 0`
++.020 < . 1:1(0) ack 10001 win 320 <sack 11001:12001,nop,nop>
+   +0 %{ assert tcpi_ca_state == TCP_CA_Disorder, tcpi_ca_state }%
+   +0 %{ assert tcpi_snd_cwnd == 19, tcpi_snd_cwnd }%
+
+// RACK reordering timer fires and we try to retransmit 10001:11001, but can't,
+// due to the local qdisc congestion.
++.020 %{ assert tcpi_ca_state == TCP_CA_Recovery, 'ca_state: %d min_rtt: %d rtt: %d' % (tcpi_ca_state, tcpi_min_rtt, tcpi_rtt) }%
+   +0 %{ assert tcpi_unacked == 2, tcpi_unacked }%
+   +0 %{ assert tcpi_sacked  == 1, tcpi_sacked  }%
+   +0 %{ assert tcpi_lost    == 1, tcpi_lost    }%
+   +0 %{ assert tcpi_retrans == 0, tcpi_retrans }%  // retransmit failed!
+   +0 %{ assert tcpi_snd_cwnd == 1, tcpi_snd_cwnd }%
+// No packets are in flight
+
+// An ACK in Recovery with no packets in flight, and no packets ACKed.
+// Look out!
++.010 < . 1:1001(1000) ack 10001 win 320 <sack 11001:12001,nop,nop>
+   +0 %{ assert tcpi_snd_cwnd == 1, tcpi_snd_cwnd }%

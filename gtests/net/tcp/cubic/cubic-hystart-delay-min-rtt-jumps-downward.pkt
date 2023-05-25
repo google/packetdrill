@@ -1,0 +1,103 @@
+// Test of the CUBIC HYSTART_DELAY mechanism.
+// Verify that RTT samples after the 8th sample in a round
+// trip that reduce the min_rtt substantially do not cause
+// Hystart to spuriously exit slow start.
+// Tests: b344579ca8478598937215f7005d6c7b84d28aee (2020-06-24)
+// "tcp_cubic: fix spurious HYSTART_DELAY exit upon drop in min RTT"
+
+`../common/defaults.sh
+echo 3 > /sys/module/tcp_cubic/parameters/hystart_detect
+`
+
+    0 socket(..., SOCK_STREAM, IPPROTO_TCP) = 3
+   +0 setsockopt(3, SOL_SOCKET, SO_REUSEADDR, [1], 4) = 0
+   +0 bind(3, ..., ...) = 0
+   +0 listen(3, 1) = 0
+
+   +0 < S 0:0(0) win 32792 <mss 1000,sackOK,nop,nop,nop,wscale 7>
+   +0 > S. 0:0(0) ack 1 <mss 1460,nop,nop,sackOK,nop,wscale 8>
++.200 < . 1:1(0) ack 1 win 257
+   +0 accept(3, ..., ...) = 4
+   +0 setsockopt(4, SOL_SOCKET, SO_SNDBUF, [200000], 4) = 0
+
+   +0 %{ TCP_INFINITE_SSTHRESH = 0x7fffffff }%
+
+   +0 write(4, ..., 28000) = 28000
+   +0 > P. 1:10001(10000) ack 1
+   +0 %{ assert tcpi_snd_cwnd == 10, tcpi_snd_cwnd }%
+
++.200 < . 1:1(0) ack 10001 win 257
+   +0 > P. 10001:28001(18000) ack 1
+   +0 %{ assert tcpi_snd_cwnd == 20, tcpi_snd_cwnd }%
+
+// Now we make a small write to allow a simple case
+// where the RTT goes down, without causing a spurious retransmit.
++.180 write(4, ..., 2000) = 2000
+   +0 > P. 28001:30001(2000) ack 1
+
+// Now cwnd is above hystart_low_window, so Hystart is in effect.
+// In bictcp_cong_avoid() the code marks this as the start of
+// a new round trip, and resets sample_cnt to 0.
+// This RTT sample is 200ms, and the following 9 RTT samples
+// are each 1ms higher than the previous. None are high enough
+// to reach the Hystart delay threshold of 1.125x higher than
+// the min_rtt of 200ms, or 225ms.
++.020 < . 1:1(0) ack 12001 win 257
+   +0 %{ assert tcpi_snd_ssthresh == TCP_INFINITE_SSTHRESH, tcpi_snd_ssthresh }%
+   +0 %{ assert tcpi_snd_cwnd == 22, tcpi_snd_cwnd }%
+
++.001 < . 1:1(0) ack 14001 win 257
+   +0 %{ assert tcpi_snd_ssthresh == TCP_INFINITE_SSTHRESH, tcpi_snd_ssthresh }%
+   +0 %{ assert tcpi_snd_cwnd == 24, tcpi_snd_cwnd }%
+// Now sample_cnt is 1.
+
++.001 < . 1:1(0) ack 16001 win 257
+   +0 %{ assert tcpi_snd_ssthresh == TCP_INFINITE_SSTHRESH, tcpi_snd_ssthresh }%
+   +0 %{ assert tcpi_snd_cwnd == 26, tcpi_snd_cwnd }%
+// Now sample_cnt is 2.
+
++.001 < . 1:1(0) ack 18001 win 257
+   +0 %{ assert tcpi_snd_ssthresh == TCP_INFINITE_SSTHRESH, tcpi_snd_ssthresh }%
+   +0 %{ assert tcpi_snd_cwnd == 28, tcpi_snd_cwnd }%
+// Now sample_cnt is 3.
+
++.001 < . 1:1(0) ack 20001 win 257
+   +0 %{ assert tcpi_snd_ssthresh == TCP_INFINITE_SSTHRESH, tcpi_snd_ssthresh }%
+   +0 %{ assert tcpi_snd_cwnd == 30, tcpi_snd_cwnd }%
+// Now sample_cnt is 4.
+
++.001 < . 1:1(0) ack 22001 win 257
+   +0 %{ assert tcpi_snd_ssthresh == TCP_INFINITE_SSTHRESH, tcpi_snd_ssthresh }%
+   +0 %{ assert tcpi_snd_cwnd == 32, tcpi_snd_cwnd }%
+// Now sample_cnt is 5.
+
++.001 < . 1:1(0) ack 24001 win 257
+   +0 %{ assert tcpi_snd_ssthresh == TCP_INFINITE_SSTHRESH, tcpi_snd_ssthresh }%
+   +0 %{ assert tcpi_snd_cwnd == 34, tcpi_snd_cwnd }%
+// Now sample_cnt is 6.
+
++.001 < . 1:1(0) ack 26001 win 257
+   +0 %{ assert tcpi_snd_ssthresh == TCP_INFINITE_SSTHRESH, tcpi_snd_ssthresh }%
+   +0 %{ assert tcpi_snd_cwnd == 36, tcpi_snd_cwnd }%
+// Now sample_cnt is 7.
+
++.001 < . 1:1(0) ack 28001 win 257
+   +0 %{ assert tcpi_snd_ssthresh == TCP_INFINITE_SSTHRESH, tcpi_snd_ssthresh }%
+   +0 %{ assert tcpi_snd_cwnd == 38, tcpi_snd_cwnd }%
+// Now sample_cnt is 8.
+
++.001 < . 1:1(0) ack 30001 win 257
+   +0 %{ assert tcpi_snd_ssthresh == TCP_INFINITE_SSTHRESH, tcpi_snd_ssthresh }%
+   +0 %{ assert tcpi_snd_cwnd == 40, tcpi_snd_cwnd }%
+// Now sample_cnt is 9, which is greater than HYSTART_MIN_SAMPLES (8),
+// so Hystart makes its first delay check. The RTT sample here is
+// 20ms + 9*1ms = 29ms, which is a new minimum. So the minimum RTT
+// has gone down.
+//
+// Before the Jun 2020 Hystart bug fix, Hystart would fail to incorporate
+// this new min RTT in curr_rtt, and so would compare
+// a curr_rtt ~= 201ms with a delay_min of 29ms, and spuriously
+// exit slow start on an ACK where the min RTT went down.
+//
+// With the Jun 2020 Hystart bug fix, Hystart would *correctly* incorporate
+// this new min RTT in curr_rtt, and so would not exit slow start.

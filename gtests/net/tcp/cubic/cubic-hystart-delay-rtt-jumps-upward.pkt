@@ -1,0 +1,84 @@
+// Test of the CUBIC HYSTART_DELAY mechanism.
+// Verify that it correctly exits slow start if there are more than
+// 8 RTT samples in a round trip that are >= 12.5% higher than
+// the connection's min_rtt.
+
+`../common/defaults.sh
+echo 3 > /sys/module/tcp_cubic/parameters/hystart_detect
+`
+
+    0 socket(..., SOCK_STREAM, IPPROTO_TCP) = 3
+   +0 setsockopt(3, SOL_SOCKET, SO_REUSEADDR, [1], 4) = 0
+   +0 bind(3, ..., ...) = 0
+   +0 listen(3, 1) = 0
+
+   +0 < S 0:0(0) win 32792 <mss 1000,sackOK,nop,nop,nop,wscale 7>
+   +0 > S. 0:0(0) ack 1 <mss 1460,nop,nop,sackOK,nop,wscale 8>
++.200 < . 1:1(0) ack 1 win 257
+   +0 accept(3, ..., ...) = 4
+   +0 setsockopt(4, SOL_SOCKET, SO_SNDBUF, [200000], 4) = 0
+
+   +0 %{ TCP_INFINITE_SSTHRESH = 0x7fffffff }%
+
+   +0 write(4, ..., 30000) = 30000
+   +0 > P. 1:10001(10000) ack 1
+   +0 %{ assert tcpi_snd_cwnd == 10, tcpi_snd_cwnd }%
+
++.200 < . 1:1(0) ack 10001 win 257
+   +0 > P. 10001:30001(20000) ack 1
+   +0 %{ assert tcpi_snd_cwnd == 20, tcpi_snd_cwnd }%
+
+// Now cwnd is above hystart_low_window, so Hystart is in effect.
+// In hystart_update() the code marks this as the start of
+// a new round trip, and resets sample_cnt to 0, then increments
+// sample_cnt to 1.
++.240 < . 1:1(0) ack 12001 win 257
+   +0 %{ assert tcpi_snd_ssthresh == TCP_INFINITE_SSTHRESH, tcpi_snd_ssthresh }%
+   +0 %{ assert tcpi_snd_cwnd == 22, tcpi_snd_cwnd }%
+
++.001 < . 1:1(0) ack 14001 win 257
+   +0 %{ assert tcpi_snd_ssthresh == TCP_INFINITE_SSTHRESH, tcpi_snd_ssthresh }%
+   +0 %{ assert tcpi_snd_cwnd == 24, tcpi_snd_cwnd }%
+// Now sample_cnt is 2.
+
++.001 < . 1:1(0) ack 16001 win 257
+   +0 %{ assert tcpi_snd_ssthresh == TCP_INFINITE_SSTHRESH, tcpi_snd_ssthresh }%
+   +0 %{ assert tcpi_snd_cwnd == 26, tcpi_snd_cwnd }%
+// Now sample_cnt is 3.
+
++.001 < . 1:1(0) ack 18001 win 257
+   +0 %{ assert tcpi_snd_ssthresh == TCP_INFINITE_SSTHRESH, tcpi_snd_ssthresh }%
+   +0 %{ assert tcpi_snd_cwnd == 28, tcpi_snd_cwnd }%
+// Now sample_cnt is 4.
+
++.001 < . 1:1(0) ack 20001 win 257
+   +0 %{ assert tcpi_snd_ssthresh == TCP_INFINITE_SSTHRESH, tcpi_snd_ssthresh }%
+   +0 %{ assert tcpi_snd_cwnd == 30, tcpi_snd_cwnd }%
+// Now sample_cnt is 5.
+
++.001 < . 1:1(0) ack 22001 win 257
+   +0 %{ assert tcpi_snd_ssthresh == TCP_INFINITE_SSTHRESH, tcpi_snd_ssthresh }%
+   +0 %{ assert tcpi_snd_cwnd == 32, tcpi_snd_cwnd }%
+// Now sample_cnt is 6.
+
++.001 < . 1:1(0) ack 24001 win 257
+   +0 %{ assert tcpi_snd_ssthresh == TCP_INFINITE_SSTHRESH, tcpi_snd_ssthresh }%
+   +0 %{ assert tcpi_snd_cwnd == 34, tcpi_snd_cwnd }%
+// Now sample_cnt is 7.
+
++.001 < . 1:1(0) ack 26001 win 257
+   +0 %{ assert tcpi_snd_ssthresh == TCP_INFINITE_SSTHRESH, tcpi_snd_ssthresh }%
+   +0 %{ assert tcpi_snd_cwnd == 36, tcpi_snd_cwnd }%
+// Now sample_cnt is 8.
+
++.001 < . 1:1(0) ack 28001 win 257
+// Now sample_cnt is 9, which is > HYSTART_MIN_SAMPLES (8),
+// so Hystart makes its first delay check. The min RTT sample in this
+// round trip is  >= 1.125 x min_rtt = 225ms.
+// So Hystart will exit slow start and set ssthresh to the current cwnd.
+   +0 %{ assert tcpi_snd_ssthresh == 36, tcpi_snd_ssthresh }%
+   +0 %{ assert tcpi_snd_cwnd == 36, tcpi_snd_cwnd }%
+
++.001 < . 1:1(0) ack 30001 win 257
+   +0 %{ assert tcpi_snd_ssthresh == 36, tcpi_snd_ssthresh }%
+   +0 %{ assert tcpi_snd_cwnd == 36, tcpi_snd_cwnd }%
