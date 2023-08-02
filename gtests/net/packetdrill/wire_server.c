@@ -83,7 +83,8 @@ static void wire_server_free(struct wire_server *wire_server)
 }
 
 /* Unserialize argv from a single string with '\0' characters between
- * args. Add a --wire_server so that we don't have an identity crisis.
+ * args. Ignore arguments that are only appropriate for clients, and add a
+ * --wire_server argument so that we don't have an identity crisis.
  */
 static void wire_server_unserialize_argv(struct wire_server *wire_server,
 					 const char *args, int args_len)
@@ -108,6 +109,9 @@ static void wire_server_unserialize_argv(struct wire_server *wire_server,
 
 	end = args;
 	for (i = 0; i < argc; ++i) {
+		if (strstr(end, "-wire_client") ||
+		    strstr(end, "-wire_server_at"))
+			continue;	/* don't use client-only arguments */
 		argv[i] = strdup(end);
 		end += strlen(end) + 1;	/* + 1 for '\0' */
 	}
