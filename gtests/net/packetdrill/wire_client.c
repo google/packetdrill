@@ -62,6 +62,8 @@ static void wire_client_serialize_argv(const char **argv, char **args_ptr,
 	char *end = NULL;
 
 	for (i = 0; argv[i]; ++i) {
+		if (strstr(argv[i], "-wire_client"))
+			continue;
 		args_len += strlen(argv[i]) + 1;	/* + 1 for '\0' */
 	}
 
@@ -70,6 +72,8 @@ static void wire_client_serialize_argv(const char **argv, char **args_ptr,
 
 	for (i = 0; argv[i]; ++i) {
 		int len = 0;
+		if (strstr(argv[i], "-wire_client"))
+			continue;
 		len = strlen(argv[i]) + 1;	/* + 1 for '\0' */
 		memcpy(end, argv[i], len);
 		end += len;
