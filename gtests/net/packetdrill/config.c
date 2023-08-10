@@ -569,9 +569,11 @@ static void process_option(int opt, char *optarg, struct config *config,
 		break;
 	case OPT_WIRE_CLIENT:
 		config->is_wire_client = true;
+		config->is_wire_server = false;
 		break;
 	case OPT_WIRE_SERVER:
 		config->is_wire_server = true;
+		config->is_wire_client = false;
 		break;
 	case OPT_WIRE_SERVER_IP:
 	case OPT_WIRE_SERVER_AT:
