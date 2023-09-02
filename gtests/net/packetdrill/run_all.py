@@ -19,7 +19,6 @@ class TestSet(object):
     self.args = args
     self.tools_path = os.path.abspath('./packetdrill')
     self.default_args = '--send_omit_free'
-    self.max_runtime = 180
     self.num_pass = 0
     self.num_fail = 0
     self.num_timedout = 0
@@ -32,6 +31,8 @@ class TestSet(object):
     for dirpath, _, filenames in os.walk(path):
       for filename in fnmatch.filter(filenames, '*.pkt'):
         tests.append(dirpath + '/' + filename)
+      if not self.args['traverse_subdirs']:
+        break
     return sorted(tests)
 
   def StartTest(self, path, variant, extra_args=None):
@@ -144,7 +145,7 @@ class TestSet(object):
 
   def PollTestSet(self, procs, time_start):
     """Wait until a,l tests in procs have finished or until timeout."""
-    while time.time() - time_start < self.max_runtime and procs:
+    while time.time() - time_start < self.args['timeout_sec'] and procs:
       time.sleep(1)
       for entry in procs:
         if self.PollTest(entry):
@@ -210,7 +211,7 @@ class ParallelTestSet(object):
     """Construct a test set for each subdirectory and run them in parallel."""
     errors = 0
 
-    if args['subdirs']:
+    if args['subdirs'] and args['traverse_subdirs']:
       paths = self.FindSubDirs(args['path'])
     else:
       paths = [args['path']]
@@ -238,9 +239,13 @@ def ParseArgs():
                     help='requires verbose')
   args.add_argument('-L', '--log_on_success', action='store_true',
                     help='requires verbose')
+  args.add_argument('--no-traverse_subdirs', dest='traverse_subdirs',
+                    action='store_false')
   args.add_argument('-p', '--parallelize_dirs', action='store_true')
   args.add_argument('-s', '--subdirs', action='store_true')
   args.add_argument('-S', '--serialized', action='store_true')
+  args.add_argument('-t', '--timeout_sec', nargs='?', const=180, type=int,
+                    default=180)
   args.add_argument('-v', '--verbose', action='store_true')
   return vars(args.parse_args())
 
