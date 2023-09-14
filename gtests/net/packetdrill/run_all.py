@@ -121,8 +121,6 @@ class TestSet(object):
 
     time_start = time.time()
     process = subprocess.Popen(cmd, stdout=outfile, stderr=errfile, cwd=execdir)
-    if self.args['serialized']:
-      process.wait()
 
     return (process, path, variant, outfile, errfile, time_start)
 
@@ -148,7 +146,7 @@ class TestSet(object):
 
   def StartPollTestSet(self, cmds):
     """Start and wait until all tests in procs have finished or until timeout."""
-    max_in_parallel = self.args['max_in_parallel']
+    max_in_parallel = 1 if self.args['serialized'] else self.args['max_in_parallel']
     if max_in_parallel == 0 or max_in_parallel > len(cmds):
       max_in_parallel = len(cmds)
 
