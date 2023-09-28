@@ -194,6 +194,13 @@ class TestSet(object):
 
     time_start = time.time()
     cmds = self.CmdsTests(tests)
+
+    if self.args['dry_run']:
+      print('Dry-run mode:')
+      for cmd in cmds:
+        print(' '.join(cmd[0]))
+      return
+
     self.StartPollTestSet(cmds)
 
     print(
@@ -269,6 +276,7 @@ def ParseArgs():
   args.add_argument('-p', '--parallelize_dirs', action='store_true')
   args.add_argument('-P', '--max_in_parallel', metavar='N', type=int, default=0,
                     help="max number of tests running in parallel")
+  args.add_argument('--dry_run', action='store_true')
   args.add_argument('-s', '--subdirs', action='store_true')
   args.add_argument('-S', '--serialized', action='store_true')
   args.add_argument('-v', '--verbose', action='count', default=0,
