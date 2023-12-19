@@ -41,4 +41,12 @@ extern struct packet *new_udp_packet(int address_family,
 				     u16 src_port,
 				     u16 dst_port,
 				     char **error);
+
+/* Add a UDP header that is part of an encapsulation. */
+extern int udp_header_append(struct packet *packet, u16 src_port, u16 dst_port,
+			     char **error);
+
+/* Fill in the length of an encapsulating UDP header. */
+extern int udp_header_finish(struct packet *packet,
+			     struct header *header, struct header *next_inner);
 #endif /* __UDP_PACKET_H__ */

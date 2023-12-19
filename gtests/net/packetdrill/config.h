@@ -126,6 +126,7 @@ struct config {
 	int mtu;			/* MTU of tun device */
 
 	bool strict_segments;		/* check exact segmentation? */
+	int psp_udp_port;		/* UDP dst port for PSP encapsulation */
 
 	bool non_fatal_packet;		/* treat packet asserts as non-fatal */
 	bool non_fatal_syscall;		/* treat syscall asserts as non-fatal */

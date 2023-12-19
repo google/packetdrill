@@ -24,6 +24,7 @@
 
 #include "assert.h"
 #include "packet_parser.h"
+#include "psp_packet.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -67,6 +68,7 @@ static void test_parse_tcp_ipv4_packet(void)
 	assert(packet->udp		== NULL);
 	assert(packet->icmpv4		== NULL);
 	assert(packet->icmpv6		== NULL);
+	assert(packet->psp		== NULL);
 
 	assert(packet->time_usecs	== 0);
 	assert(packet->flags		== 0);
@@ -113,6 +115,7 @@ static void test_parse_tcp_ipv6_packet(void)
 	assert(packet->udp		== NULL);
 	assert(packet->icmpv4		== NULL);
 	assert(packet->icmpv6		== NULL);
+	assert(packet->psp		== NULL);
 
 	assert(packet->time_usecs	== 0);
 	assert(packet->flags		== 0);
@@ -152,6 +155,7 @@ static void test_parse_udp_ipv4_packet(void)
 	assert(packet->udp		== expected_udp);
 	assert(packet->icmpv4		== NULL);
 	assert(packet->icmpv6		== NULL);
+	assert(packet->psp		== NULL);
 
 	assert(packet->time_usecs	== 0);
 	assert(packet->flags		== 0);
@@ -195,6 +199,7 @@ static void test_parse_udp_ipv6_packet(void)
 	assert(packet->udp		== expected_udp);
 	assert(packet->icmpv4		== NULL);
 	assert(packet->icmpv6		== NULL);
+	assert(packet->psp		== NULL);
 
 	assert(packet->time_usecs	== 0);
 	assert(packet->flags		== 0);
@@ -272,6 +277,7 @@ static void test_parse_ipv4_gre_ipv4_tcp_packet(void)
 	assert(packet->udp		== NULL);
 	assert(packet->icmpv4		== NULL);
 	assert(packet->icmpv6		== NULL);
+	assert(packet->psp		== NULL);
 
 	assert(packet->time_usecs	== 0);
 	assert(packet->flags		== 0);
@@ -369,6 +375,174 @@ static void test_parse_ipv4_gre_mpls_ipv4_tcp_packet(void)
 	assert(packet->udp		== NULL);
 	assert(packet->icmpv4		== NULL);
 	assert(packet->icmpv6		== NULL);
+	assert(packet->psp		== NULL);
+
+	assert(packet->time_usecs	== 0);
+	assert(packet->flags		== 0);
+
+	packet_free(packet);
+}
+
+/* tunnel-mode PSP encapsulation */
+static void test_parse_ipv4_psp_ipv4_tcp_packet(void)
+{
+	u8 *p = NULL;
+	int i;
+
+	/* An IPv4/UDP/PSP/IPv4/TCP packet. */
+	u8 data[] = {
+		/* IP 2.2.2.2.42743 > 1.1.1.1.1000: UDP, length 68:
+		   PSP spi 12 vc 0x17da01c2:
+		   IP 192.0.2.1.47078 > 192.168.0.1.8080:
+		   . 2:6(4) ack 1 win 123 */
+		0x45, 0x00, 0x00, 0x60, 0x00, 0x00, 0x00, 0x00,
+		0xff, 0x11, 0xb5, 0x87, 0x02, 0x02, 0x02, 0x02,
+		0x01, 0x01, 0x01, 0x01, 0xa6, 0xf7, 0x03, 0xe8,
+		0x00, 0x4c, 0x00, 0x00, 0x04, 0x02, 0x00, 0x03,
+		0x00, 0x00, 0x00, 0x0c, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x17, 0xda, 0x01, 0xc2, 0x45, 0x00, 0x00, 0x2c,
+		0x00, 0x00, 0x00, 0x00, 0xff, 0x06, 0x39, 0x21,
+		0xc0, 0x00, 0x02, 0x01, 0xc0, 0xa8, 0x00, 0x01,
+		0xb7, 0xe6, 0x1f, 0x90, 0x00, 0x00, 0x00, 0x02,
+		0x00, 0x00, 0x00, 0x01, 0x50, 0x10, 0x00, 0x7b,
+		0x55, 0x31, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+	};
+
+	struct packet *packet = packet_new(sizeof(data));
+
+	/* Populate and parse a packet */
+	memcpy(packet->buffer, data, sizeof(data));
+	char *error = NULL;
+	enum packet_parse_result_t result =
+		parse_packet(packet, sizeof(data), PACKET_LAYER_3_IP, &error);
+	assert(result == PACKET_OK);
+	assert(error == NULL);
+
+	p = packet->buffer;
+	i = 0;			/* outer most layer, 0 */
+
+	assert(packet->headers[i].type	== HEADER_IPV4);
+	assert(packet->headers[i].h.ptr	== p);
+	assert(packet->headers[i].header_bytes == sizeof(struct ipv4));
+	p += packet->headers[i].header_bytes;
+	i++;
+
+	assert(packet->headers[i].type	== HEADER_UDP);
+	assert(packet->headers[i].h.ptr	== p);
+	assert(packet->headers[i].header_bytes == sizeof(struct udp));
+	p += packet->headers[i].header_bytes;
+	i++;
+
+	struct psp *expected_psp = (struct psp *)p;
+	assert(packet->headers[i].type	== HEADER_PSP);
+	assert(packet->headers[i].h.ptr	== p);
+	assert(packet->headers[i].header_bytes == sizeof(struct psp));
+	p += packet->headers[i].header_bytes;
+	i++;
+
+	struct ipv4 *expected_inner_ipv4 = (struct ipv4 *)p;
+	assert(packet->headers[i].type	== HEADER_IPV4);
+	assert(packet->headers[i].h.ptr	== p);
+	assert(packet->headers[i].header_bytes == sizeof(struct ipv4));
+	p += packet->headers[i].header_bytes;
+	i++;
+
+	struct tcp *expected_tcp = (struct tcp *)p;
+	assert(packet->headers[i].type	== HEADER_TCP);
+	assert(packet->headers[i].h.ptr	== p);
+	assert(packet->headers[i].header_bytes == sizeof(struct tcp));
+	p += packet->headers[i].header_bytes;
+	i++;
+
+	assert(packet->headers[i].type	== HEADER_NONE);
+
+	assert(packet->ip_bytes		== sizeof(data));
+	assert(packet->ipv4		== expected_inner_ipv4);
+	assert(packet->ipv6		== NULL);
+	assert(packet->tcp		== expected_tcp);
+	assert(packet->udp		== NULL);
+	assert(packet->icmpv4		== NULL);
+	assert(packet->icmpv6		== NULL);
+	assert(packet->psp		== expected_psp);
+
+	assert(packet->time_usecs	== 0);
+	assert(packet->flags		== 0);
+
+	packet_free(packet);
+}
+
+/* transport-mode PSP encapsulation */
+static void test_parse_ipv4_psp_tcp_packet(void)
+{
+	u8 *p = NULL;
+	int i;
+
+	/* An IPv4/UDP/PSP/TCP packet. */
+	u8 data[] = {
+		/* IP 192.0.2.1.47078 > 192.168.0.1.8080: PSP spi 18:
+		   . 2:6(4) ack 1 win 123 */
+		0x45, 0x00, 0x00, 0x44, 0x00, 0x00, 0x00, 0x00,
+		0xff, 0x11, 0x38, 0xfe, 0xc0, 0x00, 0x02, 0x01,
+		0xc0, 0xa8, 0x00, 0x01, 0xa6, 0xf7, 0x03, 0xe8,
+		0x00, 0x30, 0x00, 0x00, 0x06, 0x01, 0x00, 0x01,
+		0x00, 0x00, 0x00, 0x12, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0xb7, 0xe6, 0x1f, 0x90,
+		0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x01,
+		0x50, 0x10, 0x00, 0x7b, 0x55, 0x31, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00
+	};
+
+	struct packet *packet = packet_new(sizeof(data));
+
+	/* Populate and parse a packet */
+	memcpy(packet->buffer, data, sizeof(data));
+	char *error = NULL;
+	enum packet_parse_result_t result =
+		parse_packet(packet, sizeof(data), PACKET_LAYER_3_IP, &error);
+	assert(result == PACKET_OK);
+	assert(error == NULL);
+
+	p = packet->buffer;
+	i = 0;			/* outer most layer, 0 */
+
+	struct ipv4 *expected_ipv4 = (struct ipv4 *)p;
+	assert(packet->headers[i].type	== HEADER_IPV4);
+	assert(packet->headers[i].h.ptr	== p);
+	assert(packet->headers[i].header_bytes == sizeof(struct ipv4));
+	p += packet->headers[i].header_bytes;
+	i++;
+
+	assert(packet->headers[i].type	== HEADER_UDP);
+	assert(packet->headers[i].h.ptr	== p);
+	assert(packet->headers[i].header_bytes == sizeof(struct udp));
+	p += packet->headers[i].header_bytes;
+	i++;
+
+	struct psp *expected_psp = (struct psp *)p;
+	assert(packet->headers[i].type	== HEADER_PSP);
+	assert(packet->headers[i].h.ptr	== p);
+	assert(packet->headers[i].header_bytes == PSP_MINLEN);
+	p += packet->headers[i].header_bytes;
+	i++;
+
+	struct tcp *expected_tcp = (struct tcp *)p;
+	assert(packet->headers[i].type	== HEADER_TCP);
+	assert(packet->headers[i].h.ptr	== p);
+	assert(packet->headers[i].header_bytes == sizeof(struct tcp));
+	p += packet->headers[i].header_bytes;
+	i++;
+
+	assert(packet->headers[i].type	== HEADER_NONE);
+
+	assert(packet->ip_bytes		== sizeof(data));
+	assert(packet->ipv4		== expected_ipv4);
+	assert(packet->ipv6		== NULL);
+	assert(packet->tcp		== expected_tcp);
+	assert(packet->udp		== NULL);
+	assert(packet->icmpv4		== NULL);
+	assert(packet->icmpv6		== NULL);
+	assert(packet->psp		== expected_psp);
 
 	assert(packet->time_usecs	== 0);
 	assert(packet->flags		== 0);
@@ -480,5 +654,9 @@ int main(void)
 	test_parse_icmpv4_packet();
 	test_parse_icmpv6_packet();
 
+
+	set_psp_port(1000);
+	test_parse_ipv4_psp_ipv4_tcp_packet();
+	test_parse_ipv4_psp_tcp_packet();
 	return 0;
 }

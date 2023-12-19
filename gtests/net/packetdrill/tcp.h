@@ -81,6 +81,11 @@
 
 #endif  /* linux */
 
+/* TCP PSP draft APIs. These are unlikely to become upstream ABI as is */
+#define TCP_PSP_TX_SPI_KEY	1730	/* Set PSP Tx SPI and key */
+#define TCP_PSP_RX_SPI_KEY	1731	/* Get PSP Rx SPI and key */
+#define TCP_PSP_LISTENER	1732	/* Get/set PSP Tx/Rx SPI and key */
+
 /* New TCP flags for sendto(2)/sendmsg(2). */
 #ifndef MSG_FASTOPEN
 #define MSG_FASTOPEN             0x20000000  /* TCP Fast Open: data in SYN */
