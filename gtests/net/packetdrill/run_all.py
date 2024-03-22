@@ -23,6 +23,7 @@ class TestSet(object):
     self.num_pass = 0
     self.num_fail = 0
     self.num_timedout = 0
+    self.tap = None
 
   def FindTests(self, path='.'):
     """Return all *.pkt files in a given directory and its subdirectories."""
@@ -116,7 +117,19 @@ class TestSet(object):
     errfile.seek(0)
     sys.stderr.write(errfile.read())
 
-  def StartTest(self, cmd, execdir, path, variant, basename):
+  def TapInit(self, path, n):
+    fname = 'packetdrill_' + os.path.splitext(os.path.basename(path))[0] + '.tap'
+    self.tap = open(os.path.join(self.args['tap'], fname), mode='w')
+    print('TAP version 13\n1..' + str(n), file=self.tap)
+
+  def TapLog(self, result, outfile, errfile):
+    print(result, file=self.tap)
+    outfile.seek(0)
+    errfile.seek(0)
+    for line in outfile.readlines() + errfile.readlines():
+      print('# ' + line.rstrip(), file=self.tap)
+
+  def StartTest(self, cmd, execdir, path, variant, basename, id):
     """Run a packetdrill test"""
     outfile = tempfile.TemporaryFile(mode='w+')
     errfile = tempfile.TemporaryFile(mode='w+')
@@ -130,12 +143,16 @@ class TestSet(object):
     process = subprocess.Popen(cmd, stdout=outfile, stderr=errfile, cwd=execdir,
                                env=env)
 
-    return (process, path, variant, outfile, errfile, time_start)
+    return (process, path, variant, outfile, errfile, time_start, id)
 
-  def PollTest(self, process, path, variant, outfile, errfile, time_start, now):
+  def PollTest(self, process, path, variant, outfile, errfile, time_start, id, now):
     """Test whether a test has finished and if so record its return value."""
     if process.poll() is None:
       return False, now - time_start >= self.max_runtime
+
+    if self.tap:
+      ok = 'not ok' if process.returncode else 'ok'
+      self.TapLog('%s %d %s (%s)' % (ok, id, path, variant), outfile, errfile)
 
     if not process.returncode:
       self.num_pass += 1
@@ -158,9 +175,11 @@ class TestSet(object):
     if max_in_parallel == 0 or max_in_parallel > len(cmds):
       max_in_parallel = len(cmds)
 
+    id = 1
     procs = []
     while len(procs) < max_in_parallel:
-      procs.append(self.StartTest(*cmds.pop(0)))
+      procs.append(self.StartTest(*cmds.pop(0), id))
+      id += 1
 
     timedouts = []
     while procs:
@@ -172,12 +191,13 @@ class TestSet(object):
         if stopped or timedout:
           procs.remove(entry)
           if cmds:
-            procs.append(self.StartTest(*cmds.pop(0)))
+            procs.append(self.StartTest(*cmds.pop(0), id))
+            id += 1
           if timedout:
             timedouts.append(entry)
 
     self.num_timedout = len(timedouts)
-    for proc, path, variant, outfile, errfile, _ in timedouts:
+    for proc, path, variant, outfile, errfile, _, id in timedouts:
       try:
         proc.kill()
       except:
@@ -187,6 +207,9 @@ class TestSet(object):
         print('KILL [%s (%s)]' % (path, variant))
         if self.args['log_on_error']:
           self.Log(outfile, errfile)
+      if self.tap:
+        self.TapLog('not ok %d %s (%s) # timeout' % (id, path, variant),
+                    outfile, errfile)
 
   def RunTests(self, path):
     """Find all packetdrill scripts in a path and run them."""
@@ -201,7 +224,13 @@ class TestSet(object):
         print(' '.join(cmd[0]))
       return
 
+    if self.args['tap'] is not None:
+      self.TapInit(path, len(cmds))
+
     self.StartPollTestSet(cmds)
+
+    if self.tap:
+      self.tap.close()
 
     print(
         'Ran % 4d tests: % 4d passing, % 4d failing, % 4d timed out (%.2f sec): %s'     # pylint: disable=line-too-long
@@ -279,6 +308,8 @@ def ParseArgs():
   args.add_argument('--dry_run', action='store_true')
   args.add_argument('-s', '--subdirs', action='store_true')
   args.add_argument('-S', '--serialized', action='store_true')
+  args.add_argument('-t', '--tap', metavar='DIR',
+                    help='save results in TAP format in the specified directory')
   args.add_argument('-v', '--verbose', action='count', default=0,
                     help="can be repeated to run packetdrill with -v")
   return vars(args.parse_args())
