@@ -117,6 +117,12 @@ struct socket {
 
 	/* flowlabel mapping */
 	struct flowlabel_map flowlabel_map;
+
+	/* Difference between the live and script Rx SPI values for a
+	 * PSP-encapsulated socket. We learn this value by looking at the
+	 * PSP socket options that set Rx SPIs.
+	 */
+	u32 psp_rx_spi_offset;
 };
 
 /* Convert to socket pointer if the fd is a socket, otherwise return NULL. */
@@ -173,7 +179,7 @@ static inline void reverse_tuple(const struct tuple *src_tuple,
 	dst_tuple->dst.port	= src_tuple->src.port;
 }
 
-/* Get the tuple for a packet. */
+/* Get the tuple for a packet ignoring any encapsulations. */
 static inline void get_packet_tuple(const struct packet *packet,
 				    struct tuple *tuple)
 {
