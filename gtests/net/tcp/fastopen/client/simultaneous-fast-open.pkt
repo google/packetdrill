@@ -32,6 +32,7 @@
 
 // SYN data is never retried.
 +.045 < S. 1234:1234(0) ack 1001 win 14600 <mss 940,nop,nop,sackOK,nop,wscale 6,FO 12345678,nop,nop>
+   +0 > . 1001:1001(0) ack 1 <nop,nop,sack 0:1>
 // The other end retries
   +.1 < P. 1:501(500) ack 1000 win 257
    +0 > . 1001:1001(0) ack 501
