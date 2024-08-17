@@ -28,6 +28,7 @@
 #include <string.h>
 #include "assert.h"
 #include "packet_parser.h"
+#include "psp_packet.h"
 
 static void test_tcp_ipv4_packet_to_string(void)
 {
@@ -291,11 +292,187 @@ static void test_tcp_md5_option_to_string(void)
 	packet_free(packet);
 }
 
+static void test_tcp_ipv4_psp_ipv4_packet_to_string(void)
+{
+	/* An IPv4/UDP/PSP/IPv4/TCP packet. */
+	u8 data[] = {
+		/* IPv4: */
+		0x45, 0x00, 0x00, 0x68, 0x00, 0x00, 0x00, 0x00,
+		0xff, 0x11, 0xb5, 0x7f, 0x02, 0x02, 0x02, 0x02,
+		0x01, 0x01, 0x01, 0x01,
+		/* UDP: */
+		0xa6, 0xf7, 0x03, 0xe8, 0x00, 0x54, 0x00, 0x00,
+		/* PSP: */
+		0x04, 0x01, 0x00, 0x01, 0x00, 0x00, 0x00, 0xf1,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		/* IPv4, TCP: */
+		0x45, 0x00, 0x00, 0x3c, 0x00, 0x00, 0x00, 0x00,
+		0xff, 0x06, 0x39, 0x11, 0xc0, 0x00, 0x02, 0x01,
+		0xc0, 0xa8, 0x00, 0x01, 0xcf, 0x3f, 0x1f, 0x90,
+		0x00, 0x00, 0x00, 0x01, 0x83, 0x4d, 0xa5, 0x5b,
+		0xa0, 0x10, 0x01, 0x01, 0xdb, 0x2d, 0x00, 0x00,
+		0x05, 0x0a, 0x83, 0x4d, 0xab, 0x03, 0x83, 0x4d,
+		0xb0, 0xab, 0x08, 0x0a, 0x00, 0x00, 0x01, 0x2c,
+		0x60, 0xc2, 0x18, 0x20
+	};
+
+	struct packet *packet = packet_new(sizeof(data));
+
+	/* Populate and parse a packet */
+	memcpy(packet->buffer, data, sizeof(data));
+	char *error = NULL;
+	enum packet_parse_result_t result =
+		parse_packet(packet, sizeof(data), PACKET_LAYER_3_IP,
+				     &error);
+	assert(result == PACKET_OK);
+	assert(error == NULL);
+
+	int status = 0;
+	char *dump = NULL, *expected = NULL;
+
+	/* Test a DUMP_SHORT dump */
+	status = packet_to_string(packet, DUMP_SHORT, &dump, &error);
+	assert(status == STATUS_OK);
+	assert(error == NULL);
+	printf("dump = '%s'\n", dump);
+	expected =
+		"ipv4 2.2.2.2 > 1.1.1.1: udp 42743 > 1000 (84): "
+		"psp ip_proto 4 crypto_offset 0 spi 0xf1: "
+		". 1:1(0) ack 2202903899 win 257 "
+		"<sack 2202905347:2202906795,TS val 300 ecr 1623332896>";
+	assert(strcmp(dump, expected) == 0);
+	free(dump);
+
+	/* Test a DUMP_FULL dump */
+	status = packet_to_string(packet, DUMP_FULL, &dump, &error);
+	assert(status == STATUS_OK);
+	assert(error == NULL);
+	printf("dump = '%s'\n", dump);
+	expected =
+		"ipv4 2.2.2.2 > 1.1.1.1: udp 42743 > 1000 (84): "
+		"psp ip_proto 4 crypto_offset 0 spi 0xf1: "
+		"192.0.2.1:53055 > 192.168.0.1:8080 "
+		". 1:1(0) ack 2202903899 win 257 "
+		"<sack 2202905347:2202906795,TS val 300 ecr 1623332896>";
+	assert(strcmp(dump, expected) == 0);
+	free(dump);
+
+	/* Test a DUMP_VERBOSE dump */
+	status = packet_to_string(packet, DUMP_VERBOSE, &dump, &error);
+	assert(status == STATUS_OK);
+	assert(error == NULL);
+	printf("dump = '%s'\n", dump);
+	expected =
+		"ipv4 2.2.2.2 > 1.1.1.1: udp 42743 > 1000 (84): "
+		"psp ip_proto 4 crypto_offset 0 spi 0xf1: "
+		"192.0.2.1:53055 > 192.168.0.1:8080 "
+		". 1:1(0) ack 2202903899 win 257 "
+		"<sack 2202905347:2202906795,TS val 300 ecr 1623332896>"
+		"\n"
+		"0x0000: 45 00 00 68 00 00 00 00 ff 11 b5 7f 02 02 02 02 " "\n"
+		"0x0010: 01 01 01 01 a6 f7 03 e8 00 54 00 00 04 01 00 01 " "\n"
+		"0x0020: 00 00 00 f1 00 00 00 00 00 00 00 00 45 00 00 3c " "\n"
+		"0x0030: 00 00 00 00 ff 06 39 11 c0 00 02 01 c0 a8 00 01 " "\n"
+		"0x0040: cf 3f 1f 90 00 00 00 01 83 4d a5 5b a0 10 01 01 " "\n"
+		"0x0050: db 2d 00 00 05 0a 83 4d ab 03 83 4d b0 ab 08 0a " "\n"
+		"0x0060: 00 00 01 2c 60 c2 18 20 " "\n";
+	assert(strcmp(dump, expected) == 0);
+	free(dump);
+
+	packet_free(packet);
+}
+
+static void test_tcp_psp_ipv4_packet_to_string(void)
+{
+	/* An IPv4/UDP/PSP/TCP packet. */
+	u8 data[] = {
+		/* IPv4: */
+		0x45, 0x00, 0x00, 0x54, 0x00, 0x00, 0x00, 0x00,
+		0xff, 0x11, 0x38, 0xee, 0xc0, 0x00, 0x02, 0x01,
+		0xc0, 0xa8, 0x00, 0x01,
+		/* UDP: */
+		0xa6, 0xf7, 0x03, 0xe8, 0x00, 0x40, 0x00, 0x00,
+		/* PSP: */
+		0x06, 0x01, 0x00, 0x01, 0x00, 0x00, 0x00, 0xf1,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		/* TCP: */
+		0xcf, 0x3f, 0x1f, 0x90, 0x00, 0x00, 0x00, 0x01,
+		0x83, 0x4d, 0xa5, 0x5b, 0xa0, 0x10, 0x01, 0x01,
+		0xdb, 0x2d, 0x00, 0x00, 0x05, 0x0a, 0x83, 0x4d,
+		0xab, 0x03, 0x83, 0x4d, 0xb0, 0xab, 0x08, 0x0a,
+		0x00, 0x00, 0x01, 0x2c, 0x60, 0xc2, 0x18, 0x20
+	};
+
+	struct packet *packet = packet_new(sizeof(data));
+
+	/* Populate and parse a packet */
+	memcpy(packet->buffer, data, sizeof(data));
+	char *error = NULL;
+	enum packet_parse_result_t result =
+		parse_packet(packet, sizeof(data), PACKET_LAYER_3_IP,
+				     &error);
+	assert(result == PACKET_OK);
+	assert(error == NULL);
+
+	int status = 0;
+	char *dump = NULL, *expected = NULL;
+
+	/* Test a DUMP_SHORT dump */
+	status = packet_to_string(packet, DUMP_SHORT, &dump, &error);
+	assert(status == STATUS_OK);
+	assert(error == NULL);
+	printf("dump = '%s'\n", dump);
+	expected =
+		"psp spi 0xf1 . 1:1(0) ack 2202903899 win 257 "
+		"<sack 2202905347:2202906795,TS val 300 ecr 1623332896>";
+	assert(strcmp(dump, expected) == 0);
+	free(dump);
+
+	/* Test a DUMP_FULL dump */
+	status = packet_to_string(packet, DUMP_FULL, &dump, &error);
+	assert(status == STATUS_OK);
+	assert(error == NULL);
+	printf("dump = '%s'\n", dump);
+	expected =
+		"192.0.2.1:42743 > 192.168.0.1:1000 "
+		"psp ip_proto 6 crypto_offset 0 spi 0xf1 "
+		"53055 > 8080 . 1:1(0) ack 2202903899 win 257 "
+		"<sack 2202905347:2202906795,TS val 300 ecr 1623332896>";
+	assert(strcmp(dump, expected) == 0);
+	free(dump);
+
+	/* Test a DUMP_VERBOSE dump */
+	status = packet_to_string(packet, DUMP_VERBOSE, &dump, &error);
+	assert(status == STATUS_OK);
+	assert(error == NULL);
+	printf("dump = '%s'\n", dump);
+	expected =
+		"192.0.2.1:42743 > 192.168.0.1:1000 "
+		"psp ip_proto 6 crypto_offset 0 spi 0xf1 "
+		"53055 > 8080 . 1:1(0) ack 2202903899 win 257 "
+		"<sack 2202905347:2202906795,TS val 300 ecr 1623332896>"
+		"\n"
+		"0x0000: 45 00 00 54 00 00 00 00 ff 11 38 ee c0 00 02 01 " "\n"
+		"0x0010: c0 a8 00 01 a6 f7 03 e8 00 40 00 00 06 01 00 01 " "\n"
+		"0x0020: 00 00 00 f1 00 00 00 00 00 00 00 00 cf 3f 1f 90 " "\n"
+		"0x0030: 00 00 00 01 83 4d a5 5b a0 10 01 01 db 2d 00 00 " "\n"
+		"0x0040: 05 0a 83 4d ab 03 83 4d b0 ab 08 0a 00 00 01 2c " "\n"
+		"0x0050: 60 c2 18 20 " "\n";
+	assert(strcmp(dump, expected) == 0);
+	free(dump);
+
+	packet_free(packet);
+}
+
 int main(void)
 {
 	test_tcp_ipv4_packet_to_string();
 	test_tcp_ipv6_packet_to_string();
 	test_gre_mpls_tcp_ipv4_packet_to_string();
 	test_tcp_md5_option_to_string();
+
+	set_psp_port(1000);
+	test_tcp_ipv4_psp_ipv4_packet_to_string();
+	test_tcp_psp_ipv4_packet_to_string();
 	return 0;
 }
