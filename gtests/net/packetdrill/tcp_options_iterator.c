@@ -50,6 +50,7 @@ static int get_expected_tcp_option_length(u8 kind, u8 *expected_length,
 		break;
 
 	case TCPOPT_WINDOW:
+	case TCPOPT_WINDOW | TCPOPT_WILDCARD:
 		*expected_length = TCPOLEN_WINDOW;
 		break;
 
