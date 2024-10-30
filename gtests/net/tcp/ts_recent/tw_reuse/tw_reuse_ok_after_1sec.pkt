@@ -1,0 +1,59 @@
+// Check that TIME-WAIT 4-tuple can be reused after a 1 second period.
+
+--tcp_ts_tick_usecs=1000
+--tolerance_percent=1
+
+`
+../../common/defaults.sh
+../../../tcp/common/set_sysctls.py  /proc/sys/net/ipv4/tcp_tw_reuse=1 # global enable
+../../../tcp/common/set_sysctls.py  /proc/sys/net/ipv4/tcp_tw_reuse_delay=1000 # msec
+`
+
+//
+// Prime TIME-WAIT - open first connection and close it.
+// Use source port 0xdead (57005).
+//
+
+    0   socket(..., SOCK_STREAM | SOCK_NONBLOCK, IPPROTO_TCP) = 3
+
+   +0   setsockopt(3, SOL_IP, IP_BIND_ADDRESS_NO_PORT, [1], 4) = 0
+   +0   setsockopt(3, SOL_IP, IP_LOCAL_PORT_RANGE, [0xdeaddead], 4) = 0
+
+   +0   connect(3, ..., ...) = -1 EINPROGRESS (Operation now in progress)
+
+   +0   > S  0:0(0)                 <mss 1460,sackOK,TS val 1001 ecr 0,nop,wscale 8>
++.001   < S. 0:0(0) ack 1 win 65535 <mss 1460,sackOK,TS val 3001 ecr 1001,nop,wscale 8>
+   +0   > .  1:1(0) ack 1           <...>
+
+   +0   close(3) = 0
+
+   +0   > F. 1:1(0) ack 1       <nop,nop,TS val 1002 ecr 3001>
++.001   < F. 1:1(0) ack 2 win 8 <nop,nop,TS val 3002 ecr 1002>
+   +0   > .  2:2(0) ack 2       <nop,nop,TS val 1003 ecr 3002>
+
+//
+// Reincarnation after 1 second - open and close second connection.
+// Use the same source port.
+//
+
+   +0   socket(..., SOCK_STREAM | SOCK_NONBLOCK, IPPROTO_TCP) = 3
+
+   +0   setsockopt(3, SOL_IP, IP_BIND_ADDRESS_NO_PORT, [1], 4) = 0
+   +0   setsockopt(3, SOL_IP, IP_LOCAL_PORT_RANGE, [0xdeaddead], 4) = 0
+
+// Avoid spurious failures with an extra 1 millisecond delay.
+// Kernel TIME-WAIT reuse timer has millisecond resolution. Actual reuse delay
+// can be up to 1 msec longer than the setting due to timestamp rounding.
++1.01   connect(3, ..., ...) = -1 EINPROGRESS (Operation now in progress)
+
+// NOTE: Packetdrill doesn't actually track timestamps across connection
+// reincarnations despite the fact that the random offset doesn't change.
+   +0   > S  0:0(0)                 <mss 1460,sackOK,TS val 2004 ecr 3002,nop,wscale 8>
++.001   < S. 0:0(0) ack 1 win 65535 <mss 1460,sackOK,TS val 4003 ecr 2004,nop,wscale 8>
+   +0   > .  1:1(0) ack 1           <nop,nop,TS val 2005 ecr 4003>
+
+   +0   close(3) = 0
+
+   +0   > F. 1:1(0) ack 1         <nop,nop,TS val 2005 ecr 4003>
++.001   < F. 1:1(0) ack 2 win 8   <nop,nop,TS val 4004 ecr 2005>
+   +0   > .  2:2(0) ack 2         <nop,nop,TS val 2006 ecr 4004>
