@@ -10,7 +10,7 @@
 
 // Set MSS to 1100.
  +.01 setsockopt(3, SOL_TCP, TCP_MAXSEG, [1100], 4) = 0
- +.01 getsockopt(3, SOL_TCP, TCP_MAXSEG, [536], [4]) = 0
+ +.01 getsockopt(3, SOL_TCP, TCP_MAXSEG, [1100], [4]) = 0
 
 // Establish a connection with an outgoing advertised MSS of 1100.
  +.08 < S 0:0(0) win 32792 <mss 1300,nop,wscale 7>
