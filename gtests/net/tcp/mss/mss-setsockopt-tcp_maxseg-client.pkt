@@ -7,7 +7,7 @@
 
 // Set MSS to 1100.
  +.01 setsockopt(3, SOL_TCP, TCP_MAXSEG, [1100], 4) = 0
- +.01 getsockopt(3, SOL_TCP, TCP_MAXSEG, [536], [4]) = 0
+ +.01 getsockopt(3, SOL_TCP, TCP_MAXSEG, [1100], [4]) = 0
 
  +.08...0.180 connect(3, ..., ...) = 0
 
