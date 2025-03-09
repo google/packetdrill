@@ -244,6 +244,8 @@ static void set_wire_client_defaults(struct config *config)
 	if (!config->is_wire_client)
 		return;
 
+	DEBUGP("setting wire client defaults\n");
+
 	if (config->wire_server_ip_string == NULL)
 		die("when using --wire_client, must specify "
 		    "--wire_server_at or --wire_server_ip");
