@@ -36,7 +36,7 @@ const char *wire_op_to_string(enum wire_op_t op)
 	case WIRE_SCRIPT_PATH:		return "WIRE_SCRIPT_PATH";
 	case WIRE_SCRIPT:		return "WIRE_SCRIPT";
 	case WIRE_HARDWARE_ADDR:	return "WIRE_HARDWARE_ADDR";
-	case WIRE_IP_ADDR:		return "WIRE_IP_ADDR";
+	case WIRE_LIVE_LOCAL_IP:	return "WIRE_LIVE_LOCAL_IP";
 	case WIRE_SERVER_READY:		return "WIRE_SERVER_READY";
 	case WIRE_CLIENT_STARTING:	return "WIRE_CLIENT_STARTING";
 	case WIRE_PACKETS_START:	return "WIRE_PACKETS_START";
