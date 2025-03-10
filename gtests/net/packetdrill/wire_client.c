@@ -151,6 +151,18 @@ static void wire_client_send_live_local_ip(struct wire_client *wire_client,
 				"error sending WIRE_LIVE_LOCAL_IP");
 }
 
+/* Send the IP live_remote address from which the server should send packets. */
+static void wire_client_send_live_remote_ip(struct wire_client *wire_client,
+					   const struct config *config)
+{
+	if (wire_conn_write(wire_client->wire_conn,
+			    WIRE_LIVE_REMOTE_IP,
+			    config->live_remote_ip_string,
+			    strlen(config->live_remote_ip_string)))
+		wire_client_die(wire_client,
+				"error sending WIRE_LIVE_REMOTE_IP");
+}
+
 /* Receive server's message that the server is ready to execute the script. */
 static void wire_client_receive_server_ready(struct wire_client *wire_client)
 {
@@ -278,6 +290,8 @@ int wire_client_init(struct wire_client *wire_client,
 	wire_client_send_hw_address(wire_client, config);
 
 	wire_client_send_live_local_ip(wire_client, config);
+
+	wire_client_send_live_remote_ip(wire_client, config);
 
 	wire_client_receive_server_ready(wire_client);
 

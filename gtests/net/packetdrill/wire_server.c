@@ -236,6 +236,35 @@ static int wire_server_receive_live_local_ip(struct wire_server *wire_server)
 	return STATUS_OK;
 }
 
+/* Receive the live_remote IP from which the server should send packets. */
+static int wire_server_receive_live_remote_ip(struct wire_server *wire_server)
+{
+	enum wire_op_t op = WIRE_INVALID;
+	void *buf = NULL;
+	int buf_len = -1;
+	struct config *config = &wire_server->config;
+
+	if (wire_conn_read(wire_server->wire_conn, &op, &buf, &buf_len))
+		return STATUS_ERR;
+	if (op != WIRE_LIVE_REMOTE_IP) {
+		fprintf(stderr,
+			"bad wire client: expected WIRE_LIVE_REMOTE_IP\n");
+		return STATUS_ERR;
+	}
+	if (buf_len + 1 > sizeof(config->live_remote_ip_string)) {
+		fprintf(stderr,
+			"bad wire client: ip address too long\n");
+		return STATUS_ERR;
+	}
+
+	memcpy(config->live_remote_ip_string, buf, buf_len);
+	config->live_remote_ip_string[buf_len] = '\0';  /* NULL-terminate str */
+	DEBUGP("got WIRE_LIVE_REMOTE_IP: [%s]\n",
+	       config->live_remote_ip_string);
+
+	return STATUS_OK;
+}
+
 /* Send a message to tell the client we're ready to excecute the script. */
 static int wire_server_send_server_ready(struct wire_server *wire_server)
 {
@@ -486,6 +515,9 @@ static void *wire_server_thread(void *arg)
 		goto error_done;
 
 	if (wire_server_receive_live_local_ip(wire_server))
+		goto error_done;
+
+	if (wire_server_receive_live_remote_ip(wire_server))
 		goto error_done;
 
 	if (parse_script_and_set_config(wire_server->argc,
