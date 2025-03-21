@@ -32,6 +32,7 @@
  */
 #define _GNU_SOURCE		/* for asprintf */
 #include <limits.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
 #include <arpa/inet.h>
@@ -60,12 +61,6 @@ typedef signed char s8;
 typedef signed short s16;
 typedef signed int s32;
 typedef signed long long s64;
-
-typedef u8 bool;
-enum bool_t {
-	false = 0,
-	true = 1,
-};
 
 #define ARRAY_SIZE(array_name)  (sizeof(array_name) / sizeof(array_name[0]))
 #define TIMEOUT_NONE -1
