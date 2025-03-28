@@ -2555,6 +2555,41 @@ static int syscall_shutdown(struct state *state, struct syscall_spec *syscall,
 	return STATUS_OK;
 }
 
+/* Return a pointer to a socket option value held in args[index].
+ * Return NULL in case of error. If args[index] is a bracketed expression the
+ * nested value is returned in optval_s32.
+ */
+static void *get_sockopt_optval(struct expression_list *args, int index,
+				s32 *optval_s32, char **error)
+{
+	struct expression *val_expression = get_arg(args, 3, error);
+
+	if (val_expression == NULL)
+		return NULL;
+
+	if (val_expression->type == EXPR_LINGER)
+		return &val_expression->value.linger;
+	if (val_expression->type == EXPR_GRE)
+		return &val_expression->value.gre;
+	if (val_expression->type == EXPR_IN6_ADDR)
+		return &val_expression->value.address_ipv6;
+	if (val_expression->type == EXPR_MPLS_STACK)
+		return val_expression->value.mpls_stack;
+	if (val_expression->type == EXPR_PSP)
+		return &val_expression->value.psp_tuple;
+	if (val_expression->type == EXPR_STRING)
+		return val_expression->value.buf.ptr;
+	if (val_expression->type == EXPR_LIST) {
+		if (s32_bracketed_arg(args, index, optval_s32, error))
+			return NULL;
+		return optval_s32;
+	}
+
+	asprintf(error, "unsupported [gs]etsockopt value type: %s",
+		 expression_type_to_string(val_expression->type));
+	return NULL;
+}
+
 static int syscall_getsockopt(struct state *state, struct syscall_spec *syscall,
 			      struct expression_list *args, char **error)
 {
@@ -2586,6 +2621,16 @@ static int syscall_getsockopt(struct state *state, struct syscall_spec *syscall,
 	live_optlen = script_optlen;
 	live_optval = calloc(1, live_optlen + 1);
 	assert(live_optval != NULL);
+
+	/* TCP_PSP_LISTENER is an unusual sockopt that also sets state */
+	if (optname == TCP_PSP_LISTENER) {
+		void *optval;
+
+		optval = get_sockopt_optval(args, 3, &script_optval_s32, error);
+		if (optval == NULL)
+			goto error_out;
+		memcpy(live_optval, optval, live_optlen);
+	}
 
 	begin_syscall(state, syscall);
 
@@ -2695,6 +2740,15 @@ static int syscall_getsockopt(struct state *state, struct syscall_spec *syscall,
 				 script_buf, live_buf);
 			goto error_out;
 		}
+	} else if (val_expression->type == EXPR_PSP) {
+		struct socket *socket;
+		const struct psp_spi_tuple *live_tuple = live_optval;
+		u32 live_rx_spi = live_tuple->spi;
+		u32 script_rx_spi = val_expression->value.psp_tuple.spi;
+
+		socket = fd_to_socket(find_by_live_fd(state, live_fd));
+		assert(socket != NULL);
+		socket->psp_rx_spi_offset = live_rx_spi - script_rx_spi;
 	} else {
 		asprintf(error, "unsupported getsockopt value type: %s",
 			 expression_type_to_string(
@@ -2716,7 +2770,6 @@ static int syscall_setsockopt(struct state *state, struct syscall_spec *syscall,
 {
 	int script_fd, live_fd, level, optname, optval_s32, optlen, result;
 	void *optval = NULL;
-	struct expression *val_expression;
 
 	if (check_arg_count(args, 5, error))
 		return STATUS_ERR;
@@ -2731,29 +2784,9 @@ static int syscall_setsockopt(struct state *state, struct syscall_spec *syscall,
 	if (s32_arg(args, 4, &optlen, error))
 		return STATUS_ERR;
 
-	val_expression = get_arg(args, 3, error);
-	if (val_expression == NULL)
+	optval = get_sockopt_optval(args, 3, &optval_s32, error);
+	if (optval == NULL)
 		return STATUS_ERR;
-	if (val_expression->type == EXPR_LINGER) {
-		optval = &val_expression->value.linger;
-	} else if (val_expression->type == EXPR_GRE) {
-		optval = &val_expression->value.gre;
-	} else if (val_expression->type == EXPR_IN6_ADDR) {
-		optval = &val_expression->value.address_ipv6;
-	} else if (val_expression->type == EXPR_MPLS_STACK) {
-		optval = val_expression->value.mpls_stack;
-	} else if (val_expression->type == EXPR_STRING) {
-		optval = val_expression->value.buf.ptr;
-	} else if (val_expression->type == EXPR_LIST) {
-		if (s32_bracketed_arg(args, 3, &optval_s32, error))
-			return STATUS_ERR;
-		optval = &optval_s32;
-	} else {
-		asprintf(error, "unsupported setsockopt value type: %s",
-			 expression_type_to_string(
-				 val_expression->type));
-		return STATUS_ERR;
-	}
 
 	begin_syscall(state, syscall);
 
