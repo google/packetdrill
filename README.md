@@ -6,7 +6,8 @@ The packetdrill scripting tool enables quick, precise tests for entire TCP/UDP/I
 The code is GPLv2. Currently the source for the testing tool and a number of test scripts is in the git repository. We will continue to post more tests from our team's Linux TCP test suite (described in our USENIX paper), as time permits.
 
 Links:
-* [the Google packetdrill git repository is now on github.com](https://github.com/google/packetdrill)
+* [the Google packetdrill git repository on github.com](https://github.com/google/packetdrill)
+* [packetdrill tutorial at NetDev in March 2025](https://netdevconf.info/0x19/sessions/tutorial/tutorial-using-packetdrill-to-write-automated-tests-for-the-linux-networking-stack.html)
 * [packetdrill USENIX ATC paper from June 2013](http://research.google.com/pubs/pub41316.html) describing the tool and our team's experiences
 * [packetdrill USENIX ;login: article](http://research.google.com/pubs/pub41848.html) from October 2013
 * [packetdrill mailing list](https://groups.google.com/forum/#!forum/packetdrill) for questions, discussions and patches
