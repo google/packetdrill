@@ -47,10 +47,13 @@ static void checksum_ipv4_packet(struct packet *packet)
 	/* Fill in IPv4-based layer 4 checksum. */
 	if (packet->tcp != NULL) {
 		struct tcp *tcp = packet->tcp;
+		const int encap_bytes = ((u8 *)tcp - (u8 *)ipv4) -
+					ipv4_header_len(ipv4);
+		const int tcp_bytes = l4_bytes - encap_bytes;
 		tcp->check = 0;
 		tcp->check = tcp_udp_v4_checksum(ipv4->src_ip,
 						 ipv4->dst_ip,
-						 IPPROTO_TCP, tcp, l4_bytes);
+						 IPPROTO_TCP, tcp, tcp_bytes);
 	} else if (packet->udp != NULL) {
 		struct udp *udp = packet->udp;
 		udp->check = 0;
@@ -81,10 +84,13 @@ static void checksum_ipv6_packet(struct packet *packet)
 	/* Fill in IPv6-based layer 4 checksum. */
 	if (packet->tcp != NULL) {
 		struct tcp *tcp = packet->tcp;
+		const int encap_bytes = ((u8 *)tcp - (u8 *)ipv6) -
+					sizeof(*ipv6);
+		const int tcp_bytes = l4_bytes - encap_bytes;
 		tcp->check = 0;
 		tcp->check = tcp_udp_v6_checksum(&ipv6->src_ip,
 						 &ipv6->dst_ip,
-						 IPPROTO_TCP, tcp, l4_bytes);
+						 IPPROTO_TCP, tcp, tcp_bytes);
 	} else if (packet->udp != NULL) {
 		struct udp *udp = packet->udp;
 		udp->check = 0;
