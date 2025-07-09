@@ -200,6 +200,13 @@ static void write_tcp_info(struct code_state *code,
 	emit_var(code, "tcpi_bytes_retrans",	info->tcpi_bytes_retrans);
 	emit_var(code, "tcpi_dsack_dups",	info->tcpi_dsack_dups);
 	emit_var(code, "tcpi_reord_seen",	info->tcpi_reord_seen);
+	emit_var(code, "tcpi_rcv_ooopack",      info->tcpi_rcv_ooopack);
+	emit_var(code, "tcpi_snd_wnd",		info->tcpi_snd_wnd);
+	emit_var(code, "tcpi_rcv_wnd",		info->tcpi_rcv_wnd);
+	emit_var(code, "tcpi_rehash",		info->tcpi_rehash);
+	emit_var(code, "tcpi_total_rto",	info->tcpi_total_rto);
+	emit_var(code, "tcpi_total_rto_recoveries", info->tcpi_total_rto_recoveries);
+	emit_var(code, "tcpi_total_rto_time",	info->tcpi_total_rto_time);
 
 	emit_var_end(code);
 }
