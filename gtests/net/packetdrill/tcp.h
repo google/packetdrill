@@ -217,6 +217,29 @@ struct _tcp_info {
 	__u64	tcpi_bytes_retrans;  /* RFC4898 tcpEStatsPerfOctetsRetrans */
 	__u32	tcpi_dsack_dups;     /* RFC4898 tcpEStatsStackDSACKDups */
 	__u32	tcpi_reord_seen;     /* reordering events seen */
+
+	__u32	tcpi_rcv_ooopack;    /* Out-of-order packets received */
+
+	__u32	tcpi_snd_wnd;	     /* peer's advertised receive window after
+				      * scaling (bytes)
+				      */
+	__u32	tcpi_rcv_wnd;	     /* local advertised receive window after
+				      * scaling (bytes)
+				      */
+
+	__u32   tcpi_rehash;         /* PLB or timeout triggered rehash attempts */
+
+	__u16	tcpi_total_rto;	/* Total number of RTO timeouts, including
+				 * SYN/SYN-ACK and recurring timeouts.
+				 */
+	__u16	tcpi_total_rto_recoveries;	/* Total number of RTO
+						 * recoveries, including any
+						 * unfinished recovery.
+						 */
+	__u32	tcpi_total_rto_time;	/* Total time spent in RTO recoveries
+					 * in milliseconds, including any
+					 * unfinished recovery.
+					 */
 };
 
 /* netlink attributes types for SCM_TIMESTAMPING_OPT_STATS */
