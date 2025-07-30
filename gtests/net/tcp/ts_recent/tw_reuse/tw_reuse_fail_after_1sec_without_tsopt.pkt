@@ -1,0 +1,47 @@
+// Check that TIME-WAIT 4-tuple can't be reused after the TIME-WAIT reuse delay
+// when peer doesn't support TSopt
+
+--tcp_ts_tick_usecs=1000
+--tolerance_percent=1
+
+`
+../../common/defaults.sh
+../../../tcp/common/set_sysctls.py  /proc/sys/net/ipv4/tcp_tw_reuse=1 # global enable
+../../../tcp/common/set_sysctls.py  /proc/sys/net/ipv4/tcp_tw_reuse_delay=1000 # msec
+`
+
+//
+// Prime TIME-WAIT - open first connection and close it.
+// Use source port 0xdead (57005).
+//
+
+    0   socket(..., SOCK_STREAM | SOCK_NONBLOCK, IPPROTO_TCP) = 3
+
+   +0   setsockopt(3, SOL_IP, IP_BIND_ADDRESS_NO_PORT, [1], 4) = 0
+   +0   setsockopt(3, SOL_IP, IP_LOCAL_PORT_RANGE, [0xdeaddead], 4) = 0
+
+   +0   connect(3, ..., ...) = -1 EINPROGRESS (Operation now in progress)
+
+   +0   > S  0:0(0)                 <mss 1460,sackOK,TS val 1001 ecr 0,nop,wscale 8>
++.001   < S. 0:0(0) ack 1 win 65535 <mss 1460,sackOK,nop,nop,nop,wscale 8>
+   +0   > .  1:1(0) ack 1
+
+   +0   close(3) = 0
+
+   +0   > F. 1:1(0) ack 1
++.001   < F. 1:1(0) ack 2 win 8
+   +0   > .  2:2(0) ack 2
+
+//
+// Reincarnation after 1 second - open and close second connection.
+// Use same source port.
+//
+
+   +0   socket(..., SOCK_STREAM | SOCK_NONBLOCK, IPPROTO_TCP) = 3
+
+   +0   setsockopt(3, SOL_IP, IP_BIND_ADDRESS_NO_PORT, [1], 4) = 0
+   +0   setsockopt(3, SOL_IP, IP_LOCAL_PORT_RANGE, [0xdeaddead], 4) = 0
+
++1.00   connect(3, ..., ...) = -1 EADDRNOTAVAIL (Cannot assign requested address)
+
+   +0   close(3) = 0
