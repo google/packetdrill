@@ -1,0 +1,70 @@
+// Verify that we can parse inbound and outbound encapsulated packets.
+// Try to keep this script passing on all versions of packetdrill
+// (upstream and local).
+
+--dry_run   // just parse, don't run
+
+// IPv4...
+
+// GRE encap
++0 < ipv4 2.2.2.2 > 1.1.1.1: gre: . 1:1001(1000) ack 1 win 123
++0 > ipv4 1.1.1.1 > 2.2.2.2: gre: . 1:1001(1000) ack 1
+
+// GRE plus 1-entry MPLS encap
++0 < ipv4 2.2.2.2 > 1.1.1.1: gre:
+     mpls (label 123, tc 1, [S], ttl 255): . 1:1001(1000) ack 1 win 123
+
+// GRE plus 2-entry MPLS encap
++0 < ipv4 2.2.2.2 > 1.1.1.1: gre:
+     mpls (label 0, tc 0, ttl 0) (label 1048575, tc 7, [S], ttl 255): . 1:1001(1000) ack 1 win 123
++0 > ipv4 2.2.2.2 > 1.1.1.1: gre:
+     mpls (label 0, tc 0, ttl 0) (label 1048575, tc 7, [S], ttl 255): . 1:1001(1000) ack 1 win 123
+
+// double GRE encap
++0 <  ipv4 2.2.2.2 > 1.1.1.1: gre: ipv4 2.2.2.2 > 1.1.1.1: gre: . 1:1001(1000) ack 1 win 123
++0 >  ipv4 1.1.1.1 > 2.2.2.2: gre: ipv4 1.1.1.1 > 2.2.2.2: gre: . 1:1001(1000) ack 1
+
+// IPIP encap
++0 < ipv4 2.2.2.2 > 1.1.1.1: . 1:1001(1000) ack 1 win 123
++0 > ipv4 1.1.1.1 > 2.2.2.2: . 1:1001(1000) ack 1
+
+// double IPIP encap
++0 <  ipv4 2.2.2.2 > 1.1.1.1: ipv4 2.2.2.2 > 1.1.1.1: . 1:1001(1000) ack 1 win 123
++0 >  ipv4 1.1.1.1 > 2.2.2.2: ipv4 1.1.1.1 > 2.2.2.2: . 1:1001(1000) ack 1
+
+// GRE encap with GRE header fields specified
++0 < ipv4 2.2.2.2 > 1.1.1.1 : gre flags 0xb000, sum 511, off 1023, key 0x80001234, seq 512: . 1:1001(1000) ack 1 win 123
+
+// IPv6...
+
+// GRE encap
++0 < ipv6 2::2222 > 1::1111: gre: . 1:1001(1000) ack 1 win 123
++0 > ipv6 1::1111 > 2::2222: gre: . 1:1001(1000) ack 1
+
+// GRE plus 1-entry MPLS encap
++0 < ipv6 2::2222 > 1::1111: gre:
+     mpls (label 123, tc 1, [S], ttl 255): . 1:1001(1000) ack 1 win 123
++0 > ipv6 2::2222 > 1::1111: gre:
+     mpls (label 123, tc 1, [S], ttl 255): . 1:1001(1000) ack 1 win 123
+
+// GRE plus 2-entry MPLS encap
++0 < ipv6 2::2222 > 1::1111: gre:
+     mpls (label 0, tc 0, ttl 0) (label 1048575, tc 7, [S], ttl 255): . 1:1001(1000) ack 1 win 123
++0 > ipv6 2::2222 > 1::1111: gre:
+     mpls (label 0, tc 0, ttl 0) (label 1048575, tc 7, [S], ttl 255): . 1:1001(1000) ack 1 win 123
+
+// double GRE encap
++0 <  ipv6 2::2222 > 1::1111: gre: ipv6 2::2222 > 1::1111: gre: . 1:1001(1000) ack 1 win 123
++0 >  ipv6 1::1111 > 2::2222: gre: ipv6 1::1111 > 2::2222: gre: . 1:1001(1000) ack 1
+
+// IPv6 encap
++0 < ipv6 2::2222 > 1::1111: . 1:1001(1000) ack 1 win 123
++0 > ipv6 1::1111 > 2::2222: . 1:1001(1000) ack 1
+
+// double IPv6 encap
++0 <  ipv6 2::2222 > 1::1111: ipv6 2::2222 > 1::1111: . 1:1001(1000) ack 1 win 123
++0 >  ipv6 1::1111 > 2::2222: ipv6 1::1111 > 2::2222: . 1:1001(1000) ack 1
+
+// GRE encap with GRE header fields specified
++0 < ipv6 2::2222 > 1::1111 : gre flags 0xb000, sum 511, off 1023, key 0x80001234, seq 512: . 1:1001(1000) ack 1 win 123
++0 > ipv6 1::1111 > 2::2222 : gre flags 0xb000, sum 511, off 1023, key 0x80001234, seq 512: . 1:1001(1000) ack 1
