@@ -35,21 +35,24 @@
    // Now epoll_wait should not return any event because there is no space.
    +0 epoll_wait(5, {events=0, ptr=0}, 1, 0) = 0
 
-   // The ack does not open up enough space to send EPOLLOUT to the user.
+   // The ack opens up some space, and that will send EPOLLOUT to the user.
+   // Before kernel commit 4bfe744ff164 "tcp: fix potential xmit stalls caused
+   // by TCP_NOTSENT_LOWAT", it would not send EPOLLOUT, and that was a bug.
    +0 > P. 1:10001(10000) ack 1
    +0 < . 1:1(0) ack 10001 win 257
    +0 > P. 10001:26001(16000) ack 1
-   +0 epoll_wait(5, {events=0, ptr=0}, 1, 0) = 0
+   +0 epoll_wait(5, {events=EPOLLOUT, fd=4}, 1, 0) = 1
 
-   // Now this ack opens up substantial space and we will send EPOLLOUT.
+   // Ack what we received so far. This frees up additional queue space but
+   // does not change the state because the queue was not full before.
    +0 < . 1:1(0) ack 26001 win 257
    +0 > P. 26001:42001(16000) ack 1
-   +0 epoll_wait(5, {events=EPOLLOUT, fd=4}, 1, 0) = 1
    // EPOLLET prevents a second EPOLLOUT.
    +0 epoll_wait(5, {events=0, ptr=0}, 1, 0) = 0
 
-   // We have another parital write here.
-   +0 write(4, ..., 180000) = 128000
+   // We have another parital write here. This fills up the queue and so the
+   // state will change after we send the next ack and free up some space.
+   +0 write(4, ..., 180000) = 64000
 
    // The ack opens enough space to send EPOLLOUT to the user.
    +0 < . 1:1(0) ack 42001 win 257
@@ -62,10 +65,12 @@
    +0 epoll_wait(5, {events=0, ptr=0}, 1, 0) = 0
    +0 > P. 74001:106001(32000) ack 1
 
-   // Another partial write.
-   +0 write(4, ..., 180000) = 112000
+   // Do a full write this time. This will not fill up the queue.
+   +0 write(4, ..., 180000) = 180000
 
-   // This ack opens more space, so we send EPOLLOUT.
+   // This ack opens more space, but EPOLLET prevents a second EPOLLOUT
+   // because the previous write didn't fill up the queue and so the state
+   // hasn't changed.
    +0 < . 1:1(0) ack 106001 win 257
    +0 > P. 106001:138001(32000) ack 1
-   +0 epoll_wait(5, {events=EPOLLOUT, fd=4}, 1, 0) = 1
+   +0 epoll_wait(5, {events=0, ptr=0}, 1, 0) = 0
