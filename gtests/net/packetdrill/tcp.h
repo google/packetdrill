@@ -110,6 +110,17 @@
 
 #define TCP_MD5_DIGEST_LEN	16	/* bytes in RFC2385 TCP MD5 digest */
 
+/*
+ * To compare subset of options between script packet and actual packet,
+ * we use * for "option with any value". For example, "wscale *" in the
+ * script packet means wscale option of any value.
+ *
+ * TCPOPT_WILDCARD is used to mark a option in the script packet as
+ * "any value". A script packet of kind "TCPOPT_WINDOW | TCPOPT_WILDCARD"
+ * means "wscale option of any value".
+ */
+#define TCPOPT_WILDCARD		0x80
+
 /* A portable TCP header definition (Linux and *BSD use different names). */
 struct tcp {
 	__be16	src_port;
