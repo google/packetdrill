@@ -1282,6 +1282,10 @@ tcp_option
 	}
 	$$->data.window_scale.shift_count = $2;
 }
+| WSCALE '*'   {
+	$$ = tcp_option_new(TCPOPT_WINDOW | TCPOPT_WILDCARD, TCPOLEN_WINDOW);
+	$$->data.window_scale.shift_count = 0;
+}
 | SACKOK           {
 	$$ = tcp_option_new(TCPOPT_SACK_PERMITTED,
 				    TCPOLEN_SACK_PERMITTED);
