@@ -36,6 +36,7 @@
 #include "icmpv6.h"
 #include "ip.h"
 #include "ipv6.h"
+#include "psp.h"
 #include "tcp.h"
 #include "udp.h"
 #include "unaligned.h"
@@ -98,6 +99,8 @@ struct packet {
 	bool echoed_header;     /* icmp payload is an echoed header?
 				   This is for TCP/UDP */
 
+	/* Encapsulation */
+	struct psp *psp;
 
 	s64 time_usecs;		/* wall time of receive/send if non-zero */
 
@@ -201,7 +204,7 @@ static inline u8 *packet_start(const struct packet *packet)
 }
 
 /* Return a pointer to the first byte of the innermost IP header. */
-static inline u8 *ip_start(struct packet *packet)
+static inline u8 *ip_start(const struct packet *packet)
 {
 	if (packet->ipv4 != NULL)
 		return (u8 *)packet->ipv4;

@@ -33,6 +33,8 @@
 #include "ip_packet.h"
 #include "logging.h"
 #include "mpls_packet.h"
+#include "psp_packet.h"
+#include "udp_packet.h"
 
 
 /* Info for all types of header we support. */
@@ -43,9 +45,10 @@ struct header_type_info header_types[HEADER_NUM_TYPES] = {
 	{ "GRE",    IPPROTO_GRE,	0,		gre_header_finish },
 	{ "MPLS",   0,			ETHERTYPE_MPLS_UC, mpls_header_finish },
 	{ "TCP",    IPPROTO_TCP,	0,		NULL },
-	{ "UDP",    IPPROTO_UDP,	0,		NULL },
+	{ "UDP",    IPPROTO_UDP,	0,		udp_header_finish },
 	{ "ICMPV4", IPPROTO_ICMP,	0,		NULL },
 	{ "ICMPV6", IPPROTO_ICMPV6,	0,		NULL },
+	{ "PSP",    0,			0,		psp_header_finish },
 };
 
 struct packet *packet_new(u32 buffer_bytes)
@@ -173,6 +176,7 @@ static void packet_duplicate_info(struct packet *packet,
 	packet->udp	= offset_ptr(old_base, new_base, old_packet->udp);
 	packet->icmpv4	= offset_ptr(old_base, new_base, old_packet->icmpv4);
 	packet->icmpv6	= offset_ptr(old_base, new_base, old_packet->icmpv6);
+	packet->psp	= offset_ptr(old_base, new_base, old_packet->psp);
 
 	packet->tcp_ts_val	= offset_ptr(old_base, new_base,
 					     old_packet->tcp_ts_val);
@@ -253,6 +257,11 @@ struct packet *packet_encapsulate(struct packet *outer, struct packet *inner)
 	assert(packet_header_count(packet) == outer_headers + inner_headers);
 
 	packet_finish_encapsulation_headers(packet);
+
+	/* Both inner and outer may have PSP headers. Keep the inner. */
+	if (packet->psp == NULL)
+		packet->psp = offset_ptr(outer->buffer, packet->buffer,
+					 outer->psp);
 
 	packet->ip_bytes = outer->ip_bytes + inner->ip_bytes;
 

@@ -38,6 +38,8 @@
 extern struct packet *new_tcp_packet(int address_family,
 				     enum direction_t direction,
 				     struct ip_info ip_info,
+				     const struct psp *psp,
+				     u16 psp_port,
 				     u16 src_port,
 				     u16 dst_port,
 				     const char *flags,

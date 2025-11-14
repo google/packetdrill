@@ -27,6 +27,7 @@
 
 #include <stdlib.h>
 #include "socket.h"
+#include "psp_packet.h"
 #include "tcp_options_to_string.h"
 
 static void endpoints_to_string(FILE *s, const struct packet *packet)
@@ -36,6 +37,18 @@ static void endpoints_to_string(FILE *s, const struct packet *packet)
 	struct tuple tuple;
 
 	get_packet_tuple(packet, &tuple);
+
+	/* get_packet_tuple() returns the tuple of the decapsulated packet.
+	 * Here we want the tuple of the full potentially encapsulated packet,
+	 * see if we need to use an encapsulating header's ports. Currently
+	 * this happens only for transport-mode PSP.
+	 */
+	if (is_psp_transport_encap(packet)) {
+		struct udp *udp = (struct udp *)packet->psp - 1;
+
+		tuple.src.port = udp->src_port;
+		tuple.dst.port = udp->dst_port;
+	}
 
 	fprintf(s, "%s:%u > %s:%u",
 		ip_to_string(&tuple.src.ip, src_string), ntohs(tuple.src.port),
@@ -141,8 +154,33 @@ static int mpls_header_to_string(FILE *s, struct packet *packet, int layer,
 	return STATUS_OK;
 }
 
+static int psp_header_to_string(FILE *s, struct packet *packet, int layer,
+				enum dump_format_t format, char **error)
+{
+	const struct psp *psp = packet->headers[layer].h.psp;
+
+	fprintf(s, "psp ip_proto %u crypto_offset %u spi %#x",
+		psp->next_header, psp->crypt_offset, ntohl(psp->spi));
+
+	if (psp->has_vc)
+		fprintf(s, " vc %#lx", be64toh(psp->vc));
+
+	fprintf(s, ": ");
+	return STATUS_OK;
+}
+
+static int udp_header_to_string(FILE *s, struct packet *packet, int layer,
+				enum dump_format_t format, char **error)
+{
+	const struct udp *udp = packet->headers[layer].h.udp;
+
+	fprintf(s, "udp %u > %u (%u): ", ntohs(udp->src_port),
+		ntohs(udp->dst_port), ntohs(udp->len));
+	return STATUS_OK;
+}
+
 /* Print a string representation of the TCP packet:
- *  direction opt_ip_info flags seq ack window tcp_options
+ *  direction opt_ip_info opt_encapsulation flags seq ack window tcp_options
  */
 static int tcp_packet_to_string(FILE *s, struct packet *packet,
 				enum dump_format_t format, char **error)
@@ -155,6 +193,24 @@ static int tcp_packet_to_string(FILE *s, struct packet *packet,
 		fputc(' ', s);
 	}
 
+	if (is_psp_transport_encap(packet)) {
+		/* transport-mode PSP encapsulation */
+		const struct psp *psp = packet->psp;
+
+		if (format == DUMP_SHORT) {
+			fprintf(s, "psp spi %#x ", ntohl(psp->spi));
+		} else {
+			fprintf(s, "psp ip_proto %u crypto_offset %u spi %#x ",
+				psp->next_header, psp->crypt_offset,
+				ntohl(psp->spi));
+
+			if (psp->has_vc)
+				fprintf(s, "vc %#lx ", be64toh(psp->vc));
+
+			fprintf(s, "%u > %u ", ntohs(packet->tcp->src_port),
+				ntohs(packet->tcp->dst_port));
+		}
+	}
 
 	/* We print flags in the same order as tcpdump 4.1.1. */
 	if (packet->tcp->fin)
@@ -257,6 +313,8 @@ static int encap_header_to_string(FILE *s, struct packet *packet, int layer,
 		[HEADER_IPV6]	= ipv6_header_to_string,
 		[HEADER_GRE]	= gre_header_to_string,
 		[HEADER_MPLS]	= mpls_header_to_string,
+		[HEADER_UDP]	= udp_header_to_string,
+		[HEADER_PSP]	= psp_header_to_string,
 	};
 	header_to_string_func printer = NULL;
 	enum header_t type = packet->headers[layer].type;
@@ -279,16 +337,18 @@ int packet_to_string(struct packet *packet,
 	FILE *s = open_memstream(ascii_string, &size);  /* output string */
 	int i;
 	int header_count = packet_header_count(packet);
+	const u8 *inner_l3_hdr = ip_start(packet);
 
-	/* Print any encapsulation headers preceding layer 3 and 4 headers. */
-	for (i = 0; i < header_count - 2; ++i) {
-		if (packet->headers[i].type == HEADER_NONE)
+	/* Print any encapsulation headers preceding the innermost L3 header. */
+	for (i = 0; i < header_count; ++i) {
+		assert(packet->headers[i].type != HEADER_NONE);
+		if (inner_l3_hdr && packet->headers[i].h.ptr >= inner_l3_hdr)
 			break;
 		if (encap_header_to_string(s, packet, i, format, error))
 			goto out;
 	}
 
-	if ((packet->ipv4 == NULL) && (packet->ipv6 == NULL)) {
+	if (inner_l3_hdr == NULL) {
 		fprintf(s, "[NO IP HEADER]");
 	} else {
 		if (packet->tcp != NULL) {
@@ -304,7 +364,7 @@ int packet_to_string(struct packet *packet,
 			if (icmpv6_packet_to_string(s, packet, format, error))
 				goto out;
 		} else {
-			fprintf(s, "[NO TCP OR ICMP HEADER]");
+			fprintf(s, "[NO TCP, UDP OR ICMP HEADER]");
 		}
 	}
 
