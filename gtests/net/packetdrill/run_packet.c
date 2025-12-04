@@ -1301,6 +1301,7 @@ static int verify_outbound_tcp_option(
 	struct packet *script_packet,
 	struct tcp_option *actual_option,
 	struct tcp_option *script_option,
+	int option_index,
 	char **error)
 {
 	struct config *config = state->config;
@@ -1309,6 +1310,7 @@ static int verify_outbound_tcp_option(
 	long tolerance_usecs;
 	double dynamic_tolerance;
 	s64 delta;
+	const char *err_type = NULL;
 
 	tolerance_usecs = config->tolerance_usecs;
 	/* Note that for TCP TS, we do not want to compute the tolerance based
@@ -1345,17 +1347,34 @@ static int verify_outbound_tcp_option(
 		break;
 
 	default:
-		if (script_option->length != actual_option->length) {
-			asprintf(error,
-				 "bad lengths for outbound TCP option %d",
-				 script_option->kind);
-			return STATUS_ERR;
-		}
+		if (script_option->length != actual_option->length)
+			err_type = "bad length";
 		if (script_option->length > 2 &&
 		    memcmp(&actual_option->data, &script_option->data,
-			   actual_option->length - 2) != 0) {
-			asprintf(error, "bad value outbound TCP option %d",
-				 script_option->kind);
+			   actual_option->length - 2) != 0)
+			err_type = "bad value";
+		if (err_type != NULL) {
+			char *script_tcp_option_str = NULL;
+			if (tcp_option_info_to_string(script_packet,
+						      option_index,
+						      &script_tcp_option_str,
+						      error) != STATUS_OK)
+				return STATUS_ERR;
+			char *actual_tcp_option_str = NULL;
+			if (tcp_option_info_to_string(actual_packet,
+						      option_index,
+						      &actual_tcp_option_str,
+						      error) != STATUS_OK)
+				return STATUS_ERR;
+			asprintf(error,
+				 "%s in outbound TCP option (kind=%d): "
+				 "expected: %s actual: %s",
+				 err_type,
+				 script_option->kind,
+				 script_tcp_option_str,
+				 actual_tcp_option_str);
+			free(script_tcp_option_str);
+			free(actual_tcp_option_str);
 			return STATUS_ERR;
 		}
 	}
@@ -1372,6 +1391,7 @@ static int verify_outbound_live_tcp_options(
 	struct tcp_options_iterator a_iter, s_iter;
 
 	struct tcp_option *a_opt, *s_opt;
+	int option_index = 0;
 
 	/* See if we should validate TCP options at all. */
 	if (script_packet->flags & FLAG_OPTIONS_NOCHECK)
@@ -1388,14 +1408,18 @@ static int verify_outbound_live_tcp_options(
 			return STATUS_ERR;
 		}
 
-		if (verify_outbound_tcp_option(state, actual_packet,
-					       script_packet, a_opt, s_opt,
+		if (verify_outbound_tcp_option(state,
+					       actual_packet,
+					       script_packet,
+					       a_opt, s_opt,
+					       option_index,
 					       error) != STATUS_OK) {
 			return STATUS_ERR;
 		}
 
 		a_opt = tcp_options_next(&a_iter, error);
 		s_opt = tcp_options_next(&s_iter, error);
+		option_index++;
 	}
 	return STATUS_OK;
 }

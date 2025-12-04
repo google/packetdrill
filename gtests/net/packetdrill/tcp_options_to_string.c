@@ -26,6 +26,9 @@
 
 #include "tcp_options_iterator.h"
 
+/* Internal code to print all options. */
+#define  ALL_TCP_OPTIONS  (-1)
+
 /* If the MD5 digest option is in the valid range of sizes, print the MD5
  * option and digest and return STATUS_OK. Otherwise, return STATUS_ERR.
  */
@@ -72,8 +75,9 @@ static int tcp_fast_open_option_to_string(FILE *s, struct tcp_option *option,
 	return STATUS_OK;
 }
 
-int tcp_options_to_string(struct packet *packet,
-				  char **ascii_string, char **error)
+int tcp_option_info_to_string(struct packet *packet,
+			      int desired_index,
+			      char **ascii_string, char **error)
 {
 	int result = STATUS_ERR;	/* return value */
 	size_t size = 0;
@@ -84,9 +88,17 @@ int tcp_options_to_string(struct packet *packet,
 	struct tcp_options_iterator iter;
 	struct tcp_option *option = NULL;
 	for (option = tcp_options_begin(packet, &iter);
-	     option != NULL; option = tcp_options_next(&iter, error)) {
-		if (index > 0)
+	     option != NULL; option = tcp_options_next(&iter, error), ++index) {
+		if (desired_index == ALL_TCP_OPTIONS &&
+		    index > 0)
 			fputc(',', s);
+
+		/* If the caller just wants the string representation of
+		 * one particular option, ensure we return just that one.
+		 */
+		if (desired_index != ALL_TCP_OPTIONS &&
+		    index != desired_index)
+			continue;
 
 		switch (option->kind) {
 		case TCPOPT_EOL:
@@ -153,7 +165,6 @@ int tcp_options_to_string(struct packet *packet,
 				 option->kind);
 			goto out;
 		}
-		++index;
 	}
 	if (*error != NULL)  /* bogus TCP options prevented iteration */
 		goto out;
@@ -164,4 +175,11 @@ out:
 	fclose(s);
 	return result;
 
+}
+
+int tcp_options_to_string(struct packet *packet,
+			  char **ascii_string, char **error)
+{
+	return tcp_option_info_to_string(packet, ALL_TCP_OPTIONS,
+					 ascii_string, error);
 }

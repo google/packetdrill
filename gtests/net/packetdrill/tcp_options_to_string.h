@@ -30,6 +30,14 @@
 #include "packet.h"
 #include "tcp_options.h"
 
+/* Returns in *ascii_string a human-readable representation of the TCP option
+ * in 'packet' with the given index (first option has index = 0). Returns
+ * STATUS_OK on success; on failure returns STATUS_ERR and sets error message.
+ */
+extern int tcp_option_info_to_string(struct packet *packet,
+				     int desired_index,
+				     char **ascii_string, char **error);
+
 /* Returns in *ascii_string a human-readable representation of the TCP
  * options for 'packet'. Returns STATUS_OK on success; on failure
  * returns STATUS_ERR and sets error message.
