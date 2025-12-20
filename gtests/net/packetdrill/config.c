@@ -71,6 +71,7 @@ enum option_codes {
 	OPT_DRY_RUN,
 	OPT_IS_ANYIP,
 	OPT_SEND_OMIT_FREE,
+	OPT_PSP_UDP_DPORT,
 	OPT_DEBUG,
 	OPT_DEFINE = 'D',	/* a '-D' single-letter option */
 	OPT_VERBOSE = 'v',	/* a '-v' single-letter option */
@@ -110,6 +111,7 @@ struct option options[] = {
 	{ "dry_run",		.has_arg = false, NULL, OPT_DRY_RUN },
 	{ "is_anyip",		.has_arg = false, NULL, OPT_IS_ANYIP },
 	{ "send_omit_free",	.has_arg = false, NULL, OPT_SEND_OMIT_FREE },
+	{ "psp_udp_port",	.has_arg = true,  NULL, OPT_PSP_UDP_DPORT },
 	{ "debug",		.has_arg = false, NULL, OPT_DEBUG },
 	{ "define",		.has_arg = true,  NULL, OPT_DEFINE },
 	{ "verbose",		.has_arg = false, NULL, OPT_VERBOSE },
@@ -151,6 +153,7 @@ void show_usage(void)
 		"\t[--dry_run]\n"
 		"\t[--is_anyip]\n"
 		"\t[--send_omit_free]\n"
+		"\t[--psp_udp_port=<UDP destination port for parsing/building PSP packets>]\n"
 		"\t[--debug]\n"
 		"\t[--define symbol1=val1 --define symbol2=val2 ...]\n"
 		"\t[--verbose|-v]\n"
@@ -612,6 +615,12 @@ static void process_option(int opt, char *optarg, struct config *config,
 		break;
 	case OPT_SEND_OMIT_FREE:
 		config->send_omit_free = true;
+		break;
+	case OPT_PSP_UDP_DPORT:
+		port = atoi(optarg);
+		if (port <= 0 || port > 0xffff)
+			die("%s: bad --psp_udp_port: %s\n", where, optarg);
+		config->psp_udp_port = port;
 		break;
 	case OPT_DEBUG:
 		opt_debug++;

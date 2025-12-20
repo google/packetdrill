@@ -25,6 +25,7 @@
 #include "tcp_packet.h"
 
 #include "ip_packet.h"
+#include "psp_packet.h"
 #include "tcp.h"
 
 /*
@@ -91,6 +92,8 @@ static inline int tcp_flag_ace_count(const char *flags)
 struct packet *new_tcp_packet(int address_family,
 			       enum direction_t direction,
 			       struct ip_info ip_info,
+			       const struct psp *psp,
+			       u16 psp_port,
 			       u16 src_port,
 			       u16 dst_port,
 			       const char *flags,
@@ -109,9 +112,11 @@ struct packet *new_tcp_packet(int address_family,
 	const int tcp_option_bytes = tcp_options ? tcp_options->length : 0;
 	const int ip_header_bytes = (ip_header_min_len(address_family) +
 				     ip_option_bytes);
+	const unsigned int encap_header_bytes = psp_encap_header_bytes(psp);
 	const int tcp_header_bytes = sizeof(struct tcp) + tcp_option_bytes;
 	const int ip_bytes =
-		 ip_header_bytes + tcp_header_bytes + tcp_payload_bytes;
+		 ip_header_bytes + encap_header_bytes + tcp_header_bytes +
+		 tcp_payload_bytes;
 	int ace;
 
 	/* Sanity-check all the various lengths */
@@ -155,13 +160,20 @@ struct packet *new_tcp_packet(int address_family,
 	/* Set IP header fields */
 	set_packet_ip_header(packet, address_family, ip_bytes,
 			     ip_info.tos.value, ip_info.flow_label,
-			     ip_info.ttl, IPPROTO_TCP);
+			     ip_info.ttl,
+			     psp == NULL ? IPPROTO_TCP : IPPROTO_UDP);
+
+	/* For transport-mode PSP the UDP/PSP encapsulation headers sit
+	 * between the L3 and TCP headers.
+	 */
+	if (psp != NULL && psp_encapsulate(packet, psp, psp_port, error))
+		return NULL;
 
 	tcp_header = packet_append_header(packet, HEADER_TCP, tcp_header_bytes);
 	tcp_header->total_bytes = tcp_header_bytes + tcp_payload_bytes;
 
 	/* Find the start of TCP sections of the packet */
-	packet->tcp = (struct tcp *) (ip_start(packet) + ip_header_bytes);
+	packet->tcp = tcp_header->h.tcp;
 	u8 *tcp_option_start = (u8 *) (packet->tcp + 1);
 
 	/* Set TCP header fields */

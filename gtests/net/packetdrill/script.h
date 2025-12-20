@@ -53,6 +53,7 @@ enum expression_t {
 	EXPR_SCM_TIMESTAMPING,	  /* scm_timestamping expression */
 	EXPR_SOCK_EXTENDED_ERR,	  /* scm_sock_extended_err expression */
 	EXPR_EPOLLEV,	          /* expression tree for a epoll_event struct */
+	EXPR_PSP,                 /* PSP tuple */
 	NUM_EXPR_TYPES,
 };
 /* Convert an expression type to a human-readable string */
@@ -85,6 +86,7 @@ struct expression {
 		struct scm_timestamping_expr *scm_timestamping;
 		struct sock_extended_err_expr *sock_extended_err;
 		struct epollev_expr *epollev;
+		struct psp_spi_tuple psp_tuple;
 	} value;
 	const char *format;	/* the printf format for printing the value */
 };

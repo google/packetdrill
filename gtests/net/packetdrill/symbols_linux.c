@@ -197,6 +197,10 @@ struct int_symbol platform_symbols_table[] = {
 	{ TCP_CM_INQ,			    "TCP_CM_INQ"		      },
 	{ TCP_TX_DELAY,			    "TCP_TX_DELAY"		      },
 
+	{ TCP_PSP_TX_SPI_KEY,		    "TCP_PSP_TX_SPI_KEY"              },
+	{ TCP_PSP_RX_SPI_KEY,		    "TCP_PSP_RX_SPI_KEY"              },
+	{ TCP_PSP_LISTENER,		    "TCP_PSP_LISTENER"                },
+
 	{ O_RDONLY,                         "O_RDONLY"                        },
 	{ O_WRONLY,                         "O_WRONLY"                        },
 	{ O_RDWR,                           "O_RDWR"                          },
