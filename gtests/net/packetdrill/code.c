@@ -207,6 +207,19 @@ static void write_tcp_info(struct code_state *code,
 	emit_var(code, "tcpi_total_rto",	info->tcpi_total_rto);
 	emit_var(code, "tcpi_total_rto_recoveries", info->tcpi_total_rto_recoveries);
 	emit_var(code, "tcpi_total_rto_time",	info->tcpi_total_rto_time);
+	emit_var(code, "tcpi_received_ce",	info->tcpi_received_ce);
+	emit_var(code, "tcpi_delivered_e1_bytes",
+			info->tcpi_delivered_e1_bytes);
+	emit_var(code, "tcpi_delivered_e0_bytes",
+			info->tcpi_delivered_e0_bytes);
+	emit_var(code, "tcpi_delivered_ce_bytes",
+			info->tcpi_delivered_ce_bytes);
+	emit_var(code, "tcpi_received_e1_bytes",
+			info->tcpi_received_e1_bytes);
+	emit_var(code, "tcpi_received_e0_bytes",
+			info->tcpi_received_e0_bytes);
+	emit_var(code, "tcpi_received_ce_bytes",
+			info->tcpi_received_ce_bytes);
 
 	emit_var_end(code);
 }
