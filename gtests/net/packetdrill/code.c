@@ -207,6 +207,10 @@ static void write_tcp_info(struct code_state *code,
 	emit_var(code, "tcpi_total_rto",	info->tcpi_total_rto);
 	emit_var(code, "tcpi_total_rto_recoveries", info->tcpi_total_rto_recoveries);
 	emit_var(code, "tcpi_total_rto_time",	info->tcpi_total_rto_time);
+	emit_var(code, "tcpi_ecn_mode",		info->tcpi_ecn_mode);
+	emit_var(code, "tcpi_accecn_opt_seen",	info->tcpi_accecn_opt_seen);
+	emit_var(code, "tcpi_accecn_fail_mode",	info->tcpi_accecn_fail_mode);
+	emit_var(code, "tcpi_options2",		info->tcpi_options2);
 	emit_var(code, "tcpi_received_ce",	info->tcpi_received_ce);
 	emit_var(code, "tcpi_delivered_e1_bytes",
 			info->tcpi_delivered_e1_bytes);
