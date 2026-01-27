@@ -168,6 +168,8 @@ struct int_symbol platform_symbols_table[] = {
 #endif
 	{ IPV6_TCLASS,                      "IPV6_TCLASS"                     },
 	{ IPV6_HOPLIMIT,                    "IPV6_HOPLIMIT"                   },
+	{ IP_BIND_ADDRESS_NO_PORT,          "IP_BIND_ADDRESS_NO_PORT"         },
+	{ IP_LOCAL_PORT_RANGE,              "IP_LOCAL_PORT_RANGE"             },
 
 	{ TCP_NODELAY,                      "TCP_NODELAY"                     },
 	{ TCP_MAXSEG,                       "TCP_MAXSEG"                      },
