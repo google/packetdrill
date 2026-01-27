@@ -141,8 +141,6 @@ static void write_tcp_info(struct code_state *code,
 				   const struct _tcp_info *info,
 				   int len)
 {
-	assert(len >= sizeof(struct _tcp_info));
-
 	write_symbols(code);
 
 	/* Emit the recorded values of tcpi_foo values. */
@@ -228,6 +226,7 @@ static void write_tcp_info(struct code_state *code,
 	emit_var_end(code);
 }
 
+#if HAVE_TCP_CC_INFO
 /* Write out a formatted representation of the given _tcp_bbr_info buffer. */
 static void write_tcp_bbr_cc_info(struct code_state *code,
 				  const union _tcp_cc_info *info,
@@ -294,7 +293,9 @@ static void write_tcp_cc_info(struct code_state *code,
 	write_tcp_vegas_cc_info(code, info, len);
 	emit_var_end(code);
 }
+#endif  /* HAVE_TCP_CC_INFO */
 
+#if HAVE_SO_MEMINFO
 /* Write out a formatted representation of the given mem_info buffer. */
 static void write_so_meminfo(struct code_state *code,
 			     const u32 *mem_info,
@@ -314,6 +315,7 @@ static void write_so_meminfo(struct code_state *code,
 
 	emit_var_end(code);
 }
+#endif	/* HAVE_SO_MEMINFO */
 #endif  /* linux */
 
 #if defined(__FreeBSD__)
@@ -323,8 +325,6 @@ static void write_tcp_info(struct code_state *code,
 				   const struct _tcp_info *info,
 				   int len)
 {
-	assert(len >= sizeof(struct _tcp_info));
-
 	write_symbols(code);
 
 	/* Emit the recorded values of tcpi_foo values. */
@@ -759,7 +759,6 @@ void run_code_event(struct state *state, struct event *event,
 
 	void *data = NULL;
 	void *data_ext = NULL;
-	void *data_meminfo = NULL;
 	int  data_len = 0;
 #if HAVE_TCP_INFO
 	code->data_type = DATA_TCP_INFO;
@@ -785,6 +784,7 @@ void run_code_event(struct state *state, struct event *event,
 #endif  /* HAVE_TCP_CC_INFO */
 #if HAVE_SO_MEMINFO
 	code->data_type = DATA_SO_MEMINFO;
+	void *data_meminfo = NULL;
 	data_meminfo = get_data(state, event, fd, code->data_type, &data_len);
 	if (data_meminfo)
 		append_data(code, code->data_type, data_meminfo, data_len);
