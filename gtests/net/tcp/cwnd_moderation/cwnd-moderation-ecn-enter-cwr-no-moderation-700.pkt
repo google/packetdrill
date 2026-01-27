@@ -24,10 +24,16 @@ sysctl -q net.ipv4.tcp_ecn=2    # server agrees to ECN if client proposes it
 +.005 %{
 assert tcpi_ca_state == TCP_CA_CWR, tcpi_ca_state
 
-# Since "tcp: use PRR to reduce cwin in CWR state" in Linux 3.7,
-# we use PRR for CWR.
-# Here, since we have 3 packets in flight and ssthresh is 7,
-# we do PRR-CRB and sndcnt = min(3, 1) = 2,
-# so cwnd = 3 + 1 = 4.
-assert tcpi_snd_cwnd == 4, tcpi_snd_cwnd
+# Since commit 684bad110757 "tcp: use PRR to reduce cwin in CWR state" in Linux 3.7, we use 
+# Proportional Reduction Rate (PRR) for CWR. In tcp_cwnd_reduction(), since we have 3 packets in
+# flight and ssthresh is 7, we do delta = 4 and sndcnt = min(4, 1) = 1, so cwnd = 3 + 1 = 4.
+
+# Commit 7e901ee7b6ab "tcp: avoid slow start during fast recovery on new losses", changes behavior of the test.
+# In net/ipv4/tcp_input.c function tcp_cwnd_reduction(struct sock *sk, int newly_acked_sacked, int newly_lost, int flag)
+# with added variable newly_lost we end up in the following else branch:
+# else if (flag & FLAG_SND_UNA_ADVANCED && !newly_lost).
+# Now sndcnt = sndcnt = min_t(int, delta, max_t(int, tp->prr_delivered - tp->prr_out, newly_acked_sacked) + 1) = 2.
+# So cwnd = 3 + 2 = 5.
+
+assert tcpi_snd_cwnd == 5, tcpi_snd_cwnd
 }%
