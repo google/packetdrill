@@ -97,6 +97,7 @@
 #include "logging.h"
 #include "mpls.h"
 #include "mpls_packet.h"
+#include "psp.h"
 #include "tcp_packet.h"
 #include "udp_packet.h"
 #include "parse.h"
@@ -540,6 +541,7 @@ static struct packet *append_gre(struct packet *packet, struct expression *expr)
 	struct ip_info ip_info;
 	struct mpls_stack *mpls_stack;
 	struct mpls mpls_stack_entry;
+	struct psp *psp;
 	u16 port;
 	s32 window;
 	u16 urg_ptr;
@@ -565,6 +567,10 @@ static struct packet *append_gre(struct packet *packet, struct expression *expr)
 		u16 src_port;
 		u16 dst_port;
 	} port_info;
+	struct {
+		bool supplied;
+		s64  value;
+	} optional_integer;
 }
 
 /* The specific type of the output for a symbol is given by the %type
@@ -587,6 +593,7 @@ static struct packet *append_gre(struct packet *packet, struct expression *expr)
 %token <reserved> OPTION
 %token <reserved> SUM OFF KEY SEQ
 %token <reserved> NONE CHECKSUM SEQUENCE PRESENT
+%token <reserved> PSP SPI ENCAP
 %token <reserved> EE_ERRNO EE_CODE EE_DATA EE_INFO EE_ORIGIN EE_TYPE
 %token <reserved> SCM_SEC SCM_NSEC
 %token <floating> FLOAT
@@ -613,6 +620,7 @@ static struct packet *append_gre(struct packet *packet, struct expression *expr)
 %type <integer> opt_icmp_echo_id
 %type <integer> flow_label
 %type <integer> accecn_val
+%type <integer> psp_spi
 %type <string> icmp_type opt_icmp_code opt_ack_flag opt_word ack_and_ace flags
 %type <string> opt_tcp_fast_open_cookie hex_blob
 %type <string> opt_note note word_list
@@ -639,6 +647,7 @@ static struct packet *append_gre(struct packet *packet, struct expression *expr)
 %type <expression> epollev
 %type <errno_info> opt_errno
 %type <port_info> opt_port_info
+%type <psp> psp_header_info opt_encap
 
 %%  /* The grammar follows. */
 
@@ -829,28 +838,31 @@ packet_spec
 ;
 
 tcp_packet_spec
-: packet_prefix opt_ip_info opt_port_info flags seq opt_ack opt_window opt_urg_ptr opt_tcp_options {
+: packet_prefix opt_ip_info opt_encap opt_port_info flags seq opt_ack opt_window opt_urg_ptr opt_tcp_options {
 	char *error = NULL;
 	struct packet *outer = $1, *inner = NULL;
 	enum direction_t direction = outer->direction;
+	struct psp *psp = $3;
 
 	if (($2.tos.check == TOS_CHECK_ECN_ECT01) &&
 	    (direction != DIRECTION_OUTBOUND)) {
 		semantic_error("[ect01] can only be used with outbound packets");
 	}
 
-	if (($9 == NULL) && (direction != DIRECTION_OUTBOUND)) {
-		yylineno = @7.first_line;
+	if (($10 == NULL) && (direction != DIRECTION_OUTBOUND)) {
+		yylineno = @10.first_line;
 		semantic_error("<...> for TCP options can only be used with "
 			       "outbound packets");
 	}
 
 	inner = new_tcp_packet(in_config->wire_protocol,
-			       direction, $2, $3.src_port, $3.dst_port, $4,
-			       $5.start_sequence, $5.payload_bytes,
-			       $6, $7, $8, $9, &error);
-	free($4);
-	free($9);
+			       direction, $2, psp, in_config->psp_udp_port,
+			       $4.src_port, $4.dst_port, $5,
+			       $6.start_sequence, $6.payload_bytes,
+			       $7, $8, $9, $10, &error);
+	free($3);
+	free($5);
+	free($10);
 	if (inner == NULL) {
 		assert(error != NULL);
 		semantic_error(error);
@@ -1063,6 +1075,20 @@ opt_mpls_stack_bottom
 }
 ;
 
+psp_header_info
+: psp_spi {
+	$$ = psp_new();
+	$$->flags = 1;
+	$$->ext_len = 1;
+	$$->crypt_offset = 0;
+	$$->spi = htonl($1);
+}
+;
+
+psp_spi
+: SPI any_int	{ $$ = $2->value.num; }
+;
+
 icmp_type
 : WORD		{ $$ = $1; }
 ;
@@ -1226,6 +1252,11 @@ opt_ip_info
 }
 | '(' ip_info ')'	{ $$ = $2; }
 | '[' ip_info ']'	{ $$ = $2; }
+;
+
+opt_encap
+:				{ $$ = NULL; }
+| ENCAP PSP psp_header_info 	{ $$ = $3; }
 ;
 
 seq
