@@ -71,6 +71,7 @@
 #include "so_testing.h"
 #include "wire_client.h"
 #include "psp_state.h"
+#include "ynl_psp.h"
 
 /* Public top-level entry point for executing a test script */
 extern void run_script(struct config *config,
@@ -103,6 +104,7 @@ struct state {
 	struct code_state *code;	/* for running post-processing code */
 	struct wire_client *wire_client;	/* for on-the-wire tests */
 	struct so_instance *so_instance;	/* for SO testing */
+	struct ynl_psp_state *ynl_psp;  /* interface to psp netlink family */
 	struct psp_state *psp;		/* table of script_spi -> live_spi */
 	s64 script_start_time_usecs;	/* time of first event in script */
 	s64 script_last_time_usecs;	/* time of previous event in script */
@@ -113,7 +115,8 @@ struct state {
 /* Allocate all run-time state for executing a test script. */
 extern struct state *state_new(struct config *config,
 			       struct script *script,
-			       struct netdev *netdev);
+			       struct netdev *netdev,
+			       bool enable_psp_rx);
 
 /* Free all run-time state for a test. */
 void state_free(struct state *state);

@@ -2,6 +2,7 @@ packetdrill-ext-libs := -lpthread -lrt -ldl
 
 ifeq ($(ENABLE_PSP),1)
 packetdrill-extra-cflags += -DENABLE_PSP -I./ynl-c/generated/ -I./ynl-c/include/ynl-c/ -I./ynl-c/include
+packetdrill-extra-objs += ynl_psp.o
 packetdrill-extra-static-libs += ynl-c/libynl.a
 endif
 

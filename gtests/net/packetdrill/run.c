@@ -49,6 +49,7 @@
 #include "system.h"
 #include "tcp.h"
 #include "tcp_options.h"
+#include "ynl_psp.h"
 #include "psp_state.h"
 
 /* MAX_SPIN_USECS is the maximum amount of time (in microseconds) to
@@ -76,7 +77,8 @@ const char *script_path;
 
 struct state *state_new(struct config *config,
 			struct script *script,
-			struct netdev *netdev)
+			struct netdev *netdev,
+			bool enable_psp_rx)
 {
 	struct state *state = calloc(1, sizeof(struct state));
 
@@ -93,6 +95,10 @@ struct state *state_new(struct config *config,
 	state->code = code_new(config);
 	state->fds = NULL;
 	state->num_events = 0;
+	const char *psp_ifname = config->is_wire_client ? config->wire_client_device :
+				 config->is_wire_server ? config->wire_server_device :
+				 NULL;
+	state->ynl_psp = ynl_psp_new(enable_psp_rx, psp_ifname);
 	state->psp = psp_state_new();
 	return state;
 }
@@ -138,6 +144,7 @@ void state_free(struct state *state)
 	packets_free(state->packets);
 	code_free(state->code);
 	psp_state_free(state->psp);
+	ynl_psp_free(state->ynl_psp);
 
 	if (state->wire_client)
 		wire_client_free(state->wire_client);
@@ -562,6 +569,7 @@ void run_script(struct config *config, struct script *script)
 	struct state *state = NULL;
 	struct netdev *netdev = NULL;
 	struct event *event = NULL;
+	bool enable_psp_rx = true;
 
 	DEBUGP("run_script: running script\n");
 
@@ -583,7 +591,7 @@ void run_script(struct config *config, struct script *script)
 	else
 		netdev = local_netdev_new(config);
 
-	state = state_new(config, script, netdev);
+	state = state_new(config, script, netdev, enable_psp_rx);
 
 	if (config->is_wire_client) {
 		state->wire_client = wire_client_new();

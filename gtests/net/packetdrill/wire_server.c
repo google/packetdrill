@@ -495,6 +495,7 @@ static int wire_server_run_script(struct wire_server *wire_server,
 static void *wire_server_thread(void *arg)
 {
 	struct wire_server *wire_server = (struct wire_server *)arg;
+	const bool enable_psp_rx = false;
 	struct netdev *netdev = NULL;
 	char *error = NULL;
 
@@ -542,7 +543,7 @@ static void *wire_server_thread(void *arg)
 
 	wire_server->state = state_new(&wire_server->config,
 					       &wire_server->script,
-					       netdev);
+					       netdev, enable_psp_rx);
 
 	if (wire_server_send_server_ready(wire_server))
 		goto error_done;
