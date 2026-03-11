@@ -215,7 +215,7 @@ static struct socket *handle_listen_for_script_packet(
 	assert(socket->state == SOCKET_INIT);
 	socket->state = SOCKET_PASSIVE_PACKET_RECEIVED;
 	socket->address_family = packet_address_family(packet);
-	socket->protocol = packet_ip_protocol(packet);
+	socket->protocol = IPPROTO_TCP;
 
 	/* Set script info for this socket using script packet. */
 	struct tuple tuple;
@@ -1090,6 +1090,33 @@ static int verify_gre(
 	return STATUS_OK;
 }
 
+/* Verify that required actual PSP header fields are as the script expected. */
+static int verify_psp(
+	const struct packet *actual_packet,
+	const struct packet *script_packet,
+	int layer, bool strict, char **error)
+{
+	const struct psp *actual_psp = actual_packet->headers[layer].h.psp;
+	const struct psp *script_psp = script_packet->headers[layer].h.psp;
+
+	if (check_field("psp_ext_len", script_psp->ext_len, actual_psp->ext_len,
+			error))
+		return STATUS_ERR;
+	if (check_field("psp_next_header", script_psp->next_header,
+			actual_psp->next_header, error))
+		return STATUS_ERR;
+	if (check_field("psp_crypto_offset", script_psp->crypt_offset,
+			actual_psp->crypt_offset, error))
+		return STATUS_ERR;
+	if (check_field("psp_flags", script_psp->flags, actual_psp->flags,
+			error))
+		return STATUS_ERR;
+	if (check_field("psp_spi", ntohl(script_psp->spi),
+			ntohl(actual_psp->spi), error))
+		return STATUS_ERR;
+	return STATUS_OK;
+}
+
 /* Verify that required actual MPLS header fields are as the script expected. */
 static int verify_mpls(
 	const struct packet *actual_packet,
@@ -1180,6 +1207,7 @@ static int verify_header(
 		[HEADER_UDP]	= verify_udp,
 		[HEADER_ICMPV4] = verify_icmpv4,
 		[HEADER_ICMPV6] = verify_icmpv6,
+		[HEADER_PSP]	= verify_psp,
 	};
 	verifier_func verifier = NULL;
 	const struct header *actual_header = &actual_packet->headers[layer];

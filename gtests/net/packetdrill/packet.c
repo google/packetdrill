@@ -46,6 +46,7 @@ struct header_type_info header_types[HEADER_NUM_TYPES] = {
 	{ "UDP",    IPPROTO_UDP,	0,		NULL },
 	{ "ICMPV4", IPPROTO_ICMP,	0,		NULL },
 	{ "ICMPV6", IPPROTO_ICMPV6,	0,		NULL },
+	{ "PSP",    0,			0,		NULL },
 };
 
 struct packet *packet_new(u32 buffer_bytes)
@@ -173,6 +174,7 @@ static void packet_duplicate_info(struct packet *packet,
 	packet->udp	= offset_ptr(old_base, new_base, old_packet->udp);
 	packet->icmpv4	= offset_ptr(old_base, new_base, old_packet->icmpv4);
 	packet->icmpv6	= offset_ptr(old_base, new_base, old_packet->icmpv6);
+	packet->psp	= offset_ptr(old_base, new_base, old_packet->psp);
 
 	packet->tcp_ts_val	= offset_ptr(old_base, new_base,
 					     old_packet->tcp_ts_val);

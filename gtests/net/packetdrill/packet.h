@@ -36,6 +36,7 @@
 #include "icmpv6.h"
 #include "ip.h"
 #include "ipv6.h"
+#include "psp.h"
 #include "tcp.h"
 #include "udp.h"
 #include "unaligned.h"
@@ -98,6 +99,8 @@ struct packet {
 	bool echoed_header;     /* icmp payload is an echoed header?
 				   This is for TCP/UDP */
 
+	/* Encapsulation */
+	struct psp *psp;
 
 	s64 time_usecs;		/* wall time of receive/send if non-zero */
 
@@ -334,7 +337,11 @@ static inline u8 *packet_end(const struct packet *packet)
 /* Return the length of the TCP/UDP payload. */
 static inline int packet_payload_len(const struct packet *packet)
 {
-	return packet_end(packet) - packet_payload(packet);
+	int len = packet_end(packet) - packet_payload(packet);
+
+	if (packet->psp != NULL)
+		len -= PSP_TRL_SIZE;
+	return len;
 }
 
 /* Return the location of the IP header echoed by an ICMP message. */
