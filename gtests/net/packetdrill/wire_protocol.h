@@ -26,6 +26,7 @@
 #define __WIRE_PROTOCOL_H__
 
 #include "types.h"
+#include "psp_state.h"
 
 /* Types of messages wire_client and wire_server send to each other. */
 enum wire_op_t {
@@ -56,6 +57,7 @@ struct wire_header {
 /* A client request for the server to execute some packet events. */
 struct wire_packets_start {
 	__be32 num_events;	/* total events executed (network order) */
+	struct psp_state psp;	/* send script_spi -> live_spi mapping to wire_server */
 };
 
 /* The server is done executing some packet events. */

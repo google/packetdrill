@@ -322,6 +322,9 @@ static int wire_server_receive_packets_start(struct wire_server *wire_server)
 	}
 
 	memcpy(&start, buf, sizeof(start));
+
+	memcpy(wire_server->state->psp, &start.psp, sizeof(start.psp));
+
 	if (ntohl(start.num_events) != wire_server->num_events) {
 		fprintf(stderr,
 			"bad client event count; expected %d but got %d",

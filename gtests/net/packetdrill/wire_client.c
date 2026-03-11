@@ -194,10 +194,12 @@ void wire_client_send_client_starting(struct wire_client *wire_client)
 }
 
 /* Send a client request for the server to execute some packet events. */
-static void wire_client_send_packets_start(struct wire_client *wire_client)
+static void wire_client_send_packets_start(struct wire_client *wire_client,
+					   struct psp_state *psp)
 {
 	struct wire_packets_start start;
 	start.num_events = htonl(wire_client->num_events);
+	memcpy(&start.psp, psp, sizeof(*psp));
 	if (wire_conn_write(wire_client->wire_conn,
 			    WIRE_PACKETS_START,
 			    &start, sizeof(start)))
@@ -309,12 +311,12 @@ int wire_client_init(struct wire_client *wire_client,
  * on-the-wire event.
  */
 void wire_client_next_event(struct wire_client *wire_client,
-			    struct event *event)
+			    struct event *event, struct psp_state *psp)
 {
 	/* Tell the server to start executing packet events. */
 	if (event && (event->type == PACKET_EVENT) &&
 	    (wire_client->last_event_type != PACKET_EVENT)) {
-		wire_client_send_packets_start(wire_client);
+		wire_client_send_packets_start(wire_client, psp);
 	}
 
 	/* Get the result from server execution of one or more packet events. */
