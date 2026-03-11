@@ -48,7 +48,8 @@ extern void packet_socket_set_filter(
 	struct packet_socket *psock,
 	const struct ip_address *client_live_ip,
 	u16 src_port,
-	u16 dst_port);
+	u16 dst_port,
+	u16 psp_udp_port);
 
 /* Send the given packet using writev. Return STATUS_OK on success,
  * or STATUS_ERR if writev returns an error.

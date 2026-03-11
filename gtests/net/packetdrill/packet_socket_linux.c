@@ -106,7 +106,8 @@ static void packet_socket_setup(struct packet_socket *psock)
 void packet_socket_set_filter(struct packet_socket *psock,
 			      const struct ip_address *client_live_ip,
 			      u16 src_port,
-			      u16 dst_port)
+			      u16 dst_port,
+			      u16 psp_udp_port)
 {
 	struct sock_fprog bpfcode;
 	struct sock_filter bpf_ipv4_src[] = {
@@ -118,23 +119,25 @@ void packet_socket_set_filter(struct packet_socket *psock,
 		 *
 		 * tcpdump -p -n -s 0 -i lo -dd
 		 * "ip src 1.2.3.4 and "
-		 * "(src port 0xaabb or dst port 0xccdd or icmp)"
+		 * "(src port 0xaabb or dst port 0xccdd or "
+		 * " dst port 1000 or icmp)"
 		 */
 		{ 0x28, 0,  0, 0x0000000c },
-		{ 0x15, 0, 15, 0x00000800 },	/* ETHERTYPE_IP */
+		{ 0x15, 0, 16, 0x00000800 },	/* ETHERTYPE_IP */
 		{ 0x20, 0,  0, 0x0000001a },
-		{ 0x15, 0, 13, 0x01020304 },	/* IPv4: 1.2.3.4 */
+		{ 0x15, 0, 14, 0x01020304 },	/* IPv4: 1.2.3.4 */
 		{ 0x30, 0,  0, 0x00000017 },
 		{ 0x15, 2,  0, 0x00000084 },
 		{ 0x15, 1,  0, 0x00000006 },
-		{ 0x15, 0,  7, 0x00000011 },
+		{ 0x15, 0,  8, 0x00000011 },
 		{ 0x28, 0,  0, 0x00000014 },
-		{ 0x45, 7,  0, 0x00001fff },
+		{ 0x45, 8,  0, 0x00001fff },
 		{ 0xb1, 0,  0, 0x0000000e },
 		{ 0x48, 0,  0, 0x0000000e },
-		{ 0x15, 3,  0, 0x0000aabb },	/* src port 0xaabb */
+		{ 0x15, 4,  0, 0x0000aabb },	/* src port 0xaabb */
 		{ 0x48, 0,  0, 0x00000010 },
-		{ 0x15, 1,  2, 0x0000ccdd },	/* dst port 0xccdd */
+		{ 0x15, 2,  0, 0x0000ccdd },	/* dst port 0xccdd */
+		{ 0x15, 1,  2, 0x000003e8 },	/* dst port (PSP) */
 		{ 0x15, 0,  1, 0x00000001 },
 		{ 0x06, 0,  0, 0x00040000 },
 		{ 0x06, 0,  0, 0x00000000 },
@@ -149,26 +152,28 @@ void packet_socket_set_filter(struct packet_socket *psock,
 		 *
 		 * tcpdump -p -n -s 0 -i lo -dd
 		 * "ip6 src 1:2:3:4:5:6:7:8 and "
-		 * "(src port 0xaabb or dst port 0xccdd or icmp6)
+		 * "(src port 0xaabb or dst port 0xccdd or "
+		 * " dst port 0x03e8 or icmp6)"
 		 */
 		{ 0x28, 0,  0, 0x0000000c },
-		{ 0x15, 0, 21, 0x000086dd },	/* ETHERTYPE_IPV6 */
+		{ 0x15, 0, 22, 0x000086dd },	/* ETHERTYPE_IPV6 */
 		{ 0x20, 0,  0, 0x00000016 },
-		{ 0x15, 0, 19, 0x00010002 },	/* IPv6: 1:2 */
+		{ 0x15, 0, 20, 0x00010002 },	/* IPv6: 1:2 */
 		{ 0x20, 0,  0, 0x0000001a },
-		{ 0x15, 0, 17, 0x00030004 },	/* IPv6: 3:4 */
+		{ 0x15, 0, 18, 0x00030004 },	/* IPv6: 3:4 */
 		{ 0x20, 0,  0, 0x0000001e },
-		{ 0x15, 0, 15, 0x00050006 },	/* IPv6: 5:6 */
+		{ 0x15, 0, 16, 0x00050006 },	/* IPv6: 5:6 */
 		{ 0x20, 0,  0, 0x00000022 },
-		{ 0x15, 0, 13, 0x00070008 },	/* IPv6: 7:8 */
+		{ 0x15, 0, 14, 0x00070008 },	/* IPv6: 7:8 */
 		{ 0x30, 0,  0, 0x00000014 },
 		{ 0x15, 2,  0, 0x00000084 },
 		{ 0x15, 1,  0, 0x00000006 },
-		{ 0x15, 0,  4, 0x00000011 },
+		{ 0x15, 0,  5, 0x00000011 },
 		{ 0x28, 0,  0, 0x00000036 },
-		{ 0x15, 6,  0, 0x0000aabb },	/* src port 0xaabb */
+		{ 0x15, 7,  0, 0x0000aabb },	/* src port 0xaabb */
 		{ 0x28, 0,  0, 0x00000038 },
-		{ 0x15, 4,  5, 0x0000ccdd },	/* dst port 0xccdd */
+		{ 0x15, 5,  0, 0x0000ccdd },	/* dst port 0xccdd */
+		{ 0x15, 4,  5, 0x000003e8 },	/* dst port (PSP) */
 		{ 0x15, 3,  0, 0x0000003a },
 		{ 0x15, 0,  3, 0x0000002c },
 		{ 0x30, 0,  0, 0x00000036 },
@@ -188,6 +193,8 @@ void packet_socket_set_filter(struct packet_socket *psock,
 		bpf_ipv4_src[12].k = src_port;
 		/* Fill in the dst port to look for. */
 		bpf_ipv4_src[14].k = dst_port;
+		/* Fill in the PSP UDP dst port to look for. */
+		bpf_ipv4_src[15].k = psp_udp_port;
 
 		bpfcode.len	= ARRAY_SIZE(bpf_ipv4_src);
 		bpfcode.filter	= bpf_ipv4_src;
@@ -201,6 +208,8 @@ void packet_socket_set_filter(struct packet_socket *psock,
 		bpf_ipv6_src[15].k = src_port;
 		/* Fill in the dst port to look for. */
 		bpf_ipv6_src[17].k = dst_port;
+		/* Fill in the PSP UDP dst port to look for. */
+		bpf_ipv6_src[18].k = psp_udp_port;
 
 		bpfcode.len	= ARRAY_SIZE(bpf_ipv6_src);
 		bpfcode.filter	= bpf_ipv6_src;
