@@ -1,0 +1,3 @@
+[submodule "gtests/net/packetdrill/ynl-c"]
+	path = gtests/net/packetdrill/ynl-c
+	url = https://github.com/linux-netdev/ynl-c.git
