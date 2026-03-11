@@ -1,0 +1,39 @@
+// Don't accept cleartext data from PSP-TX state
+
+--psp_udp_port=1000
+
+// Initialize connection
+    0 socket(..., SOCK_STREAM, IPPROTO_TCP) = 3
+   +0 setsockopt(3, SOL_SOCKET, SO_REUSEADDR, [1], 4) = 0
+   +0 bind(3, ..., ...) = 0
+   +0 listen(3, 1) = 0
+
+  +.1 < S 0:0(0) win 50000 <mss 1000,nop,wscale 0>
+   +0 > S. 0:0(0) ack 1 <mss MSS,nop,wscale 8>
+  +.1 < . 1:1(0) ack 1 win 50000
+   +0 accept(3, ..., ...) = 4
+
+   +0 fcntl(4, F_SETFL, O_RDWR|O_NONBLOCK) = 0
+
+// cleartext tcp
+   +0 send(4, ..., 500, 0) = 500
+   +0 > P. 1:501(500) ack 1
+   +0 <  . 1:1(0) ack 501 win 50000
+
+ +0.1 < P. 1:501(500) ack 501 win 50000
+   +0 >  . 501:501(0) ack 501
+   +0 recv(4, ..., 1000, 0) = 500
+
+// upgrade to psp
+   +0 psp_rx_assoc(4, [7]) = 0
+   +0 psp_tx_assoc(4, 23) = 0
+
+ +0.1 < P. 501:502(1) ack 501 win 50000
+ +0.5 recv(4, ..., 1, 0) = -1
+
+   +0 < F. 501:501(0) ack 501 win 50000
++0.04 > encap psp spi 23 . 501:501(0) ack 502
+
+   +0 close(4) = 0
+   +0 > encap psp spi 23 F. 501:501(0) ack 502
+  +.1 < . 502:502(0) ack 502 win 50000

@@ -1,0 +1,22 @@
+// TX key insertion should fail if ofo queue contains non-psp data
+
+--psp_udp_port=1000
+
+// Initialize connection
+    0 socket(..., SOCK_STREAM, IPPROTO_TCP) = 3
+   +0 setsockopt(3, SOL_SOCKET, SO_REUSEADDR, [1], 4) = 0
+   +0 bind(3, ..., ...) = 0
+   +0 listen(3, 1) = 0
+
+  +.1 < S 0:0(0) win 50000 <mss 1000,nop,wscale 0>
+   +0 > S. 0:0(0) ack 1 <mss MSS,nop,wscale 8>
+  +.1 < . 1:1(0) ack 1 win 50000
+   +0 accept(3, ..., ...) = 4
+
+// cleartext tcp
+ +0.1 < P. 101:501(400) ack 1 win 50000
+   +0 >  . 1:1(0) ack 1
+
+// upgrade to psp
+   +0 psp_rx_assoc(4, [7]) = 0
+   +0 psp_tx_assoc(4, 23) = -1

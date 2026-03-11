@@ -1,0 +1,31 @@
+// PSP data is allowed in the ofo-queue during TX key insertion
+
+--psp_udp_port=1000
+
+// Initialize connection
+    0 socket(..., SOCK_STREAM, IPPROTO_TCP) = 3
+   +0 setsockopt(3, SOL_SOCKET, SO_REUSEADDR, [1], 4) = 0
+   +0 bind(3, ..., ...) = 0
+   +0 listen(3, 1) = 0
+
+  +.1 < S 0:0(0) win 50000 <mss 1000,nop,wscale 0>
+   +0 > S. 0:0(0) ack 1 <mss MSS,nop,wscale 8>
+  +.1 < . 1:1(0) ack 1 win 50000
+   +0 accept(3, ..., ...) = 4
+
+   +0 psp_rx_assoc(4, [7]) = 0
+
+ +0.1 < encap psp spi 7 P. 101:501(400) ack 1 win 50000
+   +0 >  . 1:1(0) ack 1
+
+   +0 psp_tx_assoc(4, 23) = 0
+
+   +0 < encap psp spi 7 P. 1:101(100) ack 1 win 50000
+   +0 > encap psp spi 23 . 1:1(0) ack 501
+   +0 recv(4, ..., 1000, 0) = 500
+
+// PSP encapsulated FIN handshake
+  +.1 close(4) = 0
+   +0 > encap psp spi 23 F. 1:1(0) ack 501
+  +.1 < encap psp spi 7 F. 501:501(0) ack 2 win 50000
++.001 > encap psp spi 23 . 2:2(0) ack 502
