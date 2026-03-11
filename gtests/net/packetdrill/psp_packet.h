@@ -28,6 +28,8 @@
 
 #include "packet.h"
 
+struct psp_state;
+
 /* Return the packet length overhead for encapsulation with the given
  * PSP parameters.
  */
@@ -51,6 +53,10 @@ extern int psp_encapsulate(struct packet *packet, const struct psp *psp,
  */
 extern int psp_header_finish(struct packet *packet,
 			     struct header *header, struct header *next_inner);
+
+/* Map PSP SPI from script to live value and recompute outer UDP checksum. */
+extern int psp_map_to_live(struct psp_state *psp_state,
+			   struct packet *packet);
 
 /* Return true if the supplied port is PSP's UDP port. */
 extern bool is_psp_port(u16 port);
