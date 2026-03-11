@@ -3289,6 +3289,78 @@ static int syscall_splice(struct state *state, struct syscall_spec *syscall,
 	return STATUS_OK;
 }
 
+static bool psp_uapi_available(struct state *state, char **error)
+{
+	if (!state->ynl_psp) {
+		asprintf(error, "PSP not initialized");
+		return false;
+	}
+	if (state->so_instance) {
+		asprintf(error, "PSP not supported with shared objects");
+		return false;
+	}
+	return true;
+}
+
+static int syscall_psp_rx_assoc(struct state *state,
+				struct syscall_spec *syscall,
+				struct expression_list *args, char **error)
+{
+	int live_fd, script_fd, result;
+	int script_rx_spi;
+	u32 live_rx_spi;
+
+	if (check_arg_count(args, 2, error))
+		return STATUS_ERR;
+	if (s32_arg(args, 0, &script_fd, error))
+		return STATUS_ERR;
+	if (to_live_fd(state, script_fd, &live_fd, error))
+		return STATUS_ERR;
+	if (s32_bracketed_arg(args, 1, &script_rx_spi, error))
+		return STATUS_ERR;
+	if (!psp_uapi_available(state, error))
+		return STATUS_ERR;
+
+	begin_syscall(state, syscall);
+
+	result = ynl_psp_rx_assoc(state->ynl_psp, live_fd, &live_rx_spi);
+
+	if (end_syscall(state, syscall, CHECK_EXACT, result, error))
+		return STATUS_ERR;
+
+	if (psp_state_add_spi(state->psp, htonl(script_rx_spi),
+			      htonl(live_rx_spi), error))
+		return STATUS_ERR;
+
+	return STATUS_OK;
+}
+
+static int syscall_psp_tx_assoc(struct state *state, struct syscall_spec *syscall,
+			      struct expression_list *args, char **error)
+{
+	int live_fd, script_fd, result, script_tx_spi;
+
+	if (check_arg_count(args, 2, error))
+		return STATUS_ERR;
+	if (s32_arg(args, 0, &script_fd, error))
+		return STATUS_ERR;
+	if (to_live_fd(state, script_fd, &live_fd, error))
+		return STATUS_ERR;
+	if (s32_arg(args, 1, &script_tx_spi, error))
+		return STATUS_ERR;
+	if (!psp_uapi_available(state, error))
+		return STATUS_ERR;
+
+	begin_syscall(state, syscall);
+
+	result = ynl_psp_tx_assoc(state->ynl_psp, live_fd, script_tx_spi);
+
+	if (end_syscall(state, syscall, CHECK_EXACT, result, error))
+		return STATUS_ERR;
+
+	return STATUS_OK;
+}
+
 /* A dispatch table with all the system calls that we support... */
 struct system_call_entry {
 	const char *name;
@@ -3328,6 +3400,8 @@ struct system_call_entry system_call_table[] = {
 	{"epoll_wait",   syscall_epoll_wait},
 	{"pipe",         syscall_pipe},
 	{"splice",       syscall_splice},
+	{"psp_rx_assoc", syscall_psp_rx_assoc},
+	{"psp_tx_assoc", syscall_psp_tx_assoc},
 };
 
 /* Evaluate the system call arguments and invoke the system call. */
