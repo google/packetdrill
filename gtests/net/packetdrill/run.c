@@ -49,6 +49,7 @@
 #include "system.h"
 #include "tcp.h"
 #include "tcp_options.h"
+#include "psp_state.h"
 
 /* MAX_SPIN_USECS is the maximum amount of time (in microseconds) to
  * spin waiting for an event. We sleep up until this many microseconds
@@ -92,6 +93,7 @@ struct state *state_new(struct config *config,
 	state->code = code_new(config);
 	state->fds = NULL;
 	state->num_events = 0;
+	state->psp = psp_state_new();
 	return state;
 }
 
@@ -135,6 +137,7 @@ void state_free(struct state *state)
 	netdev_free(state->netdev);
 	packets_free(state->packets);
 	code_free(state->code);
+	psp_state_free(state->psp);
 
 	if (state->wire_client)
 		wire_client_free(state->wire_client);
