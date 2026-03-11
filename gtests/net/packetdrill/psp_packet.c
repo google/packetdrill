@@ -24,6 +24,8 @@
  */
 
 #include "psp_packet.h"
+#include "checksum.h"
+#include "psp_state.h"
 #include "udp_packet.h"
 
 static u16 psp_udp_port;
@@ -88,5 +90,32 @@ int psp_header_finish(struct packet *packet,
 			      PSP_TRL_SIZE;
 	trailer = (u8 *)psp + header->header_bytes + next_inner->total_bytes;
 	memset(trailer, 0, PSP_TRL_SIZE);
+	return STATUS_OK;
+}
+
+int psp_map_to_live(struct psp_state *psp_state, struct packet *packet)
+{
+	__be32 script_spi = packet->psp->spi;
+
+	if (psp_to_live_spi(psp_state, script_spi,
+			    &packet->psp->spi))
+		return STATUS_ERR;
+
+	struct udp *udp = (struct udp *)packet->psp - 1;
+	int udp_bytes = ntohs(udp->len);
+
+	udp->check = 0;
+	if (packet->ipv6) {
+		udp->check = tcp_udp_v6_checksum(
+			&packet->ipv6->src_ip,
+			&packet->ipv6->dst_ip,
+			IPPROTO_UDP, udp, udp_bytes);
+	} else if (packet->ipv4) {
+		udp->check = tcp_udp_v4_checksum(
+			packet->ipv4->src_ip,
+			packet->ipv4->dst_ip,
+			IPPROTO_UDP, udp, udp_bytes);
+	}
+
 	return STATUS_OK;
 }

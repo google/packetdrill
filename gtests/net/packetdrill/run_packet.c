@@ -39,6 +39,8 @@
 #include "packet.h"
 #include "packet_checksum.h"
 #include "packet_to_string.h"
+#include "psp_packet.h"
+#include "psp_state.h"
 #include "run.h"
 #include "script.h"
 #include "tcp.h"
@@ -1970,7 +1972,7 @@ out:
 }
 
 /* Checksum the packet and inject it into the kernel under test. */
-static int send_live_ip_packet(struct netdev *netdev,
+static int send_live_ip_packet(struct state *state,
 			       struct packet *packet)
 {
 	assert(packet->ip_bytes > 0);
@@ -1982,7 +1984,12 @@ static int send_live_ip_packet(struct netdev *netdev,
 	/* Fill in layer 3 and layer 4 checksums */
 	checksum_packet(packet);
 
-	return netdev_send(netdev, packet);
+	if (packet->psp != NULL) {
+		if (psp_map_to_live(state->psp, packet))
+			return STATUS_ERR;
+	}
+
+	return netdev_send(state->netdev, packet);
 }
 
 /* Perform the action implied by an inbound packet in a script */
@@ -2038,7 +2045,7 @@ static int do_inbound_script_packet(
 	}
 
 	/* Inject live packet into kernel. */
-	result = send_live_ip_packet(state->netdev, live_packet);
+	result = send_live_ip_packet(state, live_packet);
 
 out:
 	packet_free(live_packet);
@@ -2150,7 +2157,7 @@ int reset_connection(struct state *state, struct socket *socket)
 	set_packet_tuple(packet, &live_inbound);
 
 	/* Inject live packet into kernel. */
-	result = send_live_ip_packet(state->netdev, packet);
+	result = send_live_ip_packet(state, packet);
 
 	packet_free(packet);
 
