@@ -39,6 +39,7 @@
 #include "ip.h"
 #include "ipv6.h"
 #include "mpls.h"
+#include "psp.h"
 #include "tcp.h"
 #include "udp.h"
 
@@ -55,6 +56,7 @@ enum header_t {
 	HEADER_UDP,
 	HEADER_ICMPV4,
 	HEADER_ICMPV6,
+	HEADER_PSP,
 	HEADER_NUM_TYPES
 };
 
@@ -73,6 +75,7 @@ struct header {
 		struct udp *udp;
 		struct icmpv4 *icmpv4;
 		struct icmpv6 *icmpv6;
+		struct psp *psp;
 	} h;
 };
 

@@ -173,7 +173,7 @@ static inline void reverse_tuple(const struct tuple *src_tuple,
 	dst_tuple->dst.port	= src_tuple->src.port;
 }
 
-/* Get the tuple for a packet. */
+/* Get the tuple for a packet ignoring any encapsulations. */
 static inline void get_packet_tuple(const struct packet *packet,
 				    struct tuple *tuple)
 {
