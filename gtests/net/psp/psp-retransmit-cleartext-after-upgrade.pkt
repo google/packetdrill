@@ -1,0 +1,53 @@
+// Packets queued for transmission before PSP-TX state should be retransmitted
+// as cleartext
+
+--psp_udp_port=1000
+
+`sysctl -q net.ipv4.tcp_reordering=3`
+
+// Initialize connection
+    0 socket(..., SOCK_STREAM, IPPROTO_TCP) = 3
+   +0 setsockopt(3, SOL_SOCKET, SO_REUSEADDR, [1], 4) = 0
+   +0 bind(3, ..., ...) = 0
+   +0 listen(3, 1) = 0
+
+  +.1 < S 0:0(0) win 50000 <mss 1000,nop,wscale 0>
+   +0 > S. 0:0(0) ack 1 <mss MSS,nop,wscale 8>
+  +.1 < . 1:1(0) ack 1 win 50000
+   +0 accept(3, ..., ...) = 4
+   +0 setsockopt(4, SOL_TCP, TCP_NODELAY, [1], 4) = 0
+
+// cleartext tcp
+   +0 send(4, ..., 500, 0) = 500
+   +0 > P. 1:501(500) ack 1
+
+// upgrade to psp
+   +0 psp_rx_assoc(4, [7]) = 0
+   +0 psp_tx_assoc(4, 23) = 0
+
+// send a psp packet, cleartext still in flight
+   +0 send(4, ..., 500, 0) = 500
+   +0 > encap psp spi 23 P. 501:1001(500) ack 1
+
+// induce retransmit of cleartext packet
+   +0 < encap psp spi 7 . 1:1(0) ack 1 win 50000
+   +0 < encap psp spi 7 . 1:1(0) ack 1 win 50000
+   +0 < encap psp spi 7 . 1:1(0) ack 1 win 50000
+
+// retransmit as cleartext
+ +0.3 > P. 1:501(500) ack 1
+
+// induce retransmit of psp packet
+   +0 < encap psp spi 7 . 1:1(0) ack 501 win 50000
+   +0 < encap psp spi 7 . 1:1(0) ack 501 win 50000
+   +0 < encap psp spi 7 . 1:1(0) ack 501 win 50000
+
+// retransmit as psp
+   +0 > encap psp spi 23 P. 501:1001(500) ack 1
+ +0.1 < encap psp spi 7 . 1:1(0) ack 1001 win 50000
+
+// PSP encapsulated FIN handshake
+  +.1 close(4) = 0
+   +0 > encap psp spi 23 F. 1001:1001(0) ack 1
+  +.1 < encap psp spi 7 F. 1:1(0) ack 1002 win 50000
++.001 > encap psp spi 23 . 1002:1002(0) ack 2
