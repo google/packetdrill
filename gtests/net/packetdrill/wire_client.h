@@ -64,6 +64,6 @@ extern void wire_client_send_client_starting(struct wire_client *wire_client);
  * given event.
  */
 extern void wire_client_next_event(struct wire_client *wire_client,
-				   struct event *event);
+				   struct event *event, struct psp_state *psp);
 
 #endif /* __WIRE_CLIENT_H__ */

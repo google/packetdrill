@@ -632,7 +632,8 @@ void run_script(struct config *config, struct script *script)
 			break;
 
 		if (state->wire_client != NULL)
-			wire_client_next_event(state->wire_client, event);
+			wire_client_next_event(state->wire_client, event,
+					       state->psp);
 
 		/* In wire mode, we adjust relative times after
 		 * getting notification that previous packet events
@@ -671,7 +672,7 @@ void run_script(struct config *config, struct script *script)
 
 	/* Wait for any outstanding packet events we requested on the server. */
 	if (state->wire_client != NULL)
-		wire_client_next_event(state->wire_client, NULL);
+		wire_client_next_event(state->wire_client, NULL, state->psp);
 
 	if (run_cleanup_command() == STATUS_ERR)
 		exit(EXIT_FAILURE);
