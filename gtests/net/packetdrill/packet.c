@@ -33,6 +33,8 @@
 #include "ip_packet.h"
 #include "logging.h"
 #include "mpls_packet.h"
+#include "psp_packet.h"
+#include "udp_packet.h"
 
 
 /* Info for all types of header we support. */
@@ -43,10 +45,10 @@ struct header_type_info header_types[HEADER_NUM_TYPES] = {
 	{ "GRE",    IPPROTO_GRE,	0,		gre_header_finish },
 	{ "MPLS",   0,			ETHERTYPE_MPLS_UC, mpls_header_finish },
 	{ "TCP",    IPPROTO_TCP,	0,		NULL },
-	{ "UDP",    IPPROTO_UDP,	0,		NULL },
+	{ "UDP",    IPPROTO_UDP,	0,		udp_header_finish },
 	{ "ICMPV4", IPPROTO_ICMP,	0,		NULL },
 	{ "ICMPV6", IPPROTO_ICMPV6,	0,		NULL },
-	{ "PSP",    0,			0,		NULL },
+	{ "PSP",    0,			0,		psp_header_finish },
 };
 
 struct packet *packet_new(u32 buffer_bytes)

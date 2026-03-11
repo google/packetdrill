@@ -28,6 +28,30 @@
 
 #include "packet.h"
 
+/* Return the packet length overhead for encapsulation with the given
+ * PSP parameters.
+ */
+static inline unsigned int psp_encap_header_bytes(const struct psp *psp)
+{
+	return psp ? sizeof(struct udp) + psp_len(psp) + PSP_TRL_SIZE : 0;
+}
+
+/* PSP-encapsulate the given packet by appending a UDP and a PSP header to it.
+ * The PSP header is provided explicitly while the UDP header is mostly
+ * implicit except for its destination port.
+ *
+ * On success return STATUS_OK; on error return STATUS_ERR and fill in a
+ * malloc-allocated error message in *error.
+ */
+extern int psp_encapsulate(struct packet *packet, const struct psp *psp,
+			   u16 udp_dport, char **error);
+
+/* Finalize the PSP header by filling in all necessary fields that
+ * were not filled in at parse time.
+ */
+extern int psp_header_finish(struct packet *packet,
+			     struct header *header, struct header *next_inner);
+
 /* Return true if the supplied port is PSP's UDP port. */
 extern bool is_psp_port(u16 port);
 
