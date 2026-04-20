@@ -101,10 +101,13 @@ class TestSet(object):
     cmds = []
     for test in tests:
       if not test.endswith('v6.pkt'):
-        cmds.append(self.CmdTestIPv4(test))
-        cmds.append(self.CmdTestIPv4Mappedv6(test))
+        if self.args['ipv4']:
+          cmds.append(self.CmdTestIPv4(test))
+        if self.args['ipv4mappedv6']:
+          cmds.append(self.CmdTestIPv4Mappedv6(test))
       if not test.endswith('v4.pkt'):
-        cmds.append(self.CmdTestIPv6(test))
+        if self.args['ipv6']:
+          cmds.append(self.CmdTestIPv6(test))
 
     return cmds
 
@@ -296,6 +299,12 @@ def ParseArgs():
   """Parse commandline arguments."""
   args = argparse.ArgumentParser()
   args.add_argument('path', default='.', nargs='?')
+  args.add_argument('-4', '--ipv4', action='store_true',
+                    help='exclusively run tests using IPv4 addresses')
+  args.add_argument('-6', '--ipv6', action='store_true',
+                    help='exclusively run tests using IPv6 addresses')
+  args.add_argument('--ipv4mappedv6', action='store_true',
+                    help='exclusively run tests using IPv4-mapped-v6 addresses')
   args.add_argument('-c', '--capture', metavar='DIR',
                     help='capture packets in the specified directory')
   args.add_argument('-l', '--log_on_error', action='store_true',
@@ -312,7 +321,13 @@ def ParseArgs():
                     help='save results in TAP format in the specified directory')
   args.add_argument('-v', '--verbose', action='count', default=0,
                     help="can be repeated to run packetdrill with -v")
-  return vars(args.parse_args())
+  parsed = vars(args.parse_args())
+
+  # if -4, -6 or v4mapped are set, only run those sets. Otherwise, run them all.
+  if not parsed['ipv4'] and not parsed['ipv6'] and not parsed['ipv4mappedv6']:
+    parsed['ipv4'] = parsed['ipv6'] = parsed['ipv4mappedv6'] = True
+
+  return parsed
 
 
 def main():
