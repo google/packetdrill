@@ -2587,6 +2587,10 @@ static int syscall_getsockopt(struct state *state, struct syscall_spec *syscall,
 		return STATUS_ERR;
 
 	/* Allocate space for getsockopt output. */
+	if (script_optlen < 0) {
+		asprintf(error, "getsockopt: negative optlen %d", script_optlen);
+		return STATUS_ERR;
+	}
 	live_optlen = script_optlen;
 	live_optval = calloc(1, live_optlen + 1);
 	assert(live_optval != NULL);
