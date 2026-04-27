@@ -25,6 +25,7 @@
 
 #include "wire_server_netdev.h"
 
+#include <ctype.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/uio.h>
@@ -109,6 +110,17 @@ static void wire_server_netdev_dump_firewall_rules(const struct config *config)
 #endif
 }
 
+/* Validate that a string looks like an IP address (no shell metacharacters). */
+static bool is_safe_ip_string(const char *s)
+{
+	if (!s) return false;
+	for (; *s; ++s) {
+		if (!isalnum((unsigned char)*s) && *s != '.' && *s != ':' && *s != '%')
+			return false;
+	}
+	return true;
+}
+
 /* Drop incoming test traffic packets from the kernel under test, before they
  * are seen by the TCP/UDP/etc layers of the wire server machine. In some cases
  * (e.g., if a network does not allow spoofing) the packetdrill test traffic
@@ -122,6 +134,9 @@ static void wire_server_netdev_drop_test_traffic(const struct config *config)
 {
 #ifdef linux
 	char *command = NULL;
+
+	if (!is_safe_ip_string(config->live_local_ip_string))
+		die("wire_server_netdev: unsafe IP address string\n");
 
 	asprintf(&command,
 		 "("
@@ -155,6 +170,9 @@ static void wire_server_netdev_permit_test_traffic(const struct config *config)
 {
 #ifdef linux
 	char *command = NULL;
+
+	if (!is_safe_ip_string(config->live_local_ip_string))
+		die("wire_server_netdev: unsafe IP address string\n");
 
 	asprintf(&command,
 		 "("
