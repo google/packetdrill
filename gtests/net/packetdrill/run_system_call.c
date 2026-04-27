@@ -506,6 +506,10 @@ static int nla_expr_list_to_nla(struct expression_list *list,
 			die("out of bound u32 value specified\n");
 
 		get_nla_value(value, &val, num_bytes);
+		if ((char *)dst + NLA_ALIGN(NLA_HDRLEN + num_bytes) - (char *)start > dst_len) {
+			asprintf(error, "NLA buffer overflow: dst_len=%d exceeded", dst_len);
+			return STATUS_ERR;
+		}
 		dst += add_nla(dst, key_num, nla_info[key_num].length, &val);
 	}
 
