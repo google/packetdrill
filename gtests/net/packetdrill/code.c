@@ -126,9 +126,13 @@ static void write_symbols(struct code_state *code)
 	/* tcpi_options flags */
 #ifdef linux
 	emit_var(code, "TCPI_OPT_TIMESTAMPS",	TCPI_OPT_TIMESTAMPS);
+	emit_var(code, "TCPI_OPT_SACK",		TCPI_OPT_SACK);
 	emit_var(code, "TCPI_OPT_WSCALE",	TCPI_OPT_WSCALE);
 	emit_var(code, "TCPI_OPT_ECN",		TCPI_OPT_ECN);
+	emit_var(code, "TCPI_OPT_ECN_SEEN",	TCPI_OPT_ECN_SEEN);
 	emit_var(code, "TCPI_OPT_SYN_DATA",	TCPI_OPT_SYN_DATA);
+	emit_var(code, "TCPI_OPT_USEC_TS",	TCPI_OPT_USEC_TS);
+	emit_var(code, "TCPI_OPT_TFO_CHILD",	TCPI_OPT_TFO_CHILD);
 #endif  /* linux */
 }
 

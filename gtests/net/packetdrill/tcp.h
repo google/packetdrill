@@ -71,12 +71,32 @@
 
 #define TCP_TX_DELAY		 37
 
-/* TODO: remove these when netinet/tcp.h has them */
+/* Linux TCP values for bits in tcp_info tcpi_options field, from:
+ *   git show net-next/main:include/uapi/linux/tcp.h
+ */
+#ifndef TCPI_OPT_TIMESTAMPS
+#define TCPI_OPT_TIMESTAMPS	1 /* TCP timestamp support was negotiated */
+#endif
+#ifndef TCPI_OPT_SACK
+#define TCPI_OPT_SACK		2 /* SACK support was negotiated */
+#endif
+#ifndef TCPI_OPT_WSCALE
+#define TCPI_OPT_WSCALE		4 /* window scaling was negotiated */
+#endif
+#ifndef TCPI_OPT_ECN
+#define TCPI_OPT_ECN		8 /* ECN was negotiated at TCP session init */
+#endif
 #ifndef TCPI_OPT_ECN_SEEN
 #define TCPI_OPT_ECN_SEEN	16 /* received at least one packet with ECT */
 #endif
 #ifndef TCPI_OPT_SYN_DATA
 #define TCPI_OPT_SYN_DATA	32 /* SYN-ACK acked data in SYN sent or rcvd */
+#endif
+#ifndef TCPI_OPT_USEC_TS
+#define TCPI_OPT_USEC_TS	64 /* usec timestamps */
+#endif
+#ifndef TCPI_OPT_TFO_CHILD
+#define TCPI_OPT_TFO_CHILD	128 /* child from a Fast Open option on SYN */
 #endif
 
 #endif  /* linux */
