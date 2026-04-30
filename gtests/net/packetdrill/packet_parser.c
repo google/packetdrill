@@ -43,6 +43,7 @@
 #include "logging.h"
 #include "packet.h"
 #include "psp_packet.h"
+#include "psp_crypto.h"
 #include "tcp.h"
 
 static int parse_ipv4(struct packet *packet, u8 *header_start, u8 *packet_end,
@@ -441,6 +442,14 @@ static int parse_psp(struct packet *packet, u8 *psp_start, int psp_bytes,
 	}
 
 	int layer4_bytes = psp_bytes - psp_header_len - PSP_TRL_SIZE;
+	u8 tx_key[PSP_V0_KEYLEN] = {};
+
+	memcpy(&tx_key[PSP_V0_KEYLEN - sizeof(psp->spi)],
+	       &psp->spi, sizeof(psp->spi));
+	if (psp_decrypt(psp, psp_bytes, tx_key)) {
+		asprintf(error, "PSP decryption failed");
+		goto error_out;
+	}
 
 	u8 *next_proto_start = psp_start + psp_header_len;
 

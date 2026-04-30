@@ -3,6 +3,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "logging.h"
 
@@ -18,7 +19,7 @@ void psp_state_free(struct psp_state *state)
 }
 
 int psp_state_add_spi(struct psp_state *state, __be32 script_spi,
-		      __be32 live_spi, char **error)
+		      __be32 live_spi, u8 *key, int key_len, char **error)
 {
 	int entries = ntohl(state->entries);
 
@@ -30,6 +31,7 @@ int psp_state_add_spi(struct psp_state *state, __be32 script_spi,
 
 	state->rx_spi_table[entries].script_spi = script_spi;
 	state->rx_spi_table[entries].live_spi = live_spi;
+	memcpy(state->rx_spi_table[entries].key, key, key_len);
 	++entries;
 
 	state->entries = htonl(entries);
@@ -37,11 +39,12 @@ int psp_state_add_spi(struct psp_state *state, __be32 script_spi,
 }
 
 int psp_to_live_spi(struct psp_state *state, __be32 script_spi,
-		    __be32 *live_spi)
+		    __be32 *live_spi, u8 *key, int key_len)
 {
 	for (int i = 0; i < ntohl(state->entries); ++i) {
 		if (script_spi == state->rx_spi_table[i].script_spi) {
 			*live_spi = state->rx_spi_table[i].live_spi;
+			memcpy(key, state->rx_spi_table[i].key, key_len);
 			return STATUS_OK;
 		}
 	}

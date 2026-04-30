@@ -49,6 +49,7 @@
 #include "epoll.h"
 #include "pipe.h"
 #include "logging.h"
+#include "psp.h"
 #include "run.h"
 #include "script.h"
 #include "icmp.h"
@@ -3307,6 +3308,7 @@ static int syscall_psp_rx_assoc(struct state *state,
 				struct expression_list *args, char **error)
 {
 	int live_fd, script_fd, result;
+	u8 live_key[PSP_MAX_KEY];
 	int script_rx_spi;
 	u32 live_rx_spi;
 
@@ -3323,13 +3325,14 @@ static int syscall_psp_rx_assoc(struct state *state,
 
 	begin_syscall(state, syscall);
 
-	result = ynl_psp_rx_assoc(state->ynl_psp, live_fd, &live_rx_spi);
+	result = ynl_psp_rx_assoc(state->ynl_psp, live_fd, &live_rx_spi,
+				  live_key);
 
 	if (end_syscall(state, syscall, CHECK_EXACT, result, error))
 		return STATUS_ERR;
 
 	if (psp_state_add_spi(state->psp, htonl(script_rx_spi),
-			      htonl(live_rx_spi), error))
+			      htonl(live_rx_spi), live_key, PSP_V0_KEYLEN, error))
 		return STATUS_ERR;
 
 	return STATUS_OK;

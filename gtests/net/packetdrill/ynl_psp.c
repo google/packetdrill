@@ -11,6 +11,7 @@
 #include <ynl.h>
 
 #include "logging.h"
+#include "psp.h"
 #include "psp-user.h"
 
 struct ynl_psp_state {
@@ -134,7 +135,7 @@ void ynl_psp_free(struct ynl_psp_state *state)
 }
 
 int ynl_psp_rx_assoc(struct ynl_psp_state *state, int live_sock,
-		     u32 *live_spi)
+		     u32 *live_spi, u8 *live_key)
 {
 	struct psp_rx_assoc_rsp *rsp;
 	struct psp_rx_assoc_req *req;
@@ -151,6 +152,7 @@ int ynl_psp_rx_assoc(struct ynl_psp_state *state, int live_sock,
 		return STATUS_ERR;
 
 	*live_spi = rsp->rx_key.spi;
+	memcpy(live_key, rsp->rx_key.key, PSP_V0_KEYLEN);
 	psp_rx_assoc_rsp_free(rsp);
 	return STATUS_OK;
 }
@@ -159,7 +161,11 @@ int ynl_psp_tx_assoc(struct ynl_psp_state *state, int live_sock, u32 spi)
 {
 	struct psp_tx_assoc_rsp *tsp;
 	struct psp_tx_assoc_req *teq;
-	u8 key[16] = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16 };
+	__be32 net_spi = htonl(spi);
+	u8 key[PSP_V0_KEYLEN] = {};
+
+	/* Receiver uses same fake key derived from SPI */
+	memcpy(&key[PSP_V0_KEYLEN - sizeof(net_spi)], &net_spi, sizeof(net_spi));
 
 	teq = psp_tx_assoc_req_alloc();
 
