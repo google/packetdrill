@@ -25,6 +25,7 @@
 
 #include "psp_packet.h"
 #include "checksum.h"
+#include "psp_crypto.h"
 #include "psp_state.h"
 #include "udp_packet.h"
 
@@ -96,9 +97,20 @@ int psp_header_finish(struct packet *packet,
 int psp_map_to_live(struct psp_state *psp_state, struct packet *packet)
 {
 	__be32 script_spi = packet->psp->spi;
+	u8 live_key[PSP_MAX_KEY];
 
 	if (psp_to_live_spi(psp_state, script_spi,
-			    &packet->psp->spi))
+			    &packet->psp->spi,
+			    live_key, PSP_V0_KEYLEN))
+		return STATUS_ERR;
+
+	int psp_hdr_len = psp_len(packet->psp);
+	int psp_total = psp_hdr_len +
+			packet_tcp_header_len(packet) +
+			packet_payload_len(packet) +
+			PSP_TRL_SIZE;
+
+	if (psp_encrypt(packet->psp, psp_total, live_key))
 		return STATUS_ERR;
 
 	struct udp *udp = (struct udp *)packet->psp - 1;

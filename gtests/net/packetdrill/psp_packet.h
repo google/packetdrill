@@ -54,7 +54,9 @@ extern int psp_encapsulate(struct packet *packet, const struct psp *psp,
 extern int psp_header_finish(struct packet *packet,
 			     struct header *header, struct header *next_inner);
 
-/* Map PSP SPI from script to live value and recompute outer UDP checksum. */
+/* Map PSP SPI from script to live value, encrypt, and recompute
+ * outer UDP checksum.
+ */
 extern int psp_map_to_live(struct psp_state *psp_state,
 			   struct packet *packet);
 

@@ -36,6 +36,8 @@
 #include "types.h"
 
 #define PSP_MINLEN 16
+#define PSP_V0_KEYLEN 16
+#define PSP_MAX_KEY 32
 #define PSP_TRL_SIZE 16
 
 struct psp {
