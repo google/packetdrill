@@ -148,8 +148,10 @@ static void wire_server_netdev_drop_test_traffic(const struct config *config)
 		 config->live_local_ip_string, config->live_bind_port,
 		 iptables(config),
 		 config->live_local_ip_string, config->psp_udp_port);
-	/* For now, intentionally ignoring errors. TODO: clean up. */
-	system(command);
+	int ret = system(command);
+	if (ret)
+		fprintf(stderr, "iptables drop command failed (exit %d): %s\n",
+			ret, command);
 	free(command);
 #endif
 }
