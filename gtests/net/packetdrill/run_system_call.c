@@ -506,6 +506,10 @@ static int nla_expr_list_to_nla(struct expression_list *list,
 			die("out of bound u32 value specified\n");
 
 		get_nla_value(value, &val, num_bytes);
+		if ((char *)dst + NLA_ALIGN(NLA_HDRLEN + num_bytes) - (char *)start > dst_len) {
+			asprintf(error, "NLA buffer overflow: dst_len=%d exceeded", dst_len);
+			return STATUS_ERR;
+		}
 		dst += add_nla(dst, key_num, nla_info[key_num].length, &val);
 	}
 
@@ -2583,6 +2587,10 @@ static int syscall_getsockopt(struct state *state, struct syscall_spec *syscall,
 		return STATUS_ERR;
 
 	/* Allocate space for getsockopt output. */
+	if (script_optlen < 0) {
+		asprintf(error, "getsockopt: negative optlen %d", script_optlen);
+		return STATUS_ERR;
+	}
 	live_optlen = script_optlen;
 	live_optval = calloc(1, live_optlen + 1);
 	assert(live_optval != NULL);
