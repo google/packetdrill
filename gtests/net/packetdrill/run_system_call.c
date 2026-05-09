@@ -28,6 +28,7 @@
 #include <arpa/inet.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <inttypes.h>
 #include <limits.h>
 #include <linux/netlink.h>
 #include <netinet/in.h>
@@ -887,7 +888,7 @@ static bool cmsg_expect_eq(struct state *state, struct msghdr *expect,
 		}
 		if (acm->cmsg_len != ecm->cmsg_len) {
 			asprintf(error,
-				 "Bad len in cmsg %d: expected=%lu actual=%lu",
+				 "Bad len in cmsg %d: expected=%zu actual=%zu",
 				 i, ecm->cmsg_len, acm->cmsg_len);
 			return false;
 		}
@@ -2955,7 +2956,7 @@ static int get_epoll_event_from_expr(struct state *state,
 	if (epollev_expr->ptr) {
 		if (check_type(epollev_expr->ptr, EXPR_INTEGER, error))
 			return STATUS_ERR;
-		event->data.ptr = (void *)epollev_expr->ptr->value.num;
+		event->data.ptr = (void *)((intptr_t)epollev_expr->ptr->value.num);
 		*epoll_data = EPOLL_DATA_PTR;
 	} else if (epollev_expr->fd) {
 		if (check_type(epollev_expr->fd, EXPR_INTEGER, error))
@@ -3161,8 +3162,8 @@ static int syscall_epoll_wait(struct state *state, struct syscall_spec *syscall,
 		if (event_script.data.u64 != event_live->data.u64) {
 			asprintf(error,
 				 "epoll_event->data does not match script: "
-				 "expected: %lu "
-				 "actual: %lu\n",
+				 "expected: %"PRIu64" "
+				 "actual: %"PRIu64"\n",
 				 event_script.data.u64,
 				 event_live->data.u64);
 			goto error_out;
@@ -3280,8 +3281,8 @@ static int syscall_splice(struct state *state, struct syscall_spec *syscall,
 				fd_out_live, (loff_t *) &off_out,
 				len, flags);
 	} else {
-		result = splice(fd_in_live, (loff_t *) off_in, fd_out_live,
-				(loff_t *) off_out, len, flags);
+		result = splice(fd_in_live, (loff_t *) &off_in, fd_out_live,
+				(loff_t *) &off_out, len, flags);
 	}
 	if (end_syscall(state, syscall, CHECK_EXACT, result, error))
 		return STATUS_ERR;
