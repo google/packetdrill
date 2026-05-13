@@ -23,7 +23,7 @@ packetdrill. If you are on a Linux system based on Debian/Ubuntu then you can
 use a command like:
 
 ```
-sudo apt install git gcc make bison flex python3 net-tools
+sudo apt install git gcc make bison flex python3 net-tools iptables
 ```
 
 To check out and build packetdrill:
