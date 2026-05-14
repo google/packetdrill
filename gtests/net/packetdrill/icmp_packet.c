@@ -315,7 +315,7 @@ struct packet *new_icmp_packet(int address_family,
 	int ip_bytes = 0;
 
 	if (protocol == IPPROTO_TCP || protocol == IPPROTO_UDP) {
-		echoed_bytes = ip_fixed_bytes + ICMP_ECHO_BYTES;
+		echoed_bytes = ip_fixed_bytes + ICMP_ECHO_BYTES + payload_bytes;
 		icmp_bytes = icmp_header_len(address_family) + echoed_bytes;
 		ip_bytes = ip_header_bytes + icmp_bytes;
 	} else if (protocol == IPPROTO_RAW) {
