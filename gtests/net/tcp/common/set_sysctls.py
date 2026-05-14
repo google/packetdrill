@@ -17,7 +17,7 @@ at the end.
 __author__ = ('brakmo@google.com (Lawrence Brakmo)')
 
 import os
-import subprocess
+import stat
 import sys
 
 filename = '/tmp/sysctl_restore_%s.sh' % os.environ['PACKETDRILL_PID']
@@ -31,11 +31,12 @@ for a in sys.argv[1:]:
   # sysctl[0] contains the proc-file name, sysctl[1] the new value
 
   # read current value and add restore command to file
-  cur_val = subprocess.check_output(['cat', sysctl[0]], universal_newlines=True)
+  with open(sysctl[0], 'r') as f:
+    cur_val = f.read()
   print('echo "%s" > %s' % (cur_val.strip(), sysctl[0]), file=restore_file)
 
   # set new value
-  cmd = 'echo "%s" > %s' % (sysctl[1], sysctl[0])
-  os.system(cmd)
+  with open(sysctl[0], 'w') as f:
+    f.write(sysctl[1] + '\n')
 
-os.system('chmod u+x %s' % filename)
+os.chmod(filename, os.stat(filename).st_mode | stat.S_IXUSR)
