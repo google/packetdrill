@@ -134,6 +134,23 @@ void ynl_psp_free(struct ynl_psp_state *state)
 	free(state);
 }
 
+int ynl_psp_key_rotate(struct ynl_psp_state *state)
+{
+	struct psp_key_rotate_rsp *rsp;
+	struct psp_key_rotate_req *req;
+
+	req = psp_key_rotate_req_alloc();
+	psp_key_rotate_req_set_id(req, state->psp_dev_id);
+
+	rsp = psp_key_rotate(state->ys, req);
+	psp_key_rotate_req_free(req);
+	if (!rsp)
+		return STATUS_ERR;
+
+	psp_key_rotate_rsp_free(rsp);
+	return STATUS_OK;
+}
+
 int ynl_psp_rx_assoc(struct ynl_psp_state *state, int live_sock,
 		     u32 *live_spi, u8 *live_key)
 {
