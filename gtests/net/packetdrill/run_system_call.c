@@ -3303,6 +3303,22 @@ static bool psp_uapi_available(struct state *state, char **error)
 	return true;
 }
 
+static int syscall_psp_key_rotate(struct state *state,
+				  struct syscall_spec *syscall,
+				  struct expression_list *args, char **error)
+{
+	int result;
+
+	if (check_arg_count(args, 0, error))
+		return STATUS_ERR;
+	if (!psp_uapi_available(state, error))
+		return STATUS_ERR;
+
+	begin_syscall(state, syscall);
+	result = ynl_psp_key_rotate(state->ynl_psp);
+	return end_syscall(state, syscall, CHECK_EXACT, result, error);
+}
+
 static int syscall_psp_rx_assoc(struct state *state,
 				struct syscall_spec *syscall,
 				struct expression_list *args, char **error)
@@ -3405,6 +3421,7 @@ struct system_call_entry system_call_table[] = {
 	{"epoll_wait",   syscall_epoll_wait},
 	{"pipe",         syscall_pipe},
 	{"splice",       syscall_splice},
+	{"psp_key_rotate", syscall_psp_key_rotate},
 	{"psp_rx_assoc", syscall_psp_rx_assoc},
 	{"psp_tx_assoc", syscall_psp_tx_assoc},
 };

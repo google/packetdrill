@@ -12,6 +12,7 @@ struct ynl_psp_state;
 
 struct ynl_psp_state *ynl_psp_new(bool enable_psp_rx, const char *ifname);
 void ynl_psp_free(struct ynl_psp_state *state);
+int ynl_psp_key_rotate(struct ynl_psp_state *state);
 int ynl_psp_rx_assoc(struct ynl_psp_state *state, int live_sock,
 		     u32 *live_spi, u8 *live_key);
 int ynl_psp_tx_assoc(struct ynl_psp_state *state, int live_sock, u32 spi);
@@ -26,6 +27,11 @@ static inline struct ynl_psp_state *ynl_psp_new(bool enable_psp_rx,
 
 static inline void ynl_psp_free(struct ynl_psp_state *state)
 {
+}
+
+static inline int ynl_psp_key_rotate(struct ynl_psp_state *state)
+{
+	return STATUS_ERR;
 }
 
 static inline int ynl_psp_rx_assoc(struct ynl_psp_state *state, int live_sock,
