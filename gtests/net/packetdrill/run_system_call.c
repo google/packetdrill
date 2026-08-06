@@ -3331,8 +3331,10 @@ static int syscall_psp_rx_assoc(struct state *state,
 	if (end_syscall(state, syscall, CHECK_EXACT, result, error))
 		return STATUS_ERR;
 
-	if (psp_state_add_spi(state->psp, htonl(script_rx_spi),
-			      htonl(live_rx_spi), live_key, PSP_V0_KEYLEN, error))
+	if (!result &&
+	    psp_state_add_spi(state->psp, htonl(script_rx_spi),
+			      htonl(live_rx_spi), live_key, PSP_V0_KEYLEN,
+			      error))
 		return STATUS_ERR;
 
 	return STATUS_OK;
