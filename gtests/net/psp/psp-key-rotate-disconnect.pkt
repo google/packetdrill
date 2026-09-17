@@ -1,0 +1,42 @@
+// Test that packets using a SPI from two rotations ago are not delivered to
+// the socket, as they cannot be decrypted and authenticated from a current
+// device key.
+
+--psp_udp_port=1000
+
+// Initialize connection.
+    0 socket(..., SOCK_STREAM, IPPROTO_TCP) = 3
+   +0 setsockopt(3, SOL_SOCKET, SO_REUSEADDR, [1], 4) = 0
+   +0 bind(3, ..., ...) = 0
+   +0 listen(3, 1) = 0
+
+  +.1 < S 0:0(0) win 50000 <mss 1000,nop,wscale 0>
+   +0 > S. 0:0(0) ack 1 <...>
+  +.1 < . 1:1(0) ack 1 win 50000
+   +0 accept(3, ..., ...) = 4
+
+   +0 fcntl(4, F_SETFL, O_RDWR|O_NONBLOCK) = 0
+
+// Setup psp connection.
+   +0 psp_rx_assoc(4, [7]) = 0
+   +0 psp_tx_assoc(4, 23) = 0
+
+// Receive before any rotation.
+ +0.1 < encap psp spi 7 P. 1:501(500) ack 1 win 50000
++0~+0.1 > encap psp spi 23 . 1:1(0) ack 501
+   +0 recv(4, ..., 1000, 0) = 500
+
+// First rotation: the association is still usable.
+   +0 psp_key_rotate() = 0
+
+ +0.1 < encap psp spi 7 P. 501:1001(500) ack 1 win 50000
++0~+0.1 > encap psp spi 23 . 1:1(0) ack 1001
+   +0 recv(4, ..., 1000, 0) = 500
+
+// Second rotation: the spi + key pair is not valid.
+   +0 psp_key_rotate() = 0
+
+// The segment is not a validly decrypted PSP packet, so it is dropped before
+// it reaches the socket and no ACK is generated for it.
+ +0.1 < encap psp spi 7 P. 1001:1501(500) ack 1 win 50000
+ +0.5 recv(4, ..., 1000, 0) = -1 EAGAIN (Resource temporarily unavailable)
