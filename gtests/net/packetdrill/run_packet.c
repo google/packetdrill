@@ -1374,6 +1374,10 @@ static int verify_outbound_tcp_option(
 			asprintf(error, "bad outbound TCP timestamp value, tolerance %ld", tolerance_usecs);
 			return STATUS_ERR;
 		}
+		if (check_field("tcp_ts_ecr",
+				ntohl(script_option->data.time_stamp.ecr),
+				ntohl(actual_option->data.time_stamp.ecr), error))
+			return STATUS_ERR;
 		break;
 
 	default:
