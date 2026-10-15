@@ -134,22 +134,28 @@
 #define TCP_MD5_DIGEST_LEN	16	/* bytes in RFC2385 TCP MD5 digest */
 
 /* Values for tcpi_ecn_mode after negotiation */
+#ifndef TCPI_ECN_MODE_DISABLED
 #define TCPI_ECN_MODE_DISABLED		0x0
 #define TCPI_ECN_MODE_RFC3168		0x1
 #define TCPI_ECN_MODE_ACCECN		0x2
 #define TCPI_ECN_MODE_PENDING		0x3
+#endif
 
 /* Values for accecn_opt_seen */
+#ifndef TCP_ACCECN_OPT_NOT_SEEN
 #define TCP_ACCECN_OPT_NOT_SEEN		0x0
 #define TCP_ACCECN_OPT_EMPTY_SEEN	0x1
 #define TCP_ACCECN_OPT_COUNTER_SEEN	0x2
 #define TCP_ACCECN_OPT_FAIL_SEEN	0x3
+#endif
 
 /* Values for accecn_fail_mode */
+#ifndef TCP_ACCECN_ACE_FAIL_SEND
 #define TCP_ACCECN_ACE_FAIL_SEND	BIT(0)
 #define TCP_ACCECN_ACE_FAIL_RECV	BIT(1)
 #define TCP_ACCECN_OPT_FAIL_SEND	BIT(2)
 #define TCP_ACCECN_OPT_FAIL_RECV	BIT(3)
+#endif
 
 /* A portable TCP header definition (Linux and *BSD use different names). */
 struct tcp {
