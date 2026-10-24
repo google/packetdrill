@@ -379,19 +379,27 @@ static int iovec_new(struct expression *expression,
 	for (i = 0; i < iov_len; ++i, list = list->next) {
 		size_t len;
 		struct iovec_expr *iov_expr;
+		struct expression *iov_base;
 
 		if (check_type(list->expression, EXPR_IOVEC, error))
 			goto error_out;
 
 		iov_expr = list->expression->value.iovec;
+		iov_base = iov_expr->iov_base;
 
-		assert(iov_expr->iov_base->type == EXPR_ELLIPSIS);
 		assert(iov_expr->iov_len->type == EXPR_INTEGER);
-
 		len = iov_expr->iov_len->value.num;
-
 		iov[i].iov_len = len;
-		iov[i].iov_base = calloc(len, 1);
+
+		if (iov_base->type == EXPR_ELLIPSIS) {
+			iov[i].iov_base = calloc(len, 1);
+		} else if (iov_base->type == EXPR_INTEGER &&
+			   iov_base->value.num == 0) {
+			iov[i].iov_base = NULL;
+		} else {
+			asprintf(error, "Expected ... or NULL for iov_base");
+			goto error_out;
+		}
 	}
 
 	status = STATUS_OK;
