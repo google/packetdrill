@@ -77,6 +77,13 @@ struct ipv4 {
 #define IP_TRANSPARENT	19
 #define IP_MINTTL	21
 
+/* IP_MTU_DISCOVER values missing from glibc < 2.20. */
+#ifndef IP_PMTUDISC_INTERFACE
+#define IP_PMTUDISC_INTERFACE	4
+#endif
+#ifndef IP_PMTUDISC_OMIT
+#define IP_PMTUDISC_OMIT	5
+#endif
 #endif  /* linux */
 
 /* ECN: RFC 3168: http://tools.ietf.org/html/rfc3168 */

@@ -46,6 +46,7 @@
 
 #include "epoll.h"
 #include "ip.h"
+#include "ipv6.h"
 #include "tcp.h"
 #include "capability.h"
 

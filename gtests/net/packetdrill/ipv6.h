@@ -60,6 +60,14 @@ struct ipv6 {
 #define IPV6_HOPLIMIT   52
 #define IPV6_TCLASS	67
 #define IPV6_MINHOPCOUNT	73
+
+/* IPV6_MTU_DISCOVER values missing from glibc < 2.20. */
+#ifndef IPV6_PMTUDISC_INTERFACE
+#define IPV6_PMTUDISC_INTERFACE	4
+#endif
+#ifndef IPV6_PMTUDISC_OMIT
+#define IPV6_PMTUDISC_OMIT	5
+#endif
 #endif  /* linux */
 
 static inline u8 ipv6_tos_byte(const struct ipv6 *ipv6)
