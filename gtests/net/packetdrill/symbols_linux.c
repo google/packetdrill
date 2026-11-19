@@ -151,15 +151,24 @@ struct int_symbol platform_symbols_table[] = {
 
 	{ IP_TOS,                           "IP_TOS"                          },
 	{ IP_MTU_DISCOVER,                  "IP_MTU_DISCOVER"                 },
-	{ IPV6_MTU_DISCOVER,                "IPV6_MTU_DISCOVER"               },
-	{ IP_PMTUDISC_WANT,                 "IP_PMTUDISC_WANT"                },
 	{ IP_PMTUDISC_DONT,                 "IP_PMTUDISC_DONT"                },
+	{ IP_PMTUDISC_WANT,                 "IP_PMTUDISC_WANT"                },
 	{ IP_PMTUDISC_DO,                   "IP_PMTUDISC_DO"                  },
 	{ IP_PMTUDISC_PROBE,                "IP_PMTUDISC_PROBE"               },
+	{ IP_PMTUDISC_INTERFACE,            "IP_PMTUDISC_INTERFACE"           },
+	{ IP_PMTUDISC_OMIT,                 "IP_PMTUDISC_OMIT"                },
+	{ IPV6_MTU_DISCOVER,                "IPV6_MTU_DISCOVER"               },
+	{ IPV6_PMTUDISC_DONT,               "IPV6_PMTUDISC_DONT"              },
+	{ IPV6_PMTUDISC_WANT,               "IPV6_PMTUDISC_WANT"              },
+	{ IPV6_PMTUDISC_DO,                 "IPV6_PMTUDISC_DO"                },
+	{ IPV6_PMTUDISC_PROBE,              "IPV6_PMTUDISC_PROBE"             },
+	{ IPV6_PMTUDISC_INTERFACE,          "IPV6_PMTUDISC_INTERFACE"         },
+	{ IPV6_PMTUDISC_OMIT,               "IPV6_PMTUDISC_OMIT"              },
 	{ IP_RECVERR,			    "IP_RECVERR"		      },
 	{ IPV6_RECVERR,			    "IPV6_RECVERR"		      },
 	{ IP_FREEBIND,                      "IP_FREEBIND"                     },
 	{ IP_TTL,                           "IP_TTL"                          },
+	{ IP_MINTTL,                        "IP_MINTTL"                       },
 #ifdef IP_MTU
 	{ IP_MTU,                           "IP_MTU"                          },
 #endif
@@ -168,6 +177,7 @@ struct int_symbol platform_symbols_table[] = {
 #endif
 	{ IPV6_TCLASS,                      "IPV6_TCLASS"                     },
 	{ IPV6_HOPLIMIT,                    "IPV6_HOPLIMIT"                   },
+	{ IPV6_MINHOPCOUNT,                 "IPV6_MINHOPCOUNT"                },
 
 	{ TCP_NODELAY,                      "TCP_NODELAY"                     },
 	{ TCP_MAXSEG,                       "TCP_MAXSEG"                      },

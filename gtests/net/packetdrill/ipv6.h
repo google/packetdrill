@@ -59,6 +59,7 @@ struct ipv6 {
 #ifdef linux
 #define IPV6_HOPLIMIT   52
 #define IPV6_TCLASS	67
+#define IPV6_MINHOPCOUNT	73
 #endif  /* linux */
 
 static inline u8 ipv6_tos_byte(const struct ipv6 *ipv6)
