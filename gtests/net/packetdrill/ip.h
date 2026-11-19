@@ -75,6 +75,8 @@ struct ipv4 {
 #define IP_XFRM_POLICY	17
 #define IP_PASSSEC	18
 #define IP_TRANSPARENT	19
+#define IP_MINTTL	21
+
 #endif  /* linux */
 
 /* ECN: RFC 3168: http://tools.ietf.org/html/rfc3168 */
