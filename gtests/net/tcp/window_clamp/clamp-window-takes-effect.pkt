@@ -1,0 +1,115 @@
+// Test that setsockopt( TCP_WINDOW_CLAMP ) limits the receive window.
+
+`../common/defaults.sh`
+
+   // Establish a connection.
+    0 socket(..., SOCK_STREAM, IPPROTO_TCP) = 3
+   +0 setsockopt(3, SOL_SOCKET, SO_REUSEADDR, [1], 4) = 0
+   +0 bind(3, ..., ...) = 0
+   +0 listen(3, 1) = 0
+
+  +.1 < S 0:0(0) win 32792 <mss 1000,sackOK,nop,nop,nop,wscale 8>
+   +0 > S. 0:0(0) ack 1 win 65535 <mss 1460,nop,nop,sackOK,nop,wscale 8>
+  +.1 < . 1:1(0) ack 1 win 320
+   +0 accept(3, ..., ...) = 4
+
+   // Receive data to raise rcv_ssthresh, receive buffer.
+  +.01 < . 1:64000(63999) ack 1 win 320
+   +0 > . 1:1(0) ack 64000 win 756
+  +.01 < . 64000:128000(64000) ack 1 win 320
+   +0 > . 1:1(0) ack 128000 win 798
+
+   // Read to clear the receive buffer.
+  +.01 read(4, ..., 129000) = 127999
+
+   // 1. Check that lowering the window clamp is supported.
+   // Set window clamp: 128000 == (500 << 8)
+   +0 setsockopt(4, IPPROTO_TCP, TCP_WINDOW_CLAMP, [128000], 4) = 0
+
+   // Receive additional data, let clamp take effect.
+  +.01 < . 128000:192000(64000) ack 1 win 320
+   +0 > . 1:1(0) ack 192000 win 548
+  +.01 < . 192000:256000(64000) ack 1 win 320
+   +0 > . 1:1(0) ack 256000 win 500
+
+   // Read to clear the receive buffer.
+  +.01 read(4, ..., 129000) = 128000
+
+   // 2. Check that raising the window clamp is supported.
+   // Raise window clamp: 256000 == (1000 << 8)
+   +0 setsockopt(4, IPPROTO_TCP, TCP_WINDOW_CLAMP, [256000], 4) = 0
+
+   // Receive additional data, reply with new clamp.
+  +.01 < . 256000:320000(64000) ack 1 win 320
+   +0 > . 1:1(0) ack 320000 win 1000
+  +.01 < . 320000:384000(64000) ack 1 win 320
+   +0 > . 1:1(0) ack 384000 win 1000
+
+   // Read to clear the receive buffer.
+  +.01 read(4, ..., 129000) = 128000
+
+   // 3. Check that lowering after raising is supported.
+   // Set window clamp very low: 12800 == (50 << 8)
+   +0 setsockopt(4, IPPROTO_TCP, TCP_WINDOW_CLAMP, [12800], 4) = 0
+
+  +.01 < . 384000:448000(64000) ack 1 win 320
+   +0 > . 1:1(0) ack 448000 win 750
+  +.01 < . 448000:512000(64000) ack 1 win 320
+   +0 > . 1:1(0) ack 512000 win 500
+
+   // Read to clear the receive buffer, will not raise the window.
+  +.01 read(4, ..., 129000) = 128000
+
+  +.01 < . 512000:576000(64000) ack 1 win 320
+   +0 > . 1:1(0) ack 576000 win 250
+  +.01 < . 576000:640000(64000) ack 1 win 320
+   +0 > . 1:1(0) ack 640000 win 50
+
+   // Read to clear the receive buffer, will not raise the window.
+  +.01 read(4, ..., 129000) = 128000
+
+   // Raise briefly and lower the clamp to ensure the last write takes effect.
+   +0 setsockopt(4, IPPROTO_TCP, TCP_WINDOW_CLAMP, [1280000], 4) = 0
+   +0 setsockopt(4, IPPROTO_TCP, TCP_WINDOW_CLAMP, [128000], 4) = 0
+
+   // Small data, just to check that the clamp was raised; the increase
+   // opens in proportion to the amount of data sent to avoid epic burst
+  +.01 < . 640000:641000(1000) ack 1 win 320
+   +0 > . 1:1(0) ack 641000 win 62
+  +.01 < . 641000:643000(2000) ack 1 win 320
+   +0 > . 1:1(0) ack 643000 win 78
+  +.01 < . 643000:646000(3000) ack 1 win 320
+   +0 > . 1:1(0) ack 646000 win 101
+  +.01 < . 646000:704000(58000) ack 1 win 320
+   +0 > . 1:1(0) ack 704000 win 500
+
+   // Read to clear the receive buffer, will not raise the window.
+  +.01 read(4, ..., 129000) = 64000
+
+   // Lower briefly and return the clamp to ensure that the last write
+   // takes effect and that the window doesn't decrease unnecessarily.
+   // (It still increases slowly based on the volume of data received.)
+   +0 setsockopt(4, IPPROTO_TCP, TCP_WINDOW_CLAMP, [12800], 4) = 0
+   +0 setsockopt(4, IPPROTO_TCP, TCP_WINDOW_CLAMP, [256000], 4) = 0
+
+  +.01 < . 704000:705000(1000) ack 1 win 320
+   +0 > . 1:1(0) ack 705000 win 512
+  +.01 < . 705000:707000(2000) ack 1 win 320
+   +0 > . 1:1(0) ack 707000 win 528
+
+  +.01 < . 707000:768000(61000) ack 1 win 320
+   +0 > . 1:1(0) ack 768000 win 1000
+
+  +.01 read(4, ..., 129000) = 64000
+
+   // Repeat the transient drop, but include a small packet in between.
+   // The advertised window should return to the high value quickly,
+   // since the receiver never committed to a tiny window.
+   +0 setsockopt(4, IPPROTO_TCP, TCP_WINDOW_CLAMP, [12800], 4) = 0
+  +.01 < . 768000:769000(1000) ack 1 win 320
+   +0 > . 1:1(0) ack 769000 win 997
+
+   +0 setsockopt(4, IPPROTO_TCP, TCP_WINDOW_CLAMP, [256000], 4) = 0
+  +.01 < . 769000:770000(1000) ack 1 win 320
+   +0 > . 1:1(0) ack 770000 win 1000
+
