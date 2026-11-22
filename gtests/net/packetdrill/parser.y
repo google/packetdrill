@@ -1801,11 +1801,11 @@ sock_extended_err_expr
 ;
 
 iovec
-: '{' ELLIPSIS ',' decimal_integer '}' {
+: '{' expression ',' decimal_integer '}' {
 	struct iovec_expr *iov_expr = calloc(1, sizeof(struct iovec_expr));
 	$$ = new_expression(EXPR_IOVEC);
 	$$->value.iovec = iov_expr;
-	iov_expr->iov_base = new_expression(EXPR_ELLIPSIS);
+	iov_expr->iov_base = $2;
 	iov_expr->iov_len = $4;
 }
 ;
