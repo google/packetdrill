@@ -518,10 +518,18 @@ void lock_memory(void)
  * (TARGET_JIFFY_TICKS) to go by, to reduce noise from warm-up
  * effects. We could do fancier measuring and filtering here, but so
  * far this level of complexity seems sufficient.
+ *
+ * We only spin close to a tick, and not for the first one: spinning
+ * with a real-time priority would starve the other threads, e.g. from
+ * other packetdrill instances, for up to 100 ms.
  */
 static s64 schedule_start_time_usecs(struct state *state)
 {
 #ifdef linux
+	const long clk_tck = sysconf(_SC_CLK_TCK);
+	const s64 tick_usecs = clk_tck > 0 ? 1000000 / clk_tck : 0;
+	const s64 TICK_SPIN_USECS = 1000;
+	const s64 TICK_POLL_USECS = 200;
 	s64 start_usecs = 0;
 	clock_t last_jiffies = times(NULL);
 	int jiffy_ticks = 0;
@@ -531,6 +539,11 @@ static s64 schedule_start_time_usecs(struct state *state)
 		if (jiffies != last_jiffies) {
 			start_usecs = now_usecs(state);
 			++jiffy_ticks;
+			if (jiffy_ticks < TARGET_JIFFY_TICKS &&
+			    tick_usecs > TICK_SPIN_USECS)
+				usleep(tick_usecs - TICK_SPIN_USECS);
+		} else if (!jiffy_ticks) {
+			usleep(TICK_POLL_USECS);
 		}
 		last_jiffies = jiffies;
 	}
